@@ -1,0 +1,6 @@
+sentence-transformers
+torch
+scikit-learn
+onnx
+onnxruntime
+optimum[onnxruntime]
