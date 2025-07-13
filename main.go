@@ -567,16 +567,54 @@ func main() {
 	fmt.Println("   • This is expected: ONNX exports StaticEmbedding layer only")
 	fmt.Println("   • Go vs ONNX: PERFECT match (max diff = 0.00000000)")
 	fmt.Println("   • All methods show realistic similarity patterns")
-
 	fmt.Println("\n📈 Sample Comparison Results:")
-	fmt.Println("   Similar concepts ('ML fascinating' vs 'AI deep learning'):")
-	fmt.Printf("     Python: 0.377912, ONNX: 0.378076, Go: %.6f\n", cosineSimilarity([]float32{2.093660, 11.345815, 2.945837, -9.365224, 8.233204}, []float32{4.834754, 5.744091, 4.986327, -3.438527, 8.173711}))
 
-	fmt.Println("   Different concepts ('hello world' vs 'ML fascinating'):")
-	fmt.Printf("     Python: -0.016297, ONNX: -0.014909, Go: %.6f\n", cosineSimilarity([]float32{6.719785, 14.761699, 1.140413, 5.549222, 2.109137}, []float32{2.093660, 11.345815, 2.945837, -9.365224, 8.233204}))
+	// Get actual full embeddings for proper similarity calculation
+	testModel2, err := NewEmbeddingModel("model/embedding_model.onnx", "model/reference_tokens.json", false)
+	if err != nil {
+		fmt.Printf("   Error loading model for comparison: %v\n", err)
+	} else {
+		defer testModel2.Close()
 
-	fmt.Println("   Different concepts ('hello world' vs 'weather nice'):")
-	fmt.Printf("     Python: 0.062075, ONNX: 0.066184, Go: %.6f\n", cosineSimilarity([]float32{6.719785, 14.761699, 1.140413, 5.549222, 2.109137}, []float32{4.128786, 0.019339, -8.340072, 7.752617, -3.379750}))
+		// Get full embeddings
+		emb_ml, _ := testModel2.Encode("machine learning is fascinating")
+		emb_ai, _ := testModel2.Encode("artificial intelligence and deep learning")
+		emb_hello, _ := testModel2.Encode("hello world")
+		emb_weather, _ := testModel2.Encode("the weather is nice today")
+
+		// Calculate proper similarities with full embeddings
+		fmt.Println("   Similar concepts ('ML fascinating' vs 'AI deep learning'):")
+		go_sim1 := cosineSimilarity(emb_ml, emb_ai)
+		fmt.Printf("     Python: 0.377912, ONNX: 0.378076, Go: %.6f\n", go_sim1)
+
+		fmt.Println("   Different concepts ('hello world' vs 'ML fascinating'):")
+		go_sim2 := cosineSimilarity(emb_hello, emb_ml)
+		fmt.Printf("     Python: -0.016297, ONNX: -0.014909, Go: %.6f\n", go_sim2)
+
+		fmt.Println("   Different concepts ('hello world' vs 'weather nice'):")
+		go_sim3 := cosineSimilarity(emb_hello, emb_weather)
+		fmt.Printf("     Python: 0.062075, ONNX: 0.066184, Go: %.6f\n", go_sim3)
+
+		// Validate results
+		fmt.Println("\n🔍 Validation Check:")
+		if abs(go_sim1-0.378076) < 0.001 {
+			fmt.Printf("   ✅ Similar concepts: Go %.6f ≈ ONNX 0.378076 (diff: %.6f)\n", go_sim1, abs(go_sim1-0.378076))
+		} else {
+			fmt.Printf("   ⚠️ Similar concepts: Go %.6f ≠ ONNX 0.378076 (diff: %.6f)\n", go_sim1, abs(go_sim1-0.378076))
+		}
+
+		if abs(go_sim2-(-0.014909)) < 0.001 {
+			fmt.Printf("   ✅ Different concepts 1: Go %.6f ≈ ONNX -0.014909 (diff: %.6f)\n", go_sim2, abs(go_sim2-(-0.014909)))
+		} else {
+			fmt.Printf("   ⚠️ Different concepts 1: Go %.6f ≠ ONNX -0.014909 (diff: %.6f)\n", go_sim2, abs(go_sim2-(-0.014909)))
+		}
+
+		if abs(go_sim3-0.066184) < 0.001 {
+			fmt.Printf("   ✅ Different concepts 2: Go %.6f ≈ ONNX 0.066184 (diff: %.6f)\n", go_sim3, abs(go_sim3-0.066184))
+		} else {
+			fmt.Printf("   ⚠️ Different concepts 2: Go %.6f ≠ ONNX 0.066184 (diff: %.6f)\n", go_sim3, abs(go_sim3-0.066184))
+		}
+	}
 
 	fmt.Println("\n🎯 Validation Results:")
 	fmt.Println("   ✅ ONNX patterns are realistic (similar concepts ~0.38, different ~0.02-0.07)")
