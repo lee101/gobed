@@ -1,5 +1,7 @@
 # Go Embedding Model Example
 
+> **If the program crashes with “requested API version”, see [`docs/onnx_runtime.md`](docs/onnx_runtime.md).**
+
 This project demonstrates how to use embedding models in Go with GPU acceleration support via ONNX Runtime.
 
 ## Overview

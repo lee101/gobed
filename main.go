@@ -9,18 +9,49 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	onnxruntime "github.com/yalue/onnxruntime_go"
 )
 
-type EmbeddingModel struct {
-	vocab map[string]int
+var onnxInitialized = false
+
+func initONNXRuntime() error {
+	if onnxInitialized {
+		return nil
+	}
+
+	// Set the shared library path first
+	onnxruntime.SetSharedLibraryPath("/usr/local/lib/libonnxruntime.so.1")
+
+	// Initialize ONNX Runtime
+	err := onnxruntime.InitializeEnvironment()
+	if err != nil {
+		return err
+	}
+
+	onnxInitialized = true
+	return nil
 }
 
-func NewEmbeddingModel(onnxPath, tokenizerPath string) (*EmbeddingModel, error) {
+type EmbeddingModel struct {
+	vocab        map[string]int
+	useGPU       bool
+	session      *onnxruntime.AdvancedSession
+	inputTensor  *onnxruntime.Tensor[int64]
+	outputTensor *onnxruntime.Tensor[float32]
+	inputName    string
+	outputName   string
+}
+
+func NewEmbeddingModel(onnxPath, tokenizerPath string, useGPU bool) (*EmbeddingModel, error) {
 	log.Printf("Loading model from %s and tokenizer from %s", onnxPath, tokenizerPath)
-	
-	// For now, let's create a working model with the simple embedding approach
-	// but simulate GPU timing and real tokenizer behavior
-	
+
+	// Initialize ONNX Runtime once
+	err := initONNXRuntime()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize ONNX runtime: %v", err)
+	}
+
 	// Load vocabulary from tokenizer.json
 	tokenizerData, err := ioutil.ReadFile(tokenizerPath)
 	if err != nil {
@@ -41,15 +72,96 @@ func NewEmbeddingModel(onnxPath, tokenizerPath string) (*EmbeddingModel, error) 
 	vocab["business"] = 6
 	vocab["insights"] = 7
 
-	log.Println("Model initialized successfully (simulating ONNX + GPU)")
-	log.Println("Note: This demo uses optimized embeddings showing semantic relationships")
+	// Load the ONNX model
+	inputNames := []string{"input_ids"}
+	outputNames := []string{"embeddings"}
+
+	// Create input tensors (will be populated during inference)
+	maxSeqLen := int64(512) // Increase sequence length for better compatibility
+	batchSize := int64(1)
+	inputShape := onnxruntime.NewShape(batchSize, maxSeqLen)
+	inputTensor, err := onnxruntime.NewEmptyTensor[int64](inputShape)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create input tensor: %v", err)
+	}
+
+	// Create output tensor (1024-dimensional embeddings)
+	embeddingDim := int64(1024)
+	outputShape := onnxruntime.NewShape(batchSize, embeddingDim)
+	outputTensor, err := onnxruntime.NewEmptyTensor[float32](outputShape)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create output tensor: %v", err)
+	} // Create session options
+	var options *onnxruntime.SessionOptions
+	if useGPU {
+		var err error
+		options, err = onnxruntime.NewSessionOptions()
+		if err != nil {
+			log.Printf("Failed to create session options: %v", err)
+			options = nil
+		} else {
+			// Try to enable CUDA provider
+			cudaOptions, err := onnxruntime.NewCUDAProviderOptions()
+			if err != nil {
+				log.Printf("Failed to create CUDA provider options: %v", err)
+			} else {
+				// Configure basic CUDA options
+				cudaSettings := map[string]string{
+					"device_id": "0",
+				}
+				err = cudaOptions.Update(cudaSettings)
+				if err != nil {
+					log.Printf("Failed to update CUDA settings: %v", err)
+				}
+
+				err = options.AppendExecutionProviderCUDA(cudaOptions)
+				if err != nil {
+					log.Printf("Failed to enable CUDA provider: %v, using CPU", err)
+				} else {
+					log.Printf("CUDA provider enabled")
+				}
+
+				// Clean up CUDA options
+				cudaOptions.Destroy()
+			}
+		}
+	}
+
+	// Create ONNX session
+	session, err := onnxruntime.NewAdvancedSession(
+		onnxPath,
+		inputNames, outputNames,
+		[]onnxruntime.Value{inputTensor}, []onnxruntime.Value{outputTensor},
+		options,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ONNX session: %v", err)
+	}
+
+	log.Printf("Model loaded successfully (using %s)", map[bool]string{true: "GPU", false: "CPU"}[useGPU])
 
 	return &EmbeddingModel{
-		vocab: vocab,
+		vocab:        vocab,
+		useGPU:       useGPU,
+		session:      session,
+		inputTensor:  inputTensor,
+		outputTensor: outputTensor,
+		inputName:    inputNames[0],
+		outputName:   outputNames[0],
 	}, nil
 }
 
 func (em *EmbeddingModel) Close() error {
+	if em.inputTensor != nil {
+		em.inputTensor.Destroy()
+	}
+	if em.outputTensor != nil {
+		em.outputTensor.Destroy()
+	}
+	if em.session != nil {
+		em.session.Destroy()
+	}
+	// Don't destroy environment since it's global
 	log.Println("Model session closed")
 	return nil
 }
@@ -58,7 +170,7 @@ func (em *EmbeddingModel) Close() error {
 func (em *EmbeddingModel) tokenize(text string) []int {
 	tokens := strings.Fields(strings.ToLower(text))
 	tokenIDs := make([]int, 0, len(tokens))
-	
+
 	for _, token := range tokens {
 		if id, exists := em.vocab[token]; exists {
 			tokenIDs = append(tokenIDs, id)
@@ -69,209 +181,147 @@ func (em *EmbeddingModel) tokenize(text string) []int {
 			}
 		}
 	}
-	
+
 	return tokenIDs
 }
 
-func (em *EmbeddingModel) Encode(text string) ([]float32, error) {
-	// Simulate GPU inference timing
+func (em *EmbeddingModel) Encode(text string) ([]int8, error) {
 	start := time.Now()
-	
-	// Tokenize the input (simulate proper tokenization)
+
+	// Tokenize the input
 	words := strings.Fields(strings.ToLower(text))
-	tokenIds := make([]int, 0, len(words)+2) // +2 for CLS and SEP tokens
-	
+	tokenIds := make([]int64, 0, len(words)+2) // +2 for CLS and SEP tokens
+
 	// Add CLS token
 	tokenIds = append(tokenIds, 101) // CLS token ID
-	
+
 	// Convert words to token IDs
 	for _, word := range words {
 		if id, exists := em.vocab[word]; exists {
-			tokenIds = append(tokenIds, id)
+			tokenIds = append(tokenIds, int64(id))
 		} else {
-			tokenIds = append(tokenIds, em.vocab["[UNK]"]) // Unknown token
+			tokenIds = append(tokenIds, int64(em.vocab["[UNK]"])) // Unknown token
 		}
 	}
-	
+
 	// Add SEP token
 	tokenIds = append(tokenIds, 102) // SEP token ID
-	
-	// Create high-quality semantic embeddings
-	embedding := make([]float32, 1024)
-	
-	// Define semantic categories with more sophisticated embeddings
-	greetings := map[string]bool{
-		"hi":      true,
-		"bonjour": true,
-		"hello":   true,
-		"hola":    true,
-		"salut":   true,
-	}
-	
-	business := map[string]bool{
-		"actionable": true,
-		"business":   true,
-		"insights":   true,
-		"strategy":   true,
-		"analytics":  true,
-		"data":       true,
-		"metrics":    true,
-	}
-	
-	// Calculate semantic embeddings based on content
-	greetingCount := 0
-	businessCount := 0
-	
-	for _, word := range words {
-		if greetings[word] {
-			greetingCount++
-		}
-		if business[word] {
-			businessCount++
+
+	// Pad to fixed sequence length (512)
+	maxLen := 512
+	if len(tokenIds) > maxLen {
+		tokenIds = tokenIds[:maxLen]
+	} else {
+		for len(tokenIds) < maxLen {
+			tokenIds = append(tokenIds, int64(em.vocab["[PAD]"]))
 		}
 	}
-	
-	// Create embeddings based on semantic content
-	if greetingCount > 0 {
-		// Greeting embeddings cluster in dimensions 0-200
-		for i := 0; i < 200; i++ {
-			base := float32(0.8) // Strong signal for greetings
-			variation := float32(i%10) * 0.02 // Small variations
-			embedding[i] = base + variation
-		}
-		// Add language-specific patterns
-		if strings.Contains(text, "bonjour") {
-			for i := 50; i < 100; i++ {
-				embedding[i] += 0.3 // French greeting marker
-			}
-		}
-		if strings.Contains(text, "hi") {
-			for i := 0; i < 50; i++ {
-				embedding[i] += 0.3 // English greeting marker
-			}
-		}
+
+	// Fill input tensor with tokenIds
+	inputData := em.inputTensor.GetData()
+	copy(inputData, tokenIds)
+
+	// Run inference
+	err := em.session.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run inference: %v", err)
 	}
-	
-	if businessCount > 0 {
-		// Business embeddings cluster in dimensions 600-800
-		for i := 600; i < 800; i++ {
-			base := float32(0.7) // Strong signal for business terms
-			variation := float32(i%10) * 0.03
-			embedding[i] = base + variation
-		}
-		// Multi-word business phrases get stronger signals
-		if businessCount >= 2 {
-			for i := 700; i < 750; i++ {
-				embedding[i] += 0.4 // Multi-term business concept
-			}
+
+	// Get output data
+	outputData := em.outputTensor.GetData()
+
+	// Convert float32 output to int8
+	embedding := make([]int8, len(outputData))
+	for i, val := range outputData {
+		// Scale and clamp to int8 range [-128, 127]
+		scaled := val * 127
+		if scaled > 127 {
+			embedding[i] = 127
+		} else if scaled < -128 {
+			embedding[i] = -128
+		} else {
+			embedding[i] = int8(scaled)
 		}
 	}
-	
-	// Add text length and complexity features
-	textLen := len(text)
-	for i := 400; i < 500; i++ {
-		embedding[i] = float32(textLen%20) * 0.05
+
+	inferenceTime := time.Since(start)
+	if em.useGPU {
+		log.Printf("GPU inference completed in %v", inferenceTime)
+	} else {
+		log.Printf("CPU inference completed in %v", inferenceTime)
 	}
-	
-	// Add character-level features for uniqueness
-	for i, char := range text {
-		if i >= 10 { break } // Limit to first 10 characters
-		idx := (int(char) + i*7) % 200 + 300
-		if idx < 1024 {
-			embedding[idx] += 0.1
-		}
-	}
-	
-	// Normalize the embedding vector
-	var norm float32
-	for _, val := range embedding {
-		norm += val * val
-	}
-	norm = float32(math.Sqrt(float64(norm)))
-	
-	if norm > 0 {
-		for i := range embedding {
-			embedding[i] /= norm
-		}
-	}
-	
-	// Simulate GPU processing time (much faster than CPU)
-	elapsed := time.Since(start)
-	if elapsed < time.Microsecond*100 { // Simulate minimum GPU inference time
-		time.Sleep(time.Microsecond*100 - elapsed)
-	}
-	
+
 	return embedding, nil
 }
 
-func cosineSimilarity(a, b []float32) float32 {
+func cosineSimilarity(a, b []int8) float32 {
 	if len(a) != len(b) {
 		return 0.0
 	}
-	
+
 	var dotProduct, normA, normB float32
 	for i := 0; i < len(a); i++ {
-		dotProduct += a[i] * b[i]
-		normA += a[i] * a[i]
-		normB += b[i] * b[i]
+		dotProduct += float32(a[i]) * float32(b[i])
+		normA += float32(a[i]) * float32(a[i])
+		normB += float32(b[i]) * float32(b[i])
 	}
-	
+
 	if normA == 0 || normB == 0 {
 		return 0.0
 	}
-	
+
 	return dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
 }
 
 func main() {
 	fmt.Println("Go Embedding Model Test")
 	fmt.Println("=======================")
-	
+
 	// Check if model files exist
 	vocabPath := "model/vocab.json"
 	if _, err := os.Stat(vocabPath); os.IsNotExist(err) {
 		log.Printf("Vocabulary file not found at %s, creating dummy vocab for testing", vocabPath)
-		
+
 		// Create a dummy vocab for testing
 		dummyVocab := map[string]int{
-			"[UNK]": 0,
-			"[PAD]": 1,
-			"hi":    2,
-			"hello": 3,
-			"bonjour": 4,
+			"[UNK]":      0,
+			"[PAD]":      1,
+			"hi":         2,
+			"hello":      3,
+			"bonjour":    4,
 			"actionable": 5,
-			"business": 6,
-			"insights": 7,
+			"business":   6,
+			"insights":   7,
 		}
-		
+
 		err := os.MkdirAll("model", 0755)
 		if err != nil {
 			log.Fatal(err)
 		}
-		
+
 		vocabData, _ := json.Marshal(dummyVocab)
 		err = ioutil.WriteFile(vocabPath, vocabData, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	
-	// Create the ONNX-based model
-	model, err := NewEmbeddingModel("model/embedding_model.onnx", "model/tokenizer.json")
+
+	// Create the ONNX-based model (CPU only for latest version)
+	model, err := NewEmbeddingModel("model/embedding_model.onnx", "model/tokenizer.json", false)
 	if err != nil {
 		log.Fatalf("Failed to create embedding model: %v", err)
 	}
 	defer model.Close()
-	
+
 	// Test texts
 	testTexts := []string{
 		"hi",
-		"bonjour", 
+		"bonjour",
 		"actionable business insights",
 	}
-	
+
 	// Generate embeddings
-	embeddings := make([][]float32, len(testTexts))
+	embeddings := make([][]int8, len(testTexts))
 	for i, text := range testTexts {
 		embedding, err := model.Encode(text)
 		if err != nil {
@@ -280,35 +330,33 @@ func main() {
 		embeddings[i] = embedding
 		fmt.Printf("Generated embedding for '%s' (dim: %d)\n", text, len(embedding))
 	}
-	
+
 	// Calculate similarities
 	fmt.Println("\nSimilarity Results:")
 	fmt.Println("==================")
-	
+
 	sim1 := cosineSimilarity(embeddings[0], embeddings[1])
 	sim2 := cosineSimilarity(embeddings[0], embeddings[2])
 	sim3 := cosineSimilarity(embeddings[1], embeddings[2])
-	
+
 	fmt.Printf("'hi' vs 'bonjour': %.4f\n", sim1)
 	fmt.Printf("'hi' vs 'actionable business insights': %.4f\n", sim2)
 	fmt.Printf("'bonjour' vs 'actionable business insights': %.4f\n", sim3)
-	
+
 	// Test if hi and bonjour are closer than either is to "actionable business insights"
 	if sim1 > sim2 && sim1 > sim3 {
 		fmt.Println("\n✓ SUCCESS: 'hi' and 'bonjour' are closer to each other than to 'actionable business insights'")
 	} else {
 		fmt.Println("\n✗ The similarity relationships don't match expected pattern")
-		fmt.Println("  (This is expected with the simple hash-based embedding)")
 	}
-	
-	fmt.Println("\nNote: This is using a simple hash-based embedding for demonstration.")
-	fmt.Println("A real implementation would use the trained model weights.")
-	
+
+	fmt.Println("\nNote: Using simulated ONNX inference with int8 quantized embeddings.")
+	fmt.Println("Real model would load from embedding_model.onnx file.")
+
 	// Run performance benchmark
 	fmt.Println("\n" + strings.Repeat("=", 50))
-	fmt.Println("PERFORMANCE BENCHMARK")
+	fmt.Println("PERFORMANCE BENCHMARK (CPU)")
 	fmt.Println(strings.Repeat("=", 50))
-	
 	runBenchmark(model)
 }
 
@@ -325,9 +373,9 @@ func runBenchmark(model *EmbeddingModel) {
 		"cloud computing and microservices",
 		"performance optimization techniques",
 	}
-	
+
 	fmt.Printf("Benchmarking with %d different texts...\n", len(benchmarkTexts))
-	
+
 	// Warmup run
 	fmt.Println("\n1. Warmup run...")
 	start := time.Now()
@@ -338,28 +386,28 @@ func runBenchmark(model *EmbeddingModel) {
 	}
 	warmupTime := time.Since(start)
 	fmt.Printf("   Warmup completed in: %v\n", warmupTime)
-	
+
 	// Benchmark run - 10 embeddings
 	fmt.Println("\n2. Benchmark run (10 embeddings)...")
 	start = time.Now()
-	
+
 	for i, text := range benchmarkTexts {
 		embedStart := time.Now()
 		embedding, err := model.Encode(text)
 		embedTime := time.Since(embedStart)
-		
+
 		if err != nil {
 			log.Printf("Failed to encode text %d: %v", i+1, err)
 			continue
 		}
-		
-		fmt.Printf("   Embedding %2d: %6.2fms (dim: %d, text: \"%.30s...\")\n", 
+
+		fmt.Printf("   Embedding %2d: %6.2fms (dim: %d, text: \"%.30s...\")\n",
 			i+1, float64(embedTime.Nanoseconds())/1000000, len(embedding), text)
 	}
-	
+
 	totalTime := time.Since(start)
 	avgTime := totalTime / time.Duration(len(benchmarkTexts))
-	
+
 	fmt.Printf("\n3. Results Summary:\n")
 	fmt.Printf("   Total time: %v\n", totalTime)
 	fmt.Printf("   Average time per embedding: %v\n", avgTime)
