@@ -46,10 +46,9 @@ type EmbeddingModel struct {
 	referenceTokens map[string]ReferenceTokens
 	useGPU          bool
 	session         *onnxruntime.AdvancedSession
-	inputTensor     *onnxruntime.Tensor[int64]
-	outputTensor    *onnxruntime.Tensor[float32]
-	inputName       string
-	outputName      string
+	modelPath       string
+	inputNames      []string
+	outputNames     []string
 }
 
 // initONNXRuntime initializes the ONNX Runtime environment
@@ -59,7 +58,7 @@ func initONNXRuntime() error {
 	}
 
 	// Set the shared library path - adjust this based on your installation
-	onnxruntime.SetSharedLibraryPath("/usr/local/lib/libonnxruntime.so.1")
+	onnxruntime.SetSharedLibraryPath("/usr/local/lib/libonnxruntime.so.1.20.0")
 
 	// Initialize ONNX Runtime
 	err := onnxruntime.InitializeEnvironment()
@@ -107,25 +106,9 @@ func NewEmbeddingModel(onnxPath, referenceTokensPath string, useGPU bool) (*Embe
 	inputNames := []string{"input_ids"}
 	outputNames := []string{"embeddings"}
 
-	// Create input tensors
-	maxSeqLen := int64(512)
-	batchSize := int64(1)
-	inputShape := onnxruntime.NewShape(batchSize, maxSeqLen)
-	inputTensor, err := onnxruntime.NewEmptyTensor[int64](inputShape)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create input tensor: %v", err)
-	}
-
-	// Create output tensor (1024-dimensional embeddings)
-	embeddingDim := int64(1024)
-	outputShape := onnxruntime.NewShape(batchSize, embeddingDim)
-	outputTensor, err := onnxruntime.NewEmptyTensor[float32](outputShape)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create output tensor: %v", err)
-	}
-
 	// Set up session options
 	var options *onnxruntime.SessionOptions
+	var err error
 	if useGPU {
 		options, err = onnxruntime.NewSessionOptions()
 		if err != nil {
@@ -160,16 +143,29 @@ func NewEmbeddingModel(onnxPath, referenceTokensPath string, useGPU bool) (*Embe
 		}
 	}
 
+	// Create dummy tensors just for session creation
+	dummyInputShape := onnxruntime.NewShape(1, 8)
+	dummyInputTensor, err := onnxruntime.NewEmptyTensor[int64](dummyInputShape)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dummy input tensor: %v", err)
+	}
+	defer dummyInputTensor.Destroy()
+
+	dummyOutputShape := onnxruntime.NewShape(1, 1024)
+	dummyOutputTensor, err := onnxruntime.NewEmptyTensor[float32](dummyOutputShape)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dummy output tensor: %v", err)
+	}
+	defer dummyOutputTensor.Destroy()
+
 	// Create ONNX session
 	session, err := onnxruntime.NewAdvancedSession(
 		onnxPath,
 		inputNames, outputNames,
-		[]onnxruntime.Value{inputTensor}, []onnxruntime.Value{outputTensor},
+		[]onnxruntime.Value{dummyInputTensor}, []onnxruntime.Value{dummyOutputTensor},
 		options,
 	)
 	if err != nil {
-		inputTensor.Destroy()
-		outputTensor.Destroy()
 		return nil, fmt.Errorf("failed to create ONNX session: %v", err)
 	}
 
@@ -177,21 +173,14 @@ func NewEmbeddingModel(onnxPath, referenceTokensPath string, useGPU bool) (*Embe
 		referenceTokens: referenceTokens,
 		useGPU:          useGPU,
 		session:         session,
-		inputTensor:     inputTensor,
-		outputTensor:    outputTensor,
-		inputName:       inputNames[0],
-		outputName:      outputNames[0],
+		modelPath:       onnxPath,
+		inputNames:      inputNames,
+		outputNames:     outputNames,
 	}, nil
 }
 
 // Close releases all resources associated with the model
 func (em *EmbeddingModel) Close() error {
-	if em.inputTensor != nil {
-		em.inputTensor.Destroy()
-	}
-	if em.outputTensor != nil {
-		em.outputTensor.Destroy()
-	}
 	if em.session != nil {
 		em.session.Destroy()
 	}
@@ -203,7 +192,7 @@ func (em *EmbeddingModel) Close() error {
 func (em *EmbeddingModel) getTokenIds(text string) ([]int64, error) {
 	// First check if we have reference tokens for this exact text
 	if refTokens, exists := em.referenceTokens[text]; exists {
-		log.Printf("Using reference tokens for '%s'", text)
+		log.Printf("Using reference tokens for '%s' (length: %d)", text, refTokens.Length)
 		tokenIds := make([]int64, len(refTokens.TokenIDs))
 		for i, id := range refTokens.TokenIDs {
 			tokenIds[i] = int64(id)
@@ -214,12 +203,13 @@ func (em *EmbeddingModel) getTokenIds(text string) ([]int64, error) {
 	// Fallback: warn that we don't have reference tokens
 	log.Printf("Warning: No reference tokens for '%s', using simple fallback", text)
 
-	// Very basic fallback - just return CLS + UNK tokens + SEP + padding
-	tokenIds := make([]int64, 512)
-	tokenIds[0] = 101 // CLS
-	tokenIds[1] = 100 // UNK for the whole text
-	tokenIds[2] = 102 // SEP
-	// Rest are already 0 (PAD)
+	// Simple fallback - minimal sequence with no excessive padding
+	// This is a basic approximation and should be replaced with proper tokenization
+	tokenIds := []int64{
+		101, // CLS
+		100, // UNK for the whole text
+		102, // SEP
+	}
 
 	return tokenIds, nil
 }
@@ -241,27 +231,45 @@ func (em *EmbeddingModel) Encode(text string) ([]float32, error) {
 		return nil, fmt.Errorf("failed to tokenize text: %v", err)
 	}
 
-	// Ensure we have exactly 512 tokens (pad or truncate)
-	if len(tokenIds) > 512 {
-		tokenIds = tokenIds[:512]
-	} else if len(tokenIds) < 512 {
-		padded := make([]int64, 512)
-		copy(padded, tokenIds)
-		tokenIds = padded
+	// Create input tensor with the exact sequence length (no padding)
+	sequenceLength := int64(len(tokenIds))
+	batchSize := int64(1)
+	inputShape := onnxruntime.NewShape(batchSize, sequenceLength)
+	inputTensor, err := onnxruntime.NewTensor(inputShape, tokenIds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create input tensor: %v", err)
 	}
+	defer inputTensor.Destroy()
 
-	// Copy token IDs to input tensor
-	inputData := em.inputTensor.GetData()
-	copy(inputData, tokenIds)
+	// Create output tensor
+	embeddingDim := int64(1024)
+	outputShape := onnxruntime.NewShape(batchSize, embeddingDim)
+	outputTensor, err := onnxruntime.NewEmptyTensor[float32](outputShape)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create output tensor: %v", err)
+	}
+	defer outputTensor.Destroy()
+
+	// Create a new session for this inference with dynamic tensors
+	session, err := onnxruntime.NewAdvancedSession(
+		em.modelPath,
+		em.inputNames, em.outputNames,
+		[]onnxruntime.Value{inputTensor}, []onnxruntime.Value{outputTensor},
+		nil, // no special options needed
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create inference session: %v", err)
+	}
+	defer session.Destroy()
 
 	// Run inference
-	err = em.session.Run()
+	err = session.Run()
 	if err != nil {
 		return nil, fmt.Errorf("inference failed: %v", err)
 	}
 
 	// Get the output
-	outputData := em.outputTensor.GetData()
+	outputData := outputTensor.GetData()
 	result := make([]float32, len(outputData))
 	copy(result, outputData)
 
