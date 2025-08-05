@@ -1,0 +1,9 @@
+*.zip
+
+*.go.bak
+*.pt
+model_cache
+cached_model
+*.safetensors
+libtorch
+
