@@ -1,0 +1,10 @@
+This is a test sentence.
+Machine learning is fascinating.
+The weather is nice today.
+Python is a programming language.
+Artificial intelligence will change the world.
+Hello world
+The cat sits on the mat
+Technology is advancing rapidly
+Natural language processing
+Deep learning models

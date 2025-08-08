@@ -1,5 +1,5 @@
 *.zip
-
+real_model_cache/
 *.go.bak
 *.pt
 model_cache

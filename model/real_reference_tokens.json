@@ -1,0 +1,192 @@
+{
+  "Machine learning is fascinating.": {
+    "token_ids": [
+      3698,
+      4083,
+      2003,
+      17160,
+      1012
+    ],
+    "length": 5
+  },
+  "Artificial intelligence will change the world.": {
+    "token_ids": [
+      7976,
+      4454,
+      2097,
+      2689,
+      1996,
+      2088,
+      1012
+    ],
+    "length": 7
+  },
+  "Deep learning models are powerful.": {
+    "token_ids": [
+      2784,
+      4083,
+      4275,
+      2024,
+      3928,
+      1012
+    ],
+    "length": 6
+  },
+  "Neural networks process information.": {
+    "token_ids": [
+      15756,
+      6125,
+      2832,
+      2592,
+      1012
+    ],
+    "length": 5
+  },
+  "Hello world": {
+    "token_ids": [
+      7592,
+      2088
+    ],
+    "length": 2
+  },
+  "Good morning everyone": {
+    "token_ids": [
+      2204,
+      2851,
+      3071
+    ],
+    "length": 3
+  },
+  "Hi there friend": {
+    "token_ids": [
+      7632,
+      2045,
+      2767
+    ],
+    "length": 3
+  },
+  "The weather is nice today.": {
+    "token_ids": [
+      1996,
+      4633,
+      2003,
+      3835,
+      2651,
+      1012
+    ],
+    "length": 6
+  },
+  "Birds are singing beautifully.": {
+    "token_ids": [
+      5055,
+      2024,
+      4823,
+      17950,
+      1012
+    ],
+    "length": 5
+  },
+  "Trees grow tall in the forest.": {
+    "token_ids": [
+      3628,
+      4982,
+      4206,
+      1999,
+      1996,
+      3224,
+      1012
+    ],
+    "length": 7
+  },
+  "Python is a programming language.": {
+    "token_ids": [
+      18750,
+      2003,
+      1037,
+      4730,
+      2653,
+      1012
+    ],
+    "length": 6
+  },
+  "JavaScript runs in browsers.": {
+    "token_ids": [
+      9262,
+      22483,
+      3216,
+      1999,
+      16602,
+      2015,
+      1012
+    ],
+    "length": 7
+  },
+  "Code should be readable.": {
+    "token_ids": [
+      3642,
+      2323,
+      2022,
+      3191,
+      3085,
+      1012
+    ],
+    "length": 6
+  },
+  "The cat sits on the mat": {
+    "token_ids": [
+      1996,
+      4937,
+      7719,
+      2006,
+      1996,
+      13523
+    ],
+    "length": 6
+  },
+  "Pizza tastes delicious.": {
+    "token_ids": [
+      10733,
+      16958,
+      12090,
+      1012
+    ],
+    "length": 4
+  },
+  "Mathematics requires practice.": {
+    "token_ids": [
+      5597,
+      5942,
+      3218,
+      1012
+    ],
+    "length": 4
+  },
+  "This is a test sentence.": {
+    "token_ids": [
+      2023,
+      2003,
+      1037,
+      3231,
+      6251,
+      1012
+    ],
+    "length": 6
+  },
+  "Technology is advancing rapidly": {
+    "token_ids": [
+      2974,
+      2003,
+      10787,
+      5901
+    ],
+    "length": 4
+  },
+  "Natural language processing": {
+    "token_ids": [
+      3019,
+      2653,
+      6364
+    ],
+    "length": 3
+  }
+}
