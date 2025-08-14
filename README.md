@@ -96,6 +96,17 @@ Finds the most similar texts from a list of candidates.
 
 - Go 1.21+
 - Model weights (~119MB) - download with `setup.sh`
+- LibTorch (optional) - for future GPU acceleration
+
+## Optional: GPU Acceleration
+
+The current implementation uses pure Go and runs on CPU. For future GPU support:
+
+```bash
+./setup_libtorch.sh  # Interactive script to install LibTorch
+```
+
+This will download LibTorch with CPU or CUDA support based on your system.
 
 ## License
 
