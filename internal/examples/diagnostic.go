@@ -5,7 +5,7 @@ import (
 	"log"
 	"math"
 
-	"github.com/lee/gobed/gobed"
+	// Import the gobed package if needed
 )
 
 func main() {

@@ -8,7 +8,7 @@
 //
 // Example usage:
 //
-//	import "github.com/lee/gobed/gobed"
+//	import "github.com/lee101/gobed"
 //
 //	// Load the default production model
 //	model, err := gobed.NewSafetensorsEmbedding()

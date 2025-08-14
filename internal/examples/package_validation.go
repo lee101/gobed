@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/lee/gobed/gobed"
+	// Import the gobed package if needed
 )
 
 // TestPackageImport validates that the package can be imported and used correctly

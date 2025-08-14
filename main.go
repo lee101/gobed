@@ -1,4 +1,4 @@
-package main
+package gobed
 
 import (
 	"encoding/binary"
@@ -15,8 +15,8 @@ import (
 
 // EmbeddingModel provides a clean API for text embeddings using the real static-retrieval-mrl-en-v1 model
 type EmbeddingModel struct {
-	vocabSize       int
-	embedDim        int
+	VocabSize       int
+	EmbedDim        int
 	weights         [][]float32 // Real safetensors weights [vocab_size, embed_dim]
 	referenceTokens map[string]TokenData
 	embeddingBuffer []float32 // Pre-allocated for performance
@@ -66,8 +66,8 @@ func LoadModel() (*EmbeddingModel, error) {
 	}
 
 	model := &EmbeddingModel{
-		vocabSize:       vocabSize,
-		embedDim:        embedDim,
+		VocabSize:       vocabSize,
+		EmbedDim:        embedDim,
 		weights:         weights,
 		referenceTokens: referenceTokens,
 		embeddingBuffer: make([]float32, embedDim),
@@ -100,9 +100,9 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 
 	// Sum embeddings for all tokens (using real weights)
 	for _, tokenID := range tokenIDs {
-		if tokenID > 0 && tokenID < m.vocabSize {
+		if tokenID > 0 && tokenID < m.VocabSize {
 			weightRow := m.weights[tokenID]
-			for i := 0; i < m.embedDim; i++ {
+			for i := 0; i < m.EmbedDim; i++ {
 				m.embeddingBuffer[i] += weightRow[i]
 			}
 			validTokens++
@@ -118,7 +118,7 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 	}
 
 	// StaticEmbedding does NOT normalize - return raw mean pooled values
-	result := make([]float32, m.embedDim)
+	result := make([]float32, m.EmbedDim)
 	copy(result, m.embeddingBuffer)
 	return result, nil
 }
@@ -279,7 +279,8 @@ func loadReferenceTokens(filePath string) (map[string]TokenData, error) {
 	return tokens, err
 }
 
-func main() {
+// RunDemo runs the demonstration of the embedding model
+func RunDemo() {
 	fmt.Println("================================================================================")
 	fmt.Println("🚀 Gobed: Real Embedding Model Demo")
 	fmt.Println("================================================================================")
@@ -419,7 +420,7 @@ func main() {
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("✅ Demo completed successfully!")
-	fmt.Printf("🎯 Model specs: %d vocab × %d dimensions\n", model.vocabSize, model.embedDim)
+	fmt.Printf("🎯 Model specs: %d vocab × %d dimensions\n", model.VocabSize, model.EmbedDim)
 	fmt.Println("🚀 Real static-retrieval-mrl-en-v1 weights loaded and working!")
 	fmt.Println(strings.Repeat("=", 80))
 }

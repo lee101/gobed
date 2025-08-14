@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/lee/gobed/gobed"
+	// Import the gobed package if needed
 )
 
 func main() {
