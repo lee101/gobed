@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
 	"os"
 	"sort"
-	"strings"
 	"time"
+
+	"github.com/sugarme/tokenizer"
+	"github.com/sugarme/tokenizer/pretrained"
 )
 
 // EmbeddingModel provides a clean API for text embeddings using the real static-retrieval-mrl-en-v1 model
@@ -20,6 +21,7 @@ type EmbeddingModel struct {
 	weights         [][]float32 // Real safetensors weights [vocab_size, embed_dim]
 	referenceTokens map[string]TokenData
 	embeddingBuffer []float32 // Pre-allocated for performance
+	tokenizer       *tokenizer.Tokenizer // BERT tokenizer for arbitrary text
 }
 
 // TensorInfo contains safetensors tensor metadata
@@ -48,7 +50,14 @@ func LoadModel() (*EmbeddingModel, error) {
 	start := time.Now()
 
 	// Load real safetensors weights
-	safetensorsPath := "./model/real_model.safetensors"
+	safetensorsPath := "model/real_model.safetensors"
+	// Check alternative paths
+	if _, err := os.Stat(safetensorsPath); os.IsNotExist(err) {
+		safetensorsPath = "../../model/real_model.safetensors"
+		if _, err := os.Stat(safetensorsPath); os.IsNotExist(err) {
+			safetensorsPath = "./model/real_model.safetensors"
+		}
+	}
 	if _, err := os.Stat(safetensorsPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("real model file not found: %s", safetensorsPath)
 	}
@@ -58,11 +67,44 @@ func LoadModel() (*EmbeddingModel, error) {
 		return nil, fmt.Errorf("failed to load safetensors: %v", err)
 	}
 
-	// Load real reference tokens
-	tokensPath := "./model/real_reference_tokens.json"
+	// Load tokenizer
+	tokenizerPath := "model/tokenizer.json"
+	if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
+		tokenizerPath = "../../model/tokenizer.json"
+		if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
+			tokenizerPath = "./model/tokenizer.json"
+		}
+	}
+	// Load the actual static-retrieval-mrl-en-v1 tokenizer
+	var tk *tokenizer.Tokenizer
+	
+	// Try loading from JSON file
+	if _, statErr := os.Stat(tokenizerPath); statErr == nil {
+		var tokErr error
+		tk, tokErr = pretrained.FromFile(tokenizerPath)
+		if tokErr != nil {
+			fmt.Printf("Warning: failed to load tokenizer from %s: %v\n", tokenizerPath, tokErr)
+			tk = nil
+		}
+	}
+	
+	// If loading failed, skip tokenizer (fall back to reference tokens only)
+	if tk == nil {
+		fmt.Println("Warning: tokenizer not available, using reference tokens only")
+	}
+
+	// Load real reference tokens (for backward compatibility)
+	tokensPath := "model/real_reference_tokens.json"
+	if _, err := os.Stat(tokensPath); os.IsNotExist(err) {
+		tokensPath = "../../model/real_reference_tokens.json"
+		if _, err := os.Stat(tokensPath); os.IsNotExist(err) {
+			tokensPath = "./model/real_reference_tokens.json"
+		}
+	}
 	referenceTokens, err := loadReferenceTokens(tokensPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load reference tokens: %v", err)
+		fmt.Printf("Warning: failed to load reference tokens: %v\n", err)
+		referenceTokens = make(map[string]TokenData) // Initialize empty map
 	}
 
 	model := &EmbeddingModel{
@@ -71,6 +113,7 @@ func LoadModel() (*EmbeddingModel, error) {
 		weights:         weights,
 		referenceTokens: referenceTokens,
 		embeddingBuffer: make([]float32, embedDim),
+		tokenizer:       tk,
 	}
 
 	loadTime := time.Since(start)
@@ -80,13 +123,35 @@ func LoadModel() (*EmbeddingModel, error) {
 
 // Encode converts text to embedding vector using real model weights
 func (m *EmbeddingModel) Encode(text string) ([]float32, error) {
-	// Check if we have reference tokens for this text
+	// First try tokenizer for arbitrary text
+	if m.tokenizer != nil {
+		return m.encodeWithTokenizer(text)
+	}
+	
+	// Fallback: check if we have reference tokens for this text
 	tokenData, exists := m.referenceTokens[text]
 	if !exists {
-		return nil, fmt.Errorf("text not in reference tokens: %s", text)
+		return nil, fmt.Errorf("text not in reference tokens and no tokenizer available: %s", text)
 	}
 
 	return m.computeEmbedding(tokenData.TokenIDs)
+}
+
+// encodeWithTokenizer tokenizes and encodes arbitrary text
+func (m *EmbeddingModel) encodeWithTokenizer(text string) ([]float32, error) {
+	// Tokenize the text
+    encoding, err := m.tokenizer.EncodeSingle(text, false)
+	if err != nil {
+		return nil, fmt.Errorf("tokenization failed: %v", err)
+	}
+	
+	// Convert uint32 token IDs to int
+	tokenIDs := make([]int, len(encoding.Ids))
+	for i, id := range encoding.Ids {
+		tokenIDs[i] = int(id)
+	}
+	
+	return m.computeEmbedding(tokenIDs)
 }
 
 // computeEmbedding performs the actual embedding computation with real weights
@@ -173,7 +238,7 @@ func (m *EmbeddingModel) FindMostSimilar(query string, candidates []string, limi
 	return results, nil
 }
 
-// GetAvailableTexts returns all texts that can be encoded
+// GetAvailableTexts returns all texts that can be encoded (from reference tokens)
 func (m *EmbeddingModel) GetAvailableTexts() []string {
 	texts := make([]string, 0, len(m.referenceTokens))
 	for text := range m.referenceTokens {
@@ -277,150 +342,4 @@ func loadReferenceTokens(filePath string) (map[string]TokenData, error) {
 	var tokens map[string]TokenData
 	err = json.Unmarshal(data, &tokens)
 	return tokens, err
-}
-
-// RunDemo runs the demonstration of the embedding model
-func RunDemo() {
-	fmt.Println("================================================================================")
-	fmt.Println("🚀 Gobed: Real Embedding Model Demo")
-	fmt.Println("================================================================================")
-	fmt.Println("Model: sentence-transformers/static-retrieval-mrl-en-v1 (REAL WEIGHTS)")
-	fmt.Println("")
-
-	// Load the real model
-	model, err := LoadModel()
-	if err != nil {
-		log.Fatalf("❌ Failed to load model: %v", err)
-	}
-
-	// Get available texts
-	availableTexts := model.GetAvailableTexts()
-	if len(availableTexts) == 0 {
-		log.Fatalf("❌ No texts available for encoding")
-	}
-
-	fmt.Printf("📚 Available texts for demo: %v\n\n", availableTexts)
-
-	// Demo 1: Basic embedding
-	fmt.Println("🔍 DEMO 1: Basic Text Encoding")
-	fmt.Println(strings.Repeat("-", 50))
-
-	for _, text := range availableTexts {
-		start := time.Now()
-		embedding, err := model.Encode(text)
-		elapsed := time.Since(start)
-
-		if err != nil {
-			fmt.Printf("❌ Failed to encode '%s': %v\n", text, err)
-			continue
-		}
-
-		fmt.Printf("Text: \"%s\"\n", text)
-		fmt.Printf("  • Encoding time: %v\n", elapsed)
-		fmt.Printf("  • Dimensions: %d\n", len(embedding))
-		fmt.Printf("  • Sample values: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
-			embedding[0], embedding[1], embedding[2], embedding[3], embedding[4])
-		fmt.Println()
-	}
-
-	// Demo 2: Semantic similarity relationships
-	fmt.Println("🎯 DEMO 2: Semantic Similarity Analysis")
-	fmt.Println(strings.Repeat("-", 50))
-
-	// Calculate all pairwise similarities
-	var allSims []SimilarityResult
-	for i := 0; i < len(availableTexts); i++ {
-		for j := i + 1; j < len(availableTexts); j++ {
-			text1, text2 := availableTexts[i], availableTexts[j]
-			sim, err := model.Similarity(text1, text2)
-			if err != nil {
-				continue
-			}
-
-			allSims = append(allSims, SimilarityResult{
-				Text1:      text1,
-				Text2:      text2,
-				Similarity: sim,
-			})
-		}
-	}
-
-	// Sort by similarity
-	sort.Slice(allSims, func(i, j int) bool {
-		return allSims[i].Similarity > allSims[j].Similarity
-	})
-
-	// Show most similar pairs
-	fmt.Println("🔥 Most Similar Pairs:")
-	for i, sim := range allSims {
-		if i >= 3 { // Show top 3
-			break
-		}
-		fmt.Printf("  %d. \"%-30s\" ↔ \"%-30s\" → %.4f\n",
-			i+1, sim.Text1, sim.Text2, sim.Similarity)
-	}
-
-	fmt.Println("\n❄️  Least Similar Pairs:")
-	for i := len(allSims) - 1; i >= len(allSims)-3 && i >= 0; i-- {
-		sim := allSims[i]
-		fmt.Printf("  %d. \"%-30s\" ↔ \"%-30s\" → %.4f\n",
-			len(allSims)-i, sim.Text1, sim.Text2, sim.Similarity)
-	}
-
-	// Demo 3: Find similar texts
-	if len(availableTexts) > 0 {
-		fmt.Println("\n🔎 DEMO 3: Find Most Similar Texts")
-		fmt.Println(strings.Repeat("-", 50))
-
-		query := availableTexts[0]
-		candidates := availableTexts[1:] // Exclude the query itself
-
-		if len(candidates) > 0 {
-			similar, err := model.FindMostSimilar(query, candidates, 3)
-			if err != nil {
-				fmt.Printf("❌ Error finding similar texts: %v\n", err)
-			} else {
-				fmt.Printf("Query: \"%s\"\n", query)
-				fmt.Println("Most similar texts:")
-				for i, sim := range similar {
-					fmt.Printf("  %d. \"%-30s\" → %.4f\n", i+1, sim.Text2, sim.Similarity)
-				}
-			}
-		}
-	}
-
-	// Demo 4: Performance summary
-	fmt.Println("\n⚡ DEMO 4: Performance Summary")
-	fmt.Println(strings.Repeat("-", 50))
-
-	// Benchmark encoding speed
-	if len(availableTexts) > 0 {
-		testText := availableTexts[0]
-		iterations := 1000
-
-		fmt.Printf("Benchmarking \"%s\" over %d iterations...\n", testText, iterations)
-
-		start := time.Now()
-		for i := 0; i < iterations; i++ {
-			_, err := model.Encode(testText)
-			if err != nil {
-				break
-			}
-		}
-		elapsed := time.Since(start)
-
-		avgLatency := elapsed / time.Duration(iterations)
-		throughput := float64(iterations) / elapsed.Seconds()
-
-		fmt.Printf("Results:\n")
-		fmt.Printf("  • Average latency: %v\n", avgLatency)
-		fmt.Printf("  • Throughput: %.0f encodings/sec\n", throughput)
-		fmt.Printf("  • Total time: %v\n", elapsed)
-	}
-
-	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("✅ Demo completed successfully!")
-	fmt.Printf("🎯 Model specs: %d vocab × %d dimensions\n", model.VocabSize, model.EmbedDim)
-	fmt.Println("🚀 Real static-retrieval-mrl-en-v1 weights loaded and working!")
-	fmt.Println(strings.Repeat("=", 80))
 }

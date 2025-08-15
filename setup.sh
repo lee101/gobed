@@ -32,9 +32,16 @@ echo ""
 
 # Install Python dependencies
 echo "🐍 Installing Python dependencies..."
-if ! pip3 show huggingface-hub safetensors &> /dev/null; then
-    echo "Installing: huggingface-hub safetensors"
-    pip3 install huggingface-hub safetensors
+PY_DEPS=(huggingface-hub safetensors sentence-transformers transformers torch)
+MISSING=()
+for dep in "${PY_DEPS[@]}"; do
+    if ! pip3 show "$dep" &> /dev/null; then
+        MISSING+=("$dep")
+    fi
+done
+if [ ${#MISSING[@]} -gt 0 ]; then
+    echo "Installing: ${MISSING[*]}"
+    pip3 install "${MISSING[@]}"
 else
     echo "✅ Python dependencies already installed"
 fi
@@ -47,6 +54,16 @@ else
     echo "📥 Downloading real model weights..."
     python3 download_real_model.py
     echo "✅ Model weights downloaded"
+fi
+echo ""
+
+# Check if tokenizer already exists
+if [ -f "model/tokenizer.json" ]; then
+    echo "✅ Tokenizer already downloaded (model/tokenizer.json)"
+else
+    echo "📥 Downloading tokenizer.json from static-retrieval-mrl-en-v1..."
+    curl -L -o model/tokenizer.json "https://huggingface.co/sentence-transformers/static-retrieval-mrl-en-v1/resolve/main/0_StaticEmbedding/tokenizer.json"
+    echo "✅ Tokenizer downloaded"
 fi
 echo ""
 

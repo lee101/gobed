@@ -1,4 +1,5 @@
 *.zip
+gobed
 real_model_cache/
 *.go.bak
 *.pt
