@@ -48,14 +48,14 @@ print("="*60)
 for i, text in enumerate(texts):
     print(f"\n📝 Text {i+1}: '{text}'")
     print(f"   Shape: Go={go_embeddings[i].shape}, Python={py_embeddings[i].shape}")
-    
+
     # Compare first 5 values
     go_vals = go_embeddings[i][:5]
     py_vals = py_embeddings[i][:5]
-    
+
     print(f"   Go first 5:     {go_vals}")
     print(f"   Python first 5: {py_vals}")
-    
+
     # Calculate difference
     if len(go_embeddings[i]) == 0:
         print("   ⚠️  Go could not encode this text (tokenizer/path issue)")
@@ -63,10 +63,10 @@ for i, text in enumerate(texts):
     diff = np.abs(go_embeddings[i] - py_embeddings[i])
     max_diff = np.max(diff)
     mean_diff = np.mean(diff)
-    
+
     print(f"   Max difference:  {max_diff:.8f}")
     print(f"   Mean difference: {mean_diff:.8f}")
-    
+
     if max_diff < 0.0001:
         print(f"   ✅ PERFECT MATCH! Using real safetensors model!")
     elif max_diff < 0.001:

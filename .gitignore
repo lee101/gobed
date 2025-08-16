@@ -8,3 +8,15 @@ cached_model
 *.safetensors
 libtorch
 
+# Do not commit model directory (large files)
+model/
+
+# Build artifacts
+gobed_cuda
+*.out
+*.test
+
+# Python caches
+__pycache__/
+*.pyc
+
