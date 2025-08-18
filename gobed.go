@@ -7,8 +7,12 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sugarme/tokenizer"
 	"github.com/sugarme/tokenizer/pretrained"
@@ -137,21 +141,60 @@ func (m *EmbeddingModel) Encode(text string) ([]float32, error) {
 	return m.computeEmbedding(tokenData.TokenIDs)
 }
 
-// encodeWithTokenizer tokenizes and encodes arbitrary text
+// encodeWithTokenizer tokenizes and encodes arbitrary text with robust error handling
 func (m *EmbeddingModel) encodeWithTokenizer(text string) ([]float32, error) {
-	// Tokenize the text
-    encoding, err := m.tokenizer.EncodeSingle(text, false)
+	// Normalize and clean text
+	cleanText := normalizeText(text)
+	
+	// Handle empty text after normalization
+	if strings.TrimSpace(cleanText) == "" {
+		// Return zero embedding for empty text
+		result := make([]float32, m.EmbedDim)
+		return result, nil
+	}
+	
+	// Tokenize with recovery from panics
+	var encoding *tokenizer.Encoding
+	var err error
+	
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("tokenizer panic recovered: %v", r)
+			}
+		}()
+		encoding, err = m.tokenizer.EncodeSingle(cleanText, false)
+	}()
+	
 	if err != nil {
-		return nil, fmt.Errorf("tokenization failed: %v", err)
+		return nil, fmt.Errorf("tokenization failed for text '%s': %v", truncateForError(text), err)
 	}
 	
-	// Convert uint32 token IDs to int
-	tokenIDs := make([]int, len(encoding.Ids))
-	for i, id := range encoding.Ids {
-		tokenIDs[i] = int(id)
+	// Handle empty tokenization result
+	if encoding == nil || len(encoding.Ids) == 0 {
+		// Return zero embedding for texts that produce no tokens
+		result := make([]float32, m.EmbedDim)
+		return result, nil
 	}
 	
-	return m.computeEmbedding(tokenIDs)
+	// Convert uint32 token IDs to int, filtering out invalid tokens
+	validTokenIDs := make([]int, 0, len(encoding.Ids))
+	for _, id := range encoding.Ids {
+		tokenID := int(id)
+		// Only include tokens that are within vocabulary bounds
+		if tokenID >= 0 && tokenID < m.VocabSize {
+			validTokenIDs = append(validTokenIDs, tokenID)
+		}
+	}
+	
+	// Handle case where all tokens were filtered out
+	if len(validTokenIDs) == 0 {
+		// Return zero embedding
+		result := make([]float32, m.EmbedDim)
+		return result, nil
+	}
+	
+	return m.computeEmbedding(validTokenIDs)
 }
 
 // computeEmbedding performs the actual embedding computation with real weights
@@ -163,28 +206,52 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 
 	validTokens := 0
 
-	// Sum embeddings for all tokens (using real weights)
+	// Sum embeddings for all tokens (using real weights) with robust bounds checking
 	for _, tokenID := range tokenIDs {
-		if tokenID > 0 && tokenID < m.VocabSize {
+		// Enhanced bounds checking
+		if tokenID >= 0 && tokenID < m.VocabSize && tokenID < len(m.weights) {
 			weightRow := m.weights[tokenID]
-			for i := 0; i < m.EmbedDim; i++ {
-				m.embeddingBuffer[i] += weightRow[i]
+			if weightRow != nil && len(weightRow) == m.EmbedDim {
+				// Safe addition with bounds checking
+				for i := 0; i < m.EmbedDim && i < len(weightRow) && i < len(m.embeddingBuffer); i++ {
+					// Check for NaN or Inf values in weights
+					if !math.IsNaN(float64(weightRow[i])) && !math.IsInf(float64(weightRow[i]), 0) {
+						m.embeddingBuffer[i] += weightRow[i]
+					}
+				}
+				validTokens++
 			}
-			validTokens++
 		}
 	}
 
-	// Mean pooling (exactly like StaticEmbedding model)
+	// Mean pooling (exactly like StaticEmbedding model) with safety checks
 	if validTokens > 0 {
 		invValidTokens := 1.0 / float32(validTokens)
-		for i := range m.embeddingBuffer {
-			m.embeddingBuffer[i] *= invValidTokens
+		
+		// Check for division by zero and ensure result is finite
+		if !math.IsNaN(float64(invValidTokens)) && !math.IsInf(float64(invValidTokens), 0) {
+			for i := 0; i < len(m.embeddingBuffer) && i < m.EmbedDim; i++ {
+				m.embeddingBuffer[i] *= invValidTokens
+				
+				// Ensure final values are finite
+				if math.IsNaN(float64(m.embeddingBuffer[i])) || math.IsInf(float64(m.embeddingBuffer[i]), 0) {
+					m.embeddingBuffer[i] = 0
+				}
+			}
 		}
 	}
 
 	// StaticEmbedding does NOT normalize - return raw mean pooled values
 	result := make([]float32, m.EmbedDim)
 	copy(result, m.embeddingBuffer)
+	
+	// Final sanity check on result
+	for i, val := range result {
+		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
+			result[i] = 0
+		}
+	}
+	
 	return result, nil
 }
 
@@ -342,4 +409,89 @@ func loadReferenceTokens(filePath string) (map[string]TokenData, error) {
 	var tokens map[string]TokenData
 	err = json.Unmarshal(data, &tokens)
 	return tokens, err
+}
+
+// normalizeText performs comprehensive text normalization for robust tokenization
+func normalizeText(text string) string {
+	// Handle invalid UTF-8
+	if !utf8.ValidString(text) {
+		// Fix invalid UTF-8 by replacing invalid sequences
+		text = strings.ToValidUTF8(text, "")
+	}
+	
+	// Remove or replace control characters (except common whitespace)
+	var result strings.Builder
+	for _, r := range text {
+		if unicode.IsControl(r) {
+			switch r {
+			case '\t', '\n', '\r':
+				// Keep common whitespace characters
+				result.WriteRune(r)
+			case '\u0000':
+				// Skip null bytes
+			default:
+				// Replace other control characters with space
+				result.WriteRune(' ')
+			}
+		} else {
+			result.WriteRune(r)
+		}
+	}
+	text = result.String()
+	
+	// Remove zero-width characters that can cause tokenization issues
+	zeroWidthChars := regexp.MustCompile("[\u200B\u200C\u200D\u2060\uFEFF]")
+	text = zeroWidthChars.ReplaceAllString(text, "")
+	
+	// Normalize multiple consecutive whitespace to single space
+	multiSpace := regexp.MustCompile(`\s+`)
+	text = multiSpace.ReplaceAllString(text, " ")
+	
+	// Handle bidirectional text override characters that might confuse tokenizers
+	bidiOverride := regexp.MustCompile("[\u202A-\u202E\u2066-\u2069]")
+	text = bidiOverride.ReplaceAllString(text, "")
+	
+	// Trim leading/trailing whitespace
+	text = strings.TrimSpace(text)
+	
+	return text
+}
+
+// truncateForError truncates text for error messages to avoid log spam
+func truncateForError(text string) string {
+	const maxLen = 50
+	if len(text) <= maxLen {
+		return text
+	}
+	return text[:maxLen-3] + "..."
+}
+
+// isValidTokenID checks if a token ID is within valid bounds
+func (m *EmbeddingModel) isValidTokenID(tokenID int) bool {
+	return tokenID >= 0 && tokenID < m.VocabSize
+}
+
+// safeComputeEmbedding computes embedding with additional safety checks
+func (m *EmbeddingModel) safeComputeEmbedding(tokenIDs []int) ([]float32, error) {
+	if len(tokenIDs) == 0 {
+		// Return zero embedding for empty token list
+		result := make([]float32, m.EmbedDim)
+		return result, nil
+	}
+	
+	// Filter out any invalid tokens
+	validTokens := make([]int, 0, len(tokenIDs))
+	for _, tokenID := range tokenIDs {
+		if m.isValidTokenID(tokenID) {
+			validTokens = append(validTokens, tokenID)
+		}
+	}
+	
+	if len(validTokens) == 0 {
+		// All tokens were invalid, return zero embedding
+		result := make([]float32, m.EmbedDim)
+		return result, nil
+	}
+	
+	return m.computeEmbedding(validTokens)
 }

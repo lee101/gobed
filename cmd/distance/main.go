@@ -42,7 +42,7 @@ func main() {
 		return
 	}
 
-	// Check if texts are available
+	// Check if texts are in reference tokens, otherwise use tokenizer
 	text1Found := false
 	text2Found := false
 	
@@ -54,15 +54,10 @@ func main() {
 			text2Found = true
 		}
 	}
-
-	if !text1Found {
-		fmt.Printf("❌ Text1 not found: \"%s\"\n", text1)
-		return
-	}
-
-	if !text2Found {
-		fmt.Printf("❌ Text2 not found: \"%s\"\n", text2)
-		return
+	
+	// If either text is not found, note that we'll use the tokenizer
+	if !text1Found || !text2Found {
+		fmt.Printf("ℹ️  Using tokenizer for arbitrary text input\n")
 	}
 
 	// Encode both texts with REAL model
