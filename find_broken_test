@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# find_broken_test
+# - Runs tests in priority order and fails fast on first failure
+# - Suppresses output for passing tests; prints full logs for the failing test
+# - Order: (1) unit (changed packages first), (2) integration, (3) browser (if present), (4) benchmarks
+# - Designed for Go monorepo; skips stages that don't apply
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT_DIR"
+
+log() { printf "%s\n" "$*" >&2; }
+
+debug() { if [[ "${DEBUG:-}" == "1" ]]; then printf "[debug] %s\n" "$*" >&2; fi }
+
+# Collect changed files relative to the main branch or upstream
+_get_base_ref() {
+  if git rev-parse --verify --quiet origin/main >/dev/null; then
+    echo "origin/main"
+  else
+    # Fallback to the first remote main-like branch or initial commit
+    git for-each-ref --format='%(refname:short)' refs/remotes | grep -E 'main|master' | head -n1 || echo "$(git rev-list --max-parents=0 HEAD)"
+  fi
+}
+
+get_changed_paths() {
+  local base
+  base=$(_get_base_ref)
+  # Include staged/unstaged and untracked files
+  git status --porcelain=v1 | awk '{print $2}'
+  # Plus diff from base for committed changes on branch
+  git diff --name-only "$(git merge-base HEAD "$base")"...HEAD || true
+} 
+
+# Map filesystem paths to Go packages
+packages_from_paths() {
+  local paths=()
+  while IFS= read -r p; do
+    [[ -z "$p" ]] && continue
+    # Skip non-go files quickly; still map dirs
+    if [[ -d "$p" ]]; then
+      paths+=("$p")
+    else
+      paths+=("$(dirname "$p")")
+    fi
+  done
+  
+  # Unique dirs
+  printf '%s\n' "${paths[@]}" | awk 'NF' | sort -u | while IFS= read -r dir; do
+    # Only include dirs that are part of a Go module and buildable
+    if go list -f '{{.ImportPath}}' "$dir" >/dev/null 2>&1; then
+      go list -f '{{.ImportPath}}' "$dir"
+    fi
+  done | sort -u
+}
+
+run_go_tests_for_packages() {
+  local tag_opts=$1; shift || true
+  local pkgs=("$@")
+  for pkg in "${pkgs[@]}"; do
+    [[ -z "$pkg" ]] && continue
+    debug "Testing package: $pkg ${tag_opts}"
+    local tmp
+    tmp="$(mktemp)"
+    # Capture full verbose output for the package
+    if ! go test -run . -v ${tag_opts} "$pkg" >"$tmp" 2>&1; then
+      log "\n=================================================="
+      log "❌ FAILED: $pkg"
+      log "==================================================\n"
+      cat "$tmp"
+      rm -f "$tmp"
+      exit 1
+    fi
+    rm -f "$tmp"
+  done
+}
+
+has_integration_tests() {
+  rg -q "_integration_test\\.go|// *\+build +integration|//go:build +integration" --type go || return 1
+}
+
+bench_pkgs() {
+  # Find packages with Benchmark functions
+  rg -n "^func +(Benchmark\w+)\(" --type go --glob "**/*_test.go" --no-messages -l | xargs -r -n1 dirname | sort -u | while IFS= read -r d; do
+    go list "$d" 2>/dev/null || true
+  done | sort -u
+}
+
+run_benchmarks() {
+  local pkgs
+  mapfile -t pkgs < <(bench_pkgs || true)
+  if [[ ${#pkgs[@]} -eq 0 ]]; then
+    debug "No explicit Go benchmarks detected; skipping benchmark stage."
+    return 0
+  fi
+  for pkg in "${pkgs[@]}"; do
+    debug "Benchmarking package: $pkg"
+    local tmp
+    tmp="$(mktemp)"
+    if ! go test -bench=. -run=^$ -benchmem "$pkg" >"$tmp" 2>&1; then
+      log "\n=================================================="
+      log "❌ BENCH FAILED: $pkg"
+      log "==================================================\n"
+      cat "$tmp"
+      rm -f "$tmp"
+      exit 1
+    fi
+    # On success, keep quiet to avoid noise
+    rm -f "$tmp"
+  done
+}
+
+packages_with_tests() {
+  local dirs
+  if command -v rg >/dev/null 2>&1; then
+    mapfile -t dirs < <(rg --no-messages -l --glob '**/*_test.go' --type go '.' 2>/dev/null | xargs -r -n1 dirname | sort -u)
+  else
+    mapfile -t dirs < <(find . -type f -name '*_test.go' -print 2>/dev/null | xargs -r -n1 dirname | sort -u)
+  fi
+  for d in "${dirs[@]:-}"; do
+    go list "$d" 2>/dev/null || true
+  done | sort -u
+}
+
+main() {
+  # Discover only packages that actually have Go tests
+  mapfile -t test_pkgs < <(packages_with_tests || true)
+
+  # Determine changed packages to prioritize, intersect with test packages
+  mapfile -t changed_paths < <(get_changed_paths | awk 'NF' | sort -u)
+  mapfile -t changed_pkgs_all < <(printf '%s\n' "${changed_paths[@]}" | packages_from_paths | sort -u)
+  declare -A test_pkg_set=()
+  if [[ ${#test_pkgs[@]} -gt 0 ]]; then
+    for p in "${test_pkgs[@]}"; do test_pkg_set["$p"]=1; done
+  fi
+  changed_pkgs=()
+  for p in "${changed_pkgs_all[@]:-}"; do
+    if [[ -n "${test_pkg_set[$p]:-}" ]]; then
+      changed_pkgs+=("$p")
+    fi
+  done
+
+  # Also prioritize the current working directory's package if it has tests
+  if pkg_here=$(go list . 2>/dev/null); then
+    if [[ -n "${test_pkg_set[$pkg_here]:-}" ]]; then
+      changed_pkgs=($(printf '%s\n' "$pkg_here" "${changed_pkgs[@]:-}" | awk 'NF' | awk '!seen[$0]++'))
+    fi
+  fi
+
+  # Build priority list: changed first, then remaining test packages
+  declare -A seen=()
+  priority_pkgs=()
+  for p in "${changed_pkgs[@]:-}"; do
+    [[ -z "$p" ]] && continue
+    seen["$p"]=1
+    priority_pkgs+=("$p")
+  done
+  for p in "${test_pkgs[@]:-}"; do
+    if [[ -z "${seen[$p]:-}" ]]; then
+      priority_pkgs+=("$p")
+    fi
+  done
+
+  # 1) Unit tests (default)
+  if [[ ${#priority_pkgs[@]} -gt 0 ]]; then
+    run_go_tests_for_packages "" "${priority_pkgs[@]}"
+  else
+    debug "No Go unit test packages detected; skipping unit stage."
+  fi
+
+  # 2) Integration tests (if any)
+  if has_integration_tests; then
+    # Run only in packages that actually contain integration tests when possible
+    mapfile -t it_dirs < <(rg -n "_integration_test\\.go|// *\+build +integration|//go:build +integration" --type go --no-messages -l | xargs -r -n1 dirname | sort -u)
+    mapfile -t it_pkgs < <(printf '%s\n' "${it_dirs[@]:-}" | while IFS= read -r d; do go list "$d" 2>/dev/null || true; done | sort -u)
+    if [[ ${#it_pkgs[@]} -gt 0 ]]; then
+      run_go_tests_for_packages "-tags=integration" "${it_pkgs[@]}"
+    fi
+  fi
+
+  # 3) Browser tests (skip if not present)
+  if [[ -f package.json ]] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+    tmp="$(mktemp)"
+    if ! npm test --silent >"$tmp" 2>&1; then
+      log "\n=================================================="
+      log "❌ BROWSER TESTS FAILED (npm test)"
+      log "==================================================\n"
+      cat "$tmp"
+      rm -f "$tmp"
+      exit 1
+    fi
+    rm -f "$tmp"
+  fi
+
+  # 4) Performance/Benchmarks (quiet unless failures)
+  run_benchmarks
+
+  log "✅ All tests and benchmarks passed"
+}
+
+main "$@"
