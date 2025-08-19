@@ -1,4 +1,4 @@
-module github.com/lee101/gobed
+module github.com/gobed
 
 go 1.21
 
@@ -6,6 +6,7 @@ require (
 	github.com/sugarme/gotch v0.9.1
 	github.com/sugarme/tokenizer v0.2.2
 	github.com/yalue/onnxruntime_go v1.19.0
+	golang.org/x/sys v0.15.0
 )
 
 require (

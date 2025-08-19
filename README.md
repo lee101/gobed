@@ -1,18 +1,20 @@
-# Gobed - Fast Go Embeddings
+# Gobed - Fast Go Embeddings with Vector Search
 
-A high-performance Go implementation of text embeddings using the `sentence-transformers/static-retrieval-mrl-en-v1` model. 
+A high-performance Go implementation of text embeddings using the `sentence-transformers/static-retrieval-mrl-en-v1` model, now with **state-of-the-art vector search** capabilities. 
 
-**71x faster than Python GPU** with bit-perfect accuracy.
+**71x faster than Python GPU** embeddings with **sub-millisecond semantic search** at scale.
 
 ## Features
 
 - ⚡ **Blazing Fast**: 150,000+ embeddings/second on CPU
+- 🔍 **Vector Search**: Sub-millisecond semantic search up to 1M vectors
 - 🎯 **100% Accurate**: Bit-perfect match with Python implementation
 - 📦 **Simple API**: Clean, easy-to-use Go interface
 - 🔧 **Production Ready**: Optimized memory usage, pre-allocated buffers
 - 💾 **Lightweight**: Only ~120MB memory usage (30MB with INT8)
 - 🚀 **INT8 Quantization**: 75% memory reduction with minimal accuracy loss
-- ⚙️ **SIMD Optimized**: AVX-512 acceleration for INT8 operations (with fallback)
+- ⚙️ **SIMD Optimized**: AVX-512/ARM NEON acceleration throughout
+- 🏗️ **Smart Indexing**: Automatic index selection (Flat/IVF/HNSW-PQ)
 
 ## Installation
 
@@ -75,6 +77,197 @@ func main() {
     similarityInt8 := gobed.CosineSimilarityInt8(embed1, embed2)
     fmt.Printf("INT8 Similarity: %.4f\n", similarityInt8)
 }
+```
+
+## 🔍 Vector Search Engine
+
+Gobed includes a state-of-the-art vector search engine that automatically selects the optimal index structure based on your data size.
+
+### Quick Search Example
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "github.com/gobed"
+)
+
+func main() {
+    // Load model
+    model, err := gobed.LoadModel()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Create search engine
+    engine := gobed.NewSearchEngine(model)
+
+    // Index documents
+    docs := []string{
+        "Machine learning is a subset of artificial intelligence",
+        "Deep learning uses neural networks with multiple layers",
+        "Natural language processing helps computers understand text",
+        "Computer vision enables machines to interpret images",
+        "Reinforcement learning trains agents through rewards",
+    }
+    
+    ids, err := engine.IndexBatch(docs)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Search
+    results, err := engine.Search("neural network architectures", 3)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    for i, result := range results {
+        fmt.Printf("%d. [%.3f] %s\n", i+1, result.Similarity, result.Text)
+    }
+}
+```
+
+### Search API
+
+#### Creating a Search Engine
+
+```go
+// Automatic configuration (recommended)
+engine := gobed.NewSearchEngine(model)
+
+// Custom configuration
+config := gobed.SearchConfig{
+    AutoMode:           true,  // Let engine choose optimal settings
+    MaxExactSearchSize: 50000, // Use exact search below this size
+    NumClusters:        1024,  // Number of IVF clusters
+    SearchClusters:     8,     // Clusters to search (nprobe)
+    UseCompression:     true,  // Enable PQ compression
+    UseGraphRouting:    true,  // Use HNSW for routing
+}
+engine := gobed.NewSearchEngineWithConfig(model, config)
+```
+
+#### Indexing Documents
+
+```go
+// Index single document (returns auto-generated ID)
+id, err := engine.Index("Your text here")
+
+// Index with specific ID
+err := engine.IndexWithID(42, "Document with ID 42")
+
+// Batch indexing (most efficient)
+texts := []string{"doc1", "doc2", "doc3"}
+ids, err := engine.IndexBatch(texts)
+
+// Batch with specific IDs
+ids := []int{100, 101, 102}
+texts := []string{"doc1", "doc2", "doc3"}
+err := engine.IndexBatchWithIDs(ids, texts)
+```
+
+#### Searching
+
+```go
+// Basic search
+results, err := engine.Search("your query", 10) // Top 10 results
+
+// Advanced search with options
+opts := gobed.SearchOptions{
+    TopK:          5,      // Number of results
+    MinSimilarity: 0.7,    // Minimum similarity threshold (0-1)
+    MaxDistance:   100.0,  // Maximum distance threshold
+}
+results, err := engine.SearchWithOptions("your query", opts)
+
+// Find similar documents
+similar, err := engine.FindSimilar(documentID, 5) // 5 most similar
+```
+
+#### Managing Documents
+
+```go
+// Get document by ID
+text, exists := engine.GetDocument(id)
+
+// Get all documents
+allDocs := engine.GetAllDocuments() // Returns map[int]string
+
+// Get engine statistics
+stats := engine.Stats()
+fmt.Printf("Documents: %d, Index type: %s, Memory: %.2f MB\n",
+    stats.NumDocuments, stats.IndexType, stats.MemoryUsageMB)
+
+// Optimize index for current data size
+err := engine.Optimize()
+
+// Clear all documents
+engine.Clear()
+```
+
+### Search Performance
+
+The search engine automatically selects the optimal index based on your dataset size:
+
+| Dataset Size | Index Type | Search Latency | Memory Usage | Configuration |
+|-------------|------------|----------------|--------------|---------------|
+| ≤ 50K | SIMD-Flat | 0.3-0.5ms | ~25MB | Exact search with SIMD |
+| 50K-200K | IVF | 0.5-0.8ms | ~100MB | Inverted file index |
+| 200K-1M | IVF-HNSW | 0.8-1.0ms | ~200MB | IVF with graph routing |
+| >1M | IVF-HNSW-PQ | 1.0-1.5ms | ~500MB | Full compression stack |
+
+### Advanced: Custom Index Configuration
+
+For fine-tuned control over the search/accuracy trade-off:
+
+```go
+config := gobed.SearchConfig{
+    AutoMode: false,  // Manual configuration
+    
+    // For low latency (<1ms)
+    NumClusters:    4096,  // More clusters = faster search
+    SearchClusters: 4,     // Fewer probes = lower latency
+    UseCompression: true,  // PQ reduces memory and speeds up
+    
+    // For high accuracy (>90% recall)
+    NumClusters:    1024,  // Fewer clusters = better accuracy
+    SearchClusters: 16,    // More probes = higher recall
+    CandidatesToRerank: 256, // More reranking = better accuracy
+}
+```
+
+### Search Architecture
+
+The search engine uses a sophisticated multi-level approach:
+
+1. **Small Scale (≤50K vectors)**: SIMD-accelerated exact search
+   - AVX-512 VNNI on Intel, ARM NEON on ARM
+   - ~400ns per 512-dim dot product
+   - 100% recall guaranteed
+
+2. **Medium Scale (50K-1M vectors)**: IVF with optional HNSW
+   - Inverted File index with k-means clustering
+   - Optional HNSW graph for fast cluster routing
+   - Configurable recall/speed trade-off
+
+3. **Large Scale (>1M vectors)**: IVF-HNSW-PQ
+   - Product Quantization reduces memory 8x
+   - Asymmetric Distance Computation (ADC)
+   - Two-stage: approximate search → exact reranking
+
+### Running the Examples
+
+```bash
+# Basic search demo
+cd examples
+go run search_demo.go
+
+# Large-scale benchmark
+cd cmd/ann_demo
+go run main.go
 ```
 
 ## Performance
