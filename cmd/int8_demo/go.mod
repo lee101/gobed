@@ -1,0 +1,20 @@
+module github.com/leepenkman/gobed/cmd/int8_demo
+
+go 1.21
+
+replace github.com/leepenkman/gobed => ../..
+
+require (
+	github.com/daulet/tokenizers v0.9.0
+	github.com/leepenkman/gobed v0.0.0-00010101000000-000000000000
+)
+
+require (
+	github.com/emirpasic/gods v1.12.0 // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
+	github.com/rivo/uniseg v0.1.0 // indirect
+	github.com/schollz/progressbar/v2 v2.15.0 // indirect
+	github.com/sugarme/regexpset v0.0.0-20200920021344-4d4ec8eaf93c // indirect
+	github.com/sugarme/tokenizer v0.2.2 // indirect
+	golang.org/x/text v0.10.0 // indirect
+)

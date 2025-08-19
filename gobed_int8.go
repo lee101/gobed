@@ -285,6 +285,15 @@ func (m *EmbeddingModelInt8) Encode(text string) ([]uint8, error) {
 	}
 }
 
+// ComputeEmbeddingFromTokens computes INT8 embedding from token IDs
+func (m *EmbeddingModelInt8) ComputeEmbeddingFromTokens(tokenIDs []int) ([]uint8, error) {
+	if m.useInt8 {
+		return m.computeEmbeddingInt8(tokenIDs)
+	} else {
+		return m.computeEmbeddingFloat32AsInt8(tokenIDs)
+	}
+}
+
 // computeEmbeddingInt8 uses SIMD-accelerated INT8 computation
 func (m *EmbeddingModelInt8) computeEmbeddingInt8(tokenIDs []int) ([]uint8, error) {
 	result := make([]uint8, m.EmbedDim)
