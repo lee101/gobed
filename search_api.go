@@ -2,6 +2,7 @@ package gobed
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -109,7 +110,10 @@ func (se *SearchEngine) IndexBatchWithIDs(ids []int, texts []string) error {
 
 	// Initialize index if needed
 	if !se.initialized {
-		se.initializeIndex(len(se.documents) + len(texts))
+		err := se.initializeIndex(len(se.documents) + len(texts))
+		if err != nil {
+			return fmt.Errorf("failed to initialize index: %v", err)
+		}
 	}
 
 	// Add to index
@@ -296,7 +300,10 @@ func (se *SearchEngine) indexWithID(id int, text string) error {
 
 	// Initialize index if needed
 	if !se.initialized {
-		se.initializeIndex(1000) // Start with estimated size
+		err := se.initializeIndex(1000) // Start with estimated size
+		if err != nil {
+			return err
+		}
 	}
 
 	// Add to index
@@ -305,10 +312,34 @@ func (se *SearchEngine) indexWithID(id int, text string) error {
 	return se.index.Add(vec, embedding.Scale, id)
 }
 
-func (se *SearchEngine) initializeIndex(estimatedSize int) {
+func (se *SearchEngine) initializeIndex(estimatedSize int) error {
 	config := se.generateIndexConfig(estimatedSize)
 	se.index = search.NewEngine(config)
+	
+	// If we need IVF, we must train first
+	if estimatedSize > config.MaxFlatSize && config.NList > 0 {
+		// Generate training samples (can be synthetic for speed)
+		trainSize := min(estimatedSize/10, 10000)
+		trainVectors := make([]simd.Vec512, trainSize)
+		trainScales := make([]float32, trainSize)
+		
+		// Generate random training vectors
+		for i := 0; i < trainSize; i++ {
+			for j := 0; j < 512; j++ {
+				trainVectors[i][j] = int8(rand.Intn(256) - 128)
+			}
+			trainScales[i] = 1.0
+		}
+		
+		// Train the index
+		err := se.index.Train(trainVectors, trainScales)
+		if err != nil {
+			return fmt.Errorf("failed to train index: %v", err)
+		}
+	}
+	
 	se.initialized = true
+	return nil
 }
 
 func (se *SearchEngine) generateIndexConfig(estimatedSize int) search.Config {
