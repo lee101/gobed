@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gobed"
-	"github.com/gobed/ann/search"
-	"github.com/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/search"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 func main() {

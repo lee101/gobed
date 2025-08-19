@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 // KMeans performs k-means clustering on int8 vectors

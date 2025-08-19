@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gobed/ann/flat"
-	"github.com/gobed/ann/hnsw"
-	"github.com/gobed/ann/ivf"
-	"github.com/gobed/ann/pq"
-	"github.com/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/flat"
+	"github.com/lee101/gobed/ann/hnsw"
+	"github.com/lee101/gobed/ann/ivf"
+	"github.com/lee101/gobed/ann/pq"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 // Engine is the main search engine combining IVF-HNSW-PQ with reranking

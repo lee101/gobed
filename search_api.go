@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gobed/ann/search"
-	"github.com/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/search"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 // SearchEngine provides a high-level API for vector search

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 // SearchResult represents a search result with ID and score

@@ -3,8 +3,8 @@ package ivf
 import (
 	"sync"
 
-	"github.com/gobed/ann/simd"
-	"github.com/gobed/ann/flat"
+	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/flat"
 )
 
 // IVFIndex is an inverted file index for approximate search

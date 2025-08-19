@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gobed/ann/search"
-	"github.com/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/search"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 // VectorIndex provides high-performance vector search capabilities

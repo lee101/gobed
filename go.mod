@@ -1,4 +1,4 @@
-module github.com/gobed
+module github.com/lee101/gobed
 
 go 1.21
 

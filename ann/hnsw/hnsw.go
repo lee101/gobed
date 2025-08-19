@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/gobed/ann/simd"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 // HNSW implements Hierarchical Navigable Small World graph
