@@ -37,7 +37,7 @@ type SearchConfig struct {
 func DefaultSearchConfig() SearchConfig {
 	return SearchConfig{
 		AutoMode:           true,
-		MaxExactSearchSize: 50000,
+		MaxExactSearchSize: 5000,  // Bias toward speed - use approximate search early
 	}
 }
 
@@ -326,49 +326,61 @@ func (se *SearchEngine) generateIndexConfig(estimatedSize int) search.Config {
 		}
 	}
 
-	// Auto mode - choose optimal settings based on size
-	if estimatedSize <= 50000 {
-		// Small dataset - use exact search
-		return search.Config{
-			MaxFlatSize: 100000,
-			UseParallel: true,
-		}
-	} else if estimatedSize <= 200000 {
-		// Medium dataset - IVF without PQ
+	// Auto mode - aggressively choose approximate methods for speed
+	if estimatedSize <= 5000 {
+		// Very small dataset - exact search is still fast
 		return search.Config{
 			MaxFlatSize: 10000,
-			NList:       int(float64(estimatedSize) / 100), // ~100 vectors per cluster
-			NProbe:      8,
-			HNSWEnabled: false,
-			RerankSize:  128,
 			UseParallel: true,
 		}
-	} else if estimatedSize <= 1000000 {
+	} else if estimatedSize <= 20000 {
+		// Small dataset - simple IVF with small clusters
+		return search.Config{
+			MaxFlatSize: 1000,
+			NList:       int(float64(estimatedSize) / 50), // ~50 vectors per cluster
+			NProbe:      4,  // Search only 4 clusters for speed
+			HNSWEnabled: false,
+			RerankSize:  64,  // Small rerank for speed
+			UseParallel: true,
+		}
+	} else if estimatedSize <= 100000 {
+		// Medium dataset - IVF with moderate settings
+		return search.Config{
+			MaxFlatSize: 1000,
+			NList:       int(float64(estimatedSize) / 100), // ~100 vectors per cluster
+			NProbe:      8,   // Still fast with 8 probes
+			M:           32,  // Light PQ compression
+			NBits:       8,
+			HNSWEnabled: false,  // Skip HNSW for simplicity
+			RerankSize:  100,
+			UseParallel: true,
+		}
+	} else if estimatedSize <= 500000 {
 		// Large dataset - IVF with HNSW routing
 		return search.Config{
-			MaxFlatSize: 10000,
-			NList:       int(float64(estimatedSize) / 250), // ~250 vectors per cluster
-			NProbe:      16,
+			MaxFlatSize: 1000,
+			NList:       min(4096, int(float64(estimatedSize) / 200)), // ~200 vectors per cluster
+			NProbe:      12,
 			M:           64,
 			NBits:       8,
-			HNSWEnabled: true,
-			HNSWM:       16,
-			HNSWEfC:     200,
-			RerankSize:  256,
+			HNSWEnabled: true,  // Use HNSW for faster routing
+			HNSWM:       8,     // Small graph for speed
+			HNSWEfC:     100,   // Faster construction
+			RerankSize:  150,
 			UseParallel: true,
 		}
 	} else {
-		// Very large dataset - aggressive compression
+		// Very large dataset - maximum speed optimization
 		return search.Config{
-			MaxFlatSize: 10000,
-			NList:       8192,
-			NProbe:      32,
+			MaxFlatSize: 1000,
+			NList:       8192,  // Fixed large number of clusters
+			NProbe:      16,    // Still relatively few probes
 			M:           64,
-			NBits:       6, // More compression
+			NBits:       6,     // Aggressive compression
 			HNSWEnabled: true,
-			HNSWM:       32,
-			HNSWEfC:     400,
-			RerankSize:  512,
+			HNSWM:       16,
+			HNSWEfC:     200,
+			RerankSize:  200,   // Moderate reranking
 			UseParallel: true,
 		}
 	}

@@ -214,10 +214,11 @@ The search engine automatically selects the optimal index based on your dataset 
 
 | Dataset Size | Index Type | Search Latency | Memory Usage | Configuration |
 |-------------|------------|----------------|--------------|---------------|
-| ≤ 50K | SIMD-Flat | 0.3-0.5ms | ~25MB | Exact search with SIMD |
-| 50K-200K | IVF | 0.5-0.8ms | ~100MB | Inverted file index |
-| 200K-1M | IVF-HNSW | 0.8-1.0ms | ~200MB | IVF with graph routing |
-| >1M | IVF-HNSW-PQ | 1.0-1.5ms | ~500MB | Full compression stack |
+| ≤ 5K | SIMD-Flat | 0.2-0.3ms | ~5MB | Exact search with SIMD |
+| 5K-20K | IVF | 0.3-0.5ms | ~20MB | Simple inverted file |
+| 20K-100K | IVF-PQ | 0.5-0.8ms | ~50MB | IVF with light compression |
+| 100K-500K | IVF-HNSW | 0.8-1.0ms | ~200MB | IVF with graph routing |
+| >500K | IVF-HNSW-PQ | 1.0-1.5ms | ~500MB | Full compression stack |
 
 ### Advanced: Custom Index Configuration
 

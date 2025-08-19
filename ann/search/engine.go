@@ -59,7 +59,7 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		MaxFlatSize:    50000,
+		MaxFlatSize:    5000,  // Use approximate search much earlier for speed
 		NList:          4096,
 		NProbe:         8,
 		M:              64,

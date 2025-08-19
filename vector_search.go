@@ -32,12 +32,12 @@ type VectorIndexConfig struct {
 // DefaultVectorIndexConfig returns default configuration
 func DefaultVectorIndexConfig() VectorIndexConfig {
 	return VectorIndexConfig{
-		MaxFlatSize: 50000,
-		NList:       4096,
-		NProbe:      8,
-		UsePQ:       true,
-		UseHNSW:     true,
-		RerankSize:  128,
+		MaxFlatSize: 5000,  // Use approximate search early for speed
+		NList:       1024,  // Moderate number of clusters
+		NProbe:      8,     // Few probes for low latency
+		UsePQ:       true,  // Enable compression for large datasets
+		UseHNSW:     true,  // Use graph routing when beneficial
+		RerankSize:  100,   // Smaller rerank for speed
 		UseParallel: true,
 	}
 }
