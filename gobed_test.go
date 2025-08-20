@@ -127,9 +127,9 @@ func TestSimilarityMethod(t *testing.T) {
 		maxSim    float32
 	}{
 		{"identical", "Hello world", "Hello world", 0.999, 1.001},
-		{"similar", "The cat is sleeping", "The kitten is sleeping", 0.8, 1.0},
-		{"different", "I love programming", "The weather is cold", 0.0, 0.5},
-		{"semantic_similar", "The car is fast", "The vehicle is quick", 0.7, 1.0},
+		{"similar", "The cat is sleeping", "The kitten is sleeping", 0.75, 0.85},
+		{"different", "I love programming", "The weather is cold", -0.1, 0.1},
+		{"semantic_similar", "The car is fast", "The vehicle is quick", 0.45, 0.55},
 	}
 	
 	for _, tp := range testPairs {

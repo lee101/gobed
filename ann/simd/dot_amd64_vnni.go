@@ -52,16 +52,10 @@ package simd
 // static inline int32_t dot512_i8_vnni_fast(const int8_t* a, const int8_t* b) {
 //   __m512i acc = _mm512_setzero_si512();
 //   __m512i bias = _mm512_set1_epi8((char)0x80);
-//   __m512i sum_b_vec = _mm512_setzero_si512();
 //   
 //   for (int i = 0; i < 512; i += 64) {
 //     __m512i va = _mm512_loadu_si512((const __m512i*)(a + i));
 //     __m512i vb = _mm512_loadu_si512((const __m512i*)(b + i));
-//     
-//     // Accumulate sum(b) using SAD (sum of absolute differences)
-//     // against zero to effectively sum bytes
-//     __m512i zeros = _mm512_setzero_si512();
-//     __m512i vb_abs = vb; // For signed bytes, we need special handling
 //     
 //     // Transform a to unsigned
 //     __m512i va_u = _mm512_xor_si512(va, bias);
