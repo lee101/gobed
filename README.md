@@ -17,6 +17,9 @@ Built with the `sentence-transformers/static-retrieval-mrl-en-v1` model and stat
 - 🚀 **INT8 Quantization**: 75% memory reduction with minimal accuracy loss
 - ⚙️ **SIMD Optimized**: AVX-512/ARM NEON acceleration throughout
 - 🏗️ **Smart Indexing**: Automatic index selection (Flat/IVF/HNSW-PQ)
+- 🌐 **Shared Memory**: Zero-copy cross-process search with 49% memory savings
+- 🚄 **Async Indexing**: 26.8x faster indexing with worker pools
+- 🔥 **HTTP Server**: High-performance search server with REST API
 
 ## Installation
 

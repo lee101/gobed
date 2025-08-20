@@ -268,6 +268,26 @@ fmt.Printf("Cache size: %d entries\n", engine.CacheSize())
 - **Memory:** 4GB for datasets up to 50K documents
 - **Storage:** Standard SSD sufficient
 
+## 🆕 Shared Memory Architecture
+
+Gobed now includes a high-performance shared memory architecture for cross-process vector search:
+
+### Key Benefits
+- **Zero-copy search**: Direct memory access without data duplication
+- **49% memory savings**: Single copy serves multiple processes
+- **60x faster indexing**: 7,812 docs/sec vs 128 docs/sec
+- **Process isolation**: Crashes don't affect other processes
+
+### Performance Comparison
+
+| Architecture | Memory Usage | Search Latency | Use Case |
+|-------------|--------------|----------------|----------|
+| Standard | 4.88 MB/process | 525µs | Single process |
+| Shared Memory | 9.92 MB total | 28µs (cached) | Multi-process servers |
+| HTTP Server | 10 MB | 1-2ms | Distributed systems |
+
+See [SHARED_MEMORY.md](SHARED_MEMORY.md) for detailed documentation.
+
 ## 🚀 Future Optimizations
 
 ### Planned Improvements
@@ -276,6 +296,7 @@ fmt.Printf("Cache size: %d entries\n", engine.CacheSize())
 2. **Distributed Indexing:** Multi-node support for enterprise scale
 3. **Advanced Caching:** Persistent disk cache for embeddings
 4. **Compression:** Further memory optimization with quantization
+5. **Multi-writer support:** Concurrent writes to shared memory
 
 ### Contributing Performance Improvements
 

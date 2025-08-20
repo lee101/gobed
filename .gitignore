@@ -1,5 +1,6 @@
 *.zip
 gobed
+cmd/search_benchmark/shared_memory_bench
 real_model_cache/
 *.go.bak
 *.pt
