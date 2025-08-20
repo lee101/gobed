@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobed"
+	"github.com/lee101/gobed"
 )
 
 // Sample texts from various domains - we'll generate variations of these

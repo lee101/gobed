@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobed"
+	"github.com/lee101/gobed"
 )
 
 // Realistic texts from different domains

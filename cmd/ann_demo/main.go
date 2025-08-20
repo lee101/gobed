@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/gobed"
+	"github.com/lee101/gobed"
 	"github.com/lee101/gobed/ann/search"
 	"github.com/lee101/gobed/ann/simd"
 )
