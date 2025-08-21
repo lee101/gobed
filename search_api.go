@@ -779,9 +779,4 @@ func (se *SearchEngine) Optimize() error {
 	return nil
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
+// min function removed - using the one from parallel_indexing.go

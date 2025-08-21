@@ -10,9 +10,10 @@ import (
 
 // VectorIndex provides high-performance vector search capabilities
 type VectorIndex struct {
-	engine *search.Engine
-	model  *EmbeddingModel
-	config VectorIndexConfig
+	engine     *search.Engine
+	model      *EmbeddingModel
+	config     VectorIndexConfig
+	// bulkIndexer *BulkGPUIndexer // Optional bulk GPU indexer (disabled for now)
 }
 
 // VectorIndexConfig configures the vector index
@@ -27,18 +28,24 @@ type VectorIndexConfig struct {
 	// Search configuration
 	RerankSize     int  // Number of candidates to rerank (default: 128)
 	UseParallel    bool // Use parallel search (default: true)
+	
+	// Bulk indexing configuration
+	EnableBulkGPU  bool // Enable GPU bulk indexing for large datasets
+	BulkBatchSize  int  // Batch size for GPU bulk indexing (default: 5000)
 }
 
 // DefaultVectorIndexConfig returns default configuration
 func DefaultVectorIndexConfig() VectorIndexConfig {
 	return VectorIndexConfig{
-		MaxFlatSize: 5000,  // Use approximate search early for speed
-		NList:       1024,  // Moderate number of clusters
-		NProbe:      8,     // Few probes for low latency
-		UsePQ:       true,  // Enable compression for large datasets
-		UseHNSW:     true,  // Use graph routing when beneficial
-		RerankSize:  100,   // Smaller rerank for speed
-		UseParallel: true,
+		MaxFlatSize:   5000,  // Use approximate search early for speed
+		NList:         1024,  // Moderate number of clusters
+		NProbe:        8,     // Few probes for low latency
+		UsePQ:         true,  // Enable compression for large datasets
+		UseHNSW:       true,  // Use graph routing when beneficial
+		RerankSize:    100,   // Smaller rerank for speed
+		UseParallel:   true,
+		EnableBulkGPU: true,  // Enable GPU bulk indexing for large datasets
+		BulkBatchSize: 5000,  // Process 5k documents at once on GPU
 	}
 }
 
@@ -59,11 +66,18 @@ func NewVectorIndex(model *EmbeddingModel, config VectorIndexConfig) *VectorInde
 		engineConfig.NBits = 8
 	}
 	
-	return &VectorIndex{
+	idx := &VectorIndex{
 		engine: search.NewEngine(engineConfig),
 		model:  model,
 		config: config,
 	}
+	
+	// GPU indexer disabled for now - would be initialized here
+	if config.EnableBulkGPU {
+		fmt.Printf("⚠️  Bulk GPU indexing not yet implemented\n")
+	}
+	
+	return idx
 }
 
 // Document represents a document to index
@@ -98,6 +112,9 @@ func (idx *VectorIndex) AddDocument(doc Document) error {
 
 // AddDocuments adds multiple documents efficiently
 func (idx *VectorIndex) AddDocuments(docs []Document) error {
+	// GPU indexing disabled for now
+	
+	// Fall back to standard CPU indexing
 	vectors := make([]simd.Vec512, len(docs))
 	scales := make([]float32, len(docs))
 	ids := make([]int, len(docs))
@@ -116,6 +133,16 @@ func (idx *VectorIndex) AddDocuments(docs []Document) error {
 	
 	// Add batch to index
 	return idx.engine.AddBatch(vectors, scales, ids)
+}
+
+// AddDocumentsBulkGPU forces GPU bulk indexing regardless of size
+func (idx *VectorIndex) AddDocumentsBulkGPU(docs []Document) error {
+	return fmt.Errorf("bulk GPU indexing not yet implemented")
+}
+
+// AddDocumentsWithMonitoring adds documents with real-time GPU monitoring
+func (idx *VectorIndex) AddDocumentsWithMonitoring(docs []Document) (<-chan interface{}, error) {
+	return nil, fmt.Errorf("bulk GPU indexing not yet implemented")
 }
 
 // Search performs similarity search
