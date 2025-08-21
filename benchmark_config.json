@@ -1,0 +1,9 @@
+{
+  "dataset_sizes": [100, 500, 1000, 2500, 5000],
+  "concurrency_levels": [1, 2, 4, 8, 16],
+  "warmup_runs": 2,
+  "benchmark_runs": 3,
+  "output_format": "table",
+  "save_results": true,
+  "use_synthetic_data": true
+}

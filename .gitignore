@@ -21,3 +21,4 @@ gobed_cuda
 __pycache__/
 *.pyc
 
+bulk_benchmark

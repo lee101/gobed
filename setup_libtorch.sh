@@ -22,13 +22,24 @@ echo ""
 # Create directory
 mkdir -p libtorch
 
-# Select appropriate LibTorch version
+# Select appropriate LibTorch version based on detected CUDA
 if [ "$CUDA_AVAILABLE" = true ]; then
+    CUDA_MAJOR=$(echo $CUDA_VERSION | cut -d. -f1)
+    CUDA_MINOR=$(echo $CUDA_VERSION | cut -d. -f2)
+    
     echo "Choose LibTorch version:"
     echo "1) CPU only (smaller, ~200MB)"
     echo "2) CUDA 11.8 (GPU acceleration, ~2GB)"
     echo "3) CUDA 12.1 (GPU acceleration, ~2GB)"
-    read -p "Enter choice [1-3]: " choice
+    if (( CUDA_MAJOR > 12 || (CUDA_MAJOR == 12 && CUDA_MINOR >= 2) )); then
+        echo "4) CUDA 12.4 (GPU acceleration, ~2GB) - Recommended for CUDA $CUDA_VERSION"
+        echo ""
+        echo "💡 Auto-selecting CUDA 12.4 for your CUDA $CUDA_VERSION setup"
+        choice=4
+    else
+        echo ""
+        read -p "Enter choice [1-4]: " choice
+    fi
     
     case $choice in
         2)
@@ -38,6 +49,10 @@ if [ "$CUDA_AVAILABLE" = true ]; then
         3)
             LIBTORCH_URL="https://download.pytorch.org/libtorch/cu121/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcu121.zip"
             echo "📥 Downloading LibTorch with CUDA 12.1 support..."
+            ;;
+        4)
+            LIBTORCH_URL="https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.4.0%2Bcu124.zip"
+            echo "📥 Downloading LibTorch with CUDA 12.4 support..."
             ;;
         *)
             LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcpu.zip"
