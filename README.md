@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/github/license/lee101/gobed)](LICENSE)
 
 <img width="450" height="633" alt="image" src="https://github.com/user-attachments/assets/45a072fc-1a17-4aca-9da7-5394d688153a" />
+!VIBECODED but works 110% 🎯!
 
 A high-performance Go implementation of text embeddings with **blazing-fast vector search**. 
 
