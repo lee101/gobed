@@ -1,0 +1,59 @@
+# Makefile for GPU-Accelerated LibTorch integration
+CUDA_PATH = /usr/local/cuda-12.0
+
+# Compiler settings
+NVCC = nvcc
+CXX = g++
+NVCC_FLAGS = -std=c++17 -O3 --shared --compiler-options -fPIC --allow-unsupported-compiler
+CXX_FLAGS = -std=c++17 -fPIC -O3
+
+# Include paths
+INCLUDES = -I$(CUDA_PATH)/include
+
+# Library paths and libs
+CUDA_LIBS = -L$(CUDA_PATH)/lib64 -lcudart
+LIBS = $(CUDA_LIBS)
+
+# Target files
+CUDA_KERNELS = cuda_kernels.cu
+CUDA_OBJ = cuda_kernels.o
+WRAPPER_SRC = torch_gpu_accelerated.cpp
+WRAPPER_OBJ = torch_gpu_accelerated.o
+WRAPPER_LIB = libtorch_cgo_wrapper.so
+
+.PHONY: all clean test
+
+all: $(WRAPPER_LIB)
+
+# Compile CUDA kernels
+$(CUDA_OBJ): $(CUDA_KERNELS)
+	@echo "🔧 Compiling CUDA kernels..."
+	$(NVCC) -c $(NVCC_FLAGS) $(INCLUDES) -o $@ $<
+	@echo "✅ CUDA kernels compiled"
+
+# Compile C++ wrapper
+$(WRAPPER_OBJ): $(WRAPPER_SRC) torch_cgo_wrapper.h
+	@echo "🔧 Compiling C++ wrapper..."
+	$(CXX) -c $(CXX_FLAGS) $(INCLUDES) -o $@ $<
+	@echo "✅ C++ wrapper compiled"
+
+# Link everything together
+$(WRAPPER_LIB): $(CUDA_OBJ) $(WRAPPER_OBJ)
+	@echo "🔧 Linking GPU-accelerated library..."
+	$(NVCC) --shared --compiler-options -fPIC -o $@ $^ $(LIBS)
+	@echo "✅ Built $(WRAPPER_LIB) with real GPU acceleration!"
+
+clean:
+	rm -f $(CUDA_OBJ) $(WRAPPER_OBJ) $(WRAPPER_LIB)
+	@echo "🧹 Cleaned build artifacts"
+
+test: $(WRAPPER_LIB)
+	@echo "🧪 Testing GPU-accelerated integration..."
+	LD_LIBRARY_PATH=$(CUDA_PATH)/lib64:. go test -v ./...
+
+help:
+	@echo "Available targets:"
+	@echo "  all     - Build GPU-accelerated LibTorch wrapper"
+	@echo "  clean   - Remove build artifacts"
+	@echo "  test    - Run tests with GPU acceleration"
+	@echo "  help    - Show this help"

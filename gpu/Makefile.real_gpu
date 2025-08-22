@@ -1,0 +1,37 @@
+# Makefile for Real GPU LibTorch integration
+LIBTORCH_ROOT = /home/lee/code/gobed/libtorch
+CUDA_PATH = /usr/local/cuda-12.0
+
+# Use nvcc for CUDA compilation
+NVCC = nvcc
+NVCC_FLAGS = -std=c++17 -O3 --shared --compiler-options -fPIC --allow-unsupported-compiler
+INCLUDES = -I$(LIBTORCH_ROOT)/include -I$(LIBTORCH_ROOT)/include/torch/csrc/api/include -I$(CUDA_PATH)/include
+CUDA_LIBS = -L$(CUDA_PATH)/lib64 -lcudart -lcublas
+TORCH_LIBS = -L$(LIBTORCH_ROOT)/lib -ltorch_cpu -lc10
+
+WRAPPER_LIB = libtorch_cgo_wrapper.so
+WRAPPER_SRC = torch_real_gpu.cpp
+
+.PHONY: all clean test
+
+all: $(WRAPPER_LIB)
+
+$(WRAPPER_LIB): $(WRAPPER_SRC) torch_cgo_wrapper.h
+	@echo "🔧 Building Real GPU LibTorch wrapper..."
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -o $@ $< $(CUDA_LIBS) $(TORCH_LIBS)
+	@echo "✅ Built $(WRAPPER_LIB) with Real GPU support"
+
+clean:
+	rm -f $(WRAPPER_LIB)
+	@echo "🧹 Cleaned build artifacts"
+
+test: $(WRAPPER_LIB)
+	@echo "🧪 Testing real GPU integration..."
+	LD_LIBRARY_PATH=$(LIBTORCH_ROOT)/lib:$(CUDA_PATH)/lib64:. go test -v ./...
+
+help:
+	@echo "Available targets:"
+	@echo "  all     - Build the Real GPU LibTorch wrapper"
+	@echo "  clean   - Remove build artifacts"
+	@echo "  test    - Run tests with real GPU acceleration"
+	@echo "  help    - Show this help"

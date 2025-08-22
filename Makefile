@@ -9,6 +9,12 @@ GOFLAGS=-v
 LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION)"
 COVERAGE_FILE=coverage.out
 
+# GPU/CUDA Variables
+CUDA_PATH=/usr/local/cuda-12.0
+GPU_LIB_PATH=./gpu
+GPU_LIB_NAME=libtorch_cgo_wrapper.so
+NVCC_FLAGS=-std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC
+
 # Directories
 CMD_DIR=./cmd
 BIN_DIR=./bin
@@ -16,7 +22,51 @@ DIST_DIR=./dist
 
 # Default target
 .PHONY: all
-all: clean build test
+all: clean gpu-build build test
+
+# GPU/CUDA Build targets
+.PHONY: gpu-check
+gpu-check:
+	@echo "Checking GPU/CUDA availability..."
+	@command -v nvcc > /dev/null || (echo "❌ NVCC not found. Please install CUDA toolkit."; exit 1)
+	@command -v nvidia-smi > /dev/null || (echo "❌ nvidia-smi not found. Please install NVIDIA drivers."; exit 1)
+	@echo "✅ CUDA environment detected"
+	@nvidia-smi --query-gpu=name,driver_version,compute_cap --format=csv
+	@nvcc --version | head -n 4
+
+.PHONY: gpu-build
+gpu-build: gpu-check
+	@echo "Building GPU acceleration library..."
+	@cd $(GPU_LIB_PATH) && make -f Makefile
+	@echo "✅ GPU library built: $(GPU_LIB_PATH)/$(GPU_LIB_NAME)"
+
+.PHONY: gpu-clean
+gpu-clean:
+	@echo "Cleaning GPU build artifacts..."
+	@cd $(GPU_LIB_PATH) && make -f Makefile clean
+
+.PHONY: gpu-test
+gpu-test: gpu-build
+	@echo "Testing GPU acceleration..."
+	@cd $(GPU_LIB_PATH) && make -f Makefile test
+
+.PHONY: gpu-server
+gpu-server: gpu-build
+	@echo "Building GPU-accelerated server..."
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=1 LD_LIBRARY_PATH=$(GPU_LIB_PATH):$(CUDA_PATH)/lib64 \
+		$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BIN_DIR)/gpu-server $(CMD_DIR)/gpu_server
+
+.PHONY: run-gpu-server
+run-gpu-server: gpu-server
+	@echo "Starting GPU-accelerated server..."
+	@echo "🚀 GPU Server Features:"
+	@echo "   • CUDA-accelerated similarity search"
+	@echo "   • GPU memory management and pooling"  
+	@echo "   • Batch processing optimization"
+	@echo "   • Automatic CPU fallback"
+	@echo ""
+	LD_LIBRARY_PATH=$(GPU_LIB_PATH):$(CUDA_PATH)/lib64 $(BIN_DIR)/gpu-server
 
 # Build targets
 .PHONY: build
@@ -230,26 +280,52 @@ ci-full: deps quality test-race test-coverage bench
 # Help target
 .PHONY: help
 help:
-	@echo "Available targets:"
-	@echo "  all            - Clean, build, and test"
+	@echo "GoBeD - GPU-Accelerated Vector Search Engine"
+	@echo "============================================"
+	@echo ""
+	@echo "🚀 GPU Acceleration Targets:"
+	@echo "  gpu-check      - Check CUDA/GPU availability" 
+	@echo "  gpu-build      - Build CUDA acceleration library"
+	@echo "  gpu-clean      - Clean GPU build artifacts"
+	@echo "  gpu-test       - Test GPU acceleration"
+	@echo "  gpu-server     - Build GPU-accelerated server"
+	@echo "  run-gpu-server - Run GPU-accelerated server (RECOMMENDED)"
+	@echo ""
+	@echo "📦 Standard Build Targets:"
+	@echo "  all            - Clean, GPU build, build, and test"
 	@echo "  build          - Build the main binary"
 	@echo "  build-all      - Build all binaries"
 	@echo "  build-release  - Build release binaries for all platforms"
+	@echo ""
+	@echo "🧪 Testing Targets:"
 	@echo "  test           - Run tests"
 	@echo "  test-short     - Run short tests"
 	@echo "  test-race      - Run tests with race detector"
 	@echo "  test-coverage  - Run tests with coverage"
 	@echo "  bench          - Run benchmarks"
+	@echo ""
+	@echo "🔧 Code Quality:"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Run linters"
 	@echo "  vet            - Run go vet"
 	@echo "  quality        - Run all code quality checks"
+	@echo ""
+	@echo "📋 Dependencies:"
 	@echo "  deps           - Download dependencies"
 	@echo "  tidy           - Tidy dependencies"
+	@echo ""
+	@echo "🐳 Docker:"
 	@echo "  docker-build   - Build Docker image"
 	@echo "  docker-run     - Run Docker container"
+	@echo ""
+	@echo "🏃 Development:"
 	@echo "  run            - Build and run the binary"
+	@echo "  run-server     - Run standard search server"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  help           - Show this help message"
+	@echo ""
+	@echo "💡 Quick Start:"
+	@echo "  make run-gpu-server  # Start GPU-accelerated server"
+	@echo "  make gpu-test        # Test GPU acceleration"
 
 .DEFAULT_GOAL := help

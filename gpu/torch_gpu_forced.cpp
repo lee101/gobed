@@ -8,6 +8,25 @@
 #include <iostream>
 #include <chrono>
 
+// External CUDA kernel function declarations
+extern "C" void launch_similarity_kernel(
+    const int8_t* queries,
+    const int8_t* database,
+    float* scores,
+    int num_queries,
+    int num_vectors,
+    int dim
+);
+
+extern "C" void launch_topk_kernel(
+    const float* scores,
+    int* top_indices,
+    float* top_scores,
+    int num_queries,
+    int num_vectors,
+    int k
+);
+
 // GPU-accelerated LibTorch indexer class
 class GPUForcedIndexer {
 public:
@@ -236,47 +255,133 @@ public:
                 std::cout << "   🎯 LibTorch CUDA search" << std::endl;
                 
             } else if (using_cuda && !device.is_cuda()) {
-                // Manual CUDA operations with CPU tensors
+                // Real GPU-accelerated search using CUDA kernels!
+                std::cout << "   🚀 Real GPU-accelerated search!" << std::endl;
+                
+                // Get database data from CPU tensor
+                database = database.contiguous();
+                int8_t* db_data = database.data_ptr<int8_t>();
+                
+                // Allocate GPU memory
+                int8_t* d_query;
+                int8_t* d_database;
+                float* d_scores;
+                
+                size_t query_size = dim * sizeof(int8_t);
+                size_t db_size = num_vectors * dim * sizeof(int8_t);
+                size_t scores_size = num_vectors * sizeof(float);
+                
+                cudaError_t error;
+                error = cudaMalloc(&d_query, query_size);
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ GPU query allocation failed: " << cudaGetErrorString(error) << std::endl;
+                    goto cpu_fallback;
+                }
+                
+                error = cudaMalloc(&d_database, db_size);
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ GPU database allocation failed: " << cudaGetErrorString(error) << std::endl;
+                    cudaFree(d_query);
+                    goto cpu_fallback;
+                }
+                
+                error = cudaMalloc(&d_scores, scores_size);
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ GPU scores allocation failed: " << cudaGetErrorString(error) << std::endl;
+                    cudaFree(d_query);
+                    cudaFree(d_database);
+                    goto cpu_fallback;
+                }
+                
+                // Copy data to GPU
+                error = cudaMemcpy(d_query, query, query_size, cudaMemcpyHostToDevice);
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ Failed to copy query to GPU: " << cudaGetErrorString(error) << std::endl;
+                    cudaFree(d_query);
+                    cudaFree(d_database);
+                    cudaFree(d_scores);
+                    goto cpu_fallback;
+                }
+                
+                error = cudaMemcpy(d_database, db_data, db_size, cudaMemcpyHostToDevice);
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ Failed to copy database to GPU: " << cudaGetErrorString(error) << std::endl;
+                    cudaFree(d_query);
+                    cudaFree(d_database);
+                    cudaFree(d_scores);
+                    goto cpu_fallback;
+                }
+                
+                // Launch CUDA kernel for real GPU similarity computation
+                auto start_compute = std::chrono::high_resolution_clock::now();
+                
+                // Configure kernel launch parameters
+                dim3 block_size(32, 1);  // 32 threads per block for vector dimension
+                dim3 grid_size((num_vectors + block_size.x - 1) / block_size.x, 1);
+                
+                // Launch the real CUDA kernel!
+                launch_similarity_kernel(d_query, d_database, d_scores, 1, num_vectors, dim);
+                
+                // Check for kernel launch errors
+                error = cudaGetLastError();
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ CUDA kernel launch failed: " << cudaGetErrorString(error) << std::endl;
+                    cudaFree(d_query);
+                    cudaFree(d_database);
+                    cudaFree(d_scores);
+                    goto cpu_fallback;
+                }
+                
+                // Wait for kernel to complete
+                error = cudaDeviceSynchronize();
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ CUDA sync failed: " << cudaGetErrorString(error) << std::endl;
+                    cudaFree(d_query);
+                    cudaFree(d_database);
+                    cudaFree(d_scores);
+                    goto cpu_fallback;
+                }
+                
+                auto end_compute = std::chrono::high_resolution_clock::now();
+                auto compute_time = std::chrono::duration_cast<std::chrono::microseconds>(end_compute - start_compute);
+                
+                // Copy results back from GPU  
+                std::vector<float> cpu_scores(num_vectors);
+                error = cudaMemcpy(cpu_scores.data(), d_scores, scores_size, cudaMemcpyDeviceToHost);
+                if (error != cudaSuccess) {
+                    std::cout << "   ❌ Failed to copy results from GPU: " << cudaGetErrorString(error) << std::endl;
+                    cudaFree(d_query);
+                    cudaFree(d_database);
+                    cudaFree(d_scores);
+                    goto cpu_fallback;
+                }
+                
+                // Create tensor from results
+                scores = torch::from_blob(cpu_scores.data(), {num_vectors}, torch::TensorOptions().dtype(torch::kFloat32)).clone();
+                
+                // Cleanup GPU memory
+                cudaFree(d_query);
+                cudaFree(d_database);
+                cudaFree(d_scores);
+                
+                std::cout << "   ✅ GPU kernel computation successful (compute: " << compute_time.count() << "μs)" << std::endl;
+                
+            } else {
+            cpu_fallback:
+                // Fallback to CPU search
                 query_tensor = torch::from_blob(
                     const_cast<int8_t*>(query),
                     {dim},
                     torch::TensorOptions().dtype(torch::kInt8)
                 ).clone();
                 
-                // For now, fall back to CPU but mark as GPU-ready
                 scores = torch::zeros({num_vectors}, torch::TensorOptions().dtype(torch::kFloat32));
                 
                 auto query_acc = query_tensor.accessor<int8_t, 1>();
                 auto db_acc = database.accessor<int8_t, 2>();
                 auto scores_acc = scores.accessor<float, 1>();
                 
-                // Optimized CPU computation (could be replaced with CUDA kernel)
-                for (int i = 0; i < num_vectors; i++) {
-                    float score = 0.0f;
-                    for (int j = 0; j < dim; j++) {
-                        score += static_cast<float>(query_acc[j]) * static_cast<float>(db_acc[i][j]);
-                    }
-                    scores_acc[i] = score;
-                }
-                
-                std::cout << "   💻 CPU computation (GPU-ready)" << std::endl;
-                
-            } else {
-                // CPU only path
-                auto options = torch::TensorOptions().dtype(torch::kInt8).device(device);
-                query_tensor = torch::from_blob(
-                    const_cast<int8_t*>(query),
-                    {dim},
-                    options
-                ).clone();
-                
-                scores = torch::zeros({num_vectors}, torch::TensorOptions().dtype(torch::kFloat32).device(device));
-                
-                auto query_acc = query_tensor.accessor<int8_t, 1>();
-                auto db_acc = database.accessor<int8_t, 2>();
-                auto scores_acc = scores.accessor<float, 1>();
-                
-                // Vectorized computation
+                // Optimized CPU computation
                 for (int i = 0; i < num_vectors; i++) {
                     float score = 0.0f;
                     for (int j = 0; j < dim; j++) {
