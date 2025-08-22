@@ -30,18 +30,18 @@ func TestEmbeddingModelWithRealModel(t *testing.T) {
 	}
 
 	embeddings := make([][]float32, len(testCases))
-	
+
 	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			embedding, err := model.Encode(tc.sentence)
 			if err != nil {
 				t.Fatalf("Failed to encode sentence '%s': %v", tc.sentence, err)
 			}
-			
+
 			if len(embedding) != 1024 {
 				t.Errorf("Expected embedding dimension 1024, got %d", len(embedding))
 			}
-			
+
 			var sum, sqSum float32
 			var minVal, maxVal float32 = math.MaxFloat32, -math.MaxFloat32
 			for _, val := range embedding {
@@ -57,38 +57,38 @@ func TestEmbeddingModelWithRealModel(t *testing.T) {
 					maxVal = val
 				}
 			}
-			
+
 			mean := sum / float32(len(embedding))
 			norm := float32(math.Sqrt(float64(sqSum)))
-			
+
 			if norm == 0 {
 				t.Errorf("Zero norm embedding for sentence: %s", tc.sentence)
 			}
-			
+
 			t.Logf("Sentence: '%s'", tc.sentence)
-			t.Logf("  First 5 values: [%.4f, %.4f, %.4f, %.4f, %.4f]", 
+			t.Logf("  First 5 values: [%.4f, %.4f, %.4f, %.4f, %.4f]",
 				embedding[0], embedding[1], embedding[2], embedding[3], embedding[4])
 			t.Logf("  Stats - Mean: %.4f, Norm: %.4f, Min: %.4f, Max: %.4f", mean, norm, minVal, maxVal)
-			
+
 			embeddings[i] = embedding
 		})
 	}
-	
+
 	t.Run("diversity_check", func(t *testing.T) {
 		allSame := true
 		var maxSim, minSim float32 = -1, 2
 		similarPairs := 0
-		
+
 		for i := 0; i < len(embeddings); i++ {
 			for j := i + 1; j < len(embeddings); j++ {
 				sim := CosineSimilarity(embeddings[i], embeddings[j])
-				
+
 				if sim < 0.999 {
 					allSame = false
 				}
 				if sim > 0.95 {
 					similarPairs++
-					t.Logf("High similarity (%.4f) between '%s' and '%s'", 
+					t.Logf("High similarity (%.4f) between '%s' and '%s'",
 						sim, testCases[i].sentence, testCases[j].sentence)
 				}
 				if sim > maxSim {
@@ -99,16 +99,16 @@ func TestEmbeddingModelWithRealModel(t *testing.T) {
 				}
 			}
 		}
-		
+
 		if allSame {
 			t.Errorf("All embeddings are nearly identical (all similarities > 0.999)")
 		}
-		
+
 		t.Logf("Similarity range: [%.4f, %.4f]", minSim, maxSim)
 		t.Logf("Highly similar pairs (>0.95): %d out of %d total pairs", similarPairs, len(embeddings)*(len(embeddings)-1)/2)
-		
-		if maxSim - minSim < 0.1 {
-			t.Errorf("Insufficient diversity: similarity range is too narrow (%.4f)", maxSim - minSim)
+
+		if maxSim-minSim < 0.1 {
+			t.Errorf("Insufficient diversity: similarity range is too narrow (%.4f)", maxSim-minSim)
 		}
 	})
 }
@@ -120,27 +120,27 @@ func TestSimilarityMethod(t *testing.T) {
 	}
 
 	testPairs := []struct {
-		name      string
-		text1     string
-		text2     string
-		minSim    float32
-		maxSim    float32
+		name   string
+		text1  string
+		text2  string
+		minSim float32
+		maxSim float32
 	}{
 		{"identical", "Hello world", "Hello world", 0.999, 1.001},
 		{"similar", "The cat is sleeping", "The kitten is sleeping", 0.75, 0.85},
 		{"different", "I love programming", "The weather is cold", -0.1, 0.1},
 		{"semantic_similar", "The car is fast", "The vehicle is quick", 0.45, 0.55},
 	}
-	
+
 	for _, tp := range testPairs {
 		t.Run(tp.name, func(t *testing.T) {
 			sim, err := model.Similarity(tp.text1, tp.text2)
 			if err != nil {
 				t.Fatalf("Failed to compute similarity: %v", err)
 			}
-			
+
 			t.Logf("Similarity between '%s' and '%s': %.4f", tp.text1, tp.text2, sim)
-			
+
 			if sim < tp.minSim || sim > tp.maxSim {
 				t.Errorf("Similarity %.4f outside expected range [%.4f, %.4f]", sim, tp.minSim, tp.maxSim)
 			}
@@ -166,7 +166,7 @@ func TestFindMostSimilar(t *testing.T) {
 		"It's raining outside",
 		"Neural networks can learn patterns",
 	}
-	
+
 	queries := []struct {
 		query         string
 		expectedTop   string
@@ -185,23 +185,23 @@ func TestFindMostSimilar(t *testing.T) {
 			expectedWords: []string{"Programming", "coding"},
 		},
 	}
-	
+
 	for _, q := range queries {
 		t.Run(q.query, func(t *testing.T) {
 			results, err := model.FindMostSimilar(q.query, candidates, 3)
 			if err != nil {
 				t.Fatalf("Failed to find similar: %v", err)
 			}
-			
+
 			if len(results) != 3 {
 				t.Errorf("Expected 3 results, got %d", len(results))
 			}
-			
+
 			t.Logf("Query: '%s'", q.query)
 			for i, r := range results {
 				t.Logf("  %d. '%s' (similarity: %.4f)", i+1, r.Text2, r.Similarity)
 			}
-			
+
 			topResult := results[0].Text2
 			foundExpected := false
 			for _, word := range q.expectedWords {
@@ -210,11 +210,11 @@ func TestFindMostSimilar(t *testing.T) {
 					break
 				}
 			}
-			
+
 			if !foundExpected {
 				t.Logf("Warning: Top result '%s' doesn't contain expected words %v", topResult, q.expectedWords)
 			}
-			
+
 			for i := 1; i < len(results); i++ {
 				if results[i].Similarity > results[i-1].Similarity {
 					t.Errorf("Results not sorted by similarity: %.4f > %.4f", results[i].Similarity, results[i-1].Similarity)
@@ -250,11 +250,11 @@ func TestEdgeCases(t *testing.T) {
 		{"special_chars", "@#$%^&*()", false},
 		{"mixed_script", "Hello世界مرحبا", false},
 	}
-	
+
 	for _, ec := range edgeCases {
 		t.Run(ec.name, func(t *testing.T) {
 			embedding, err := model.Encode(ec.text)
-			
+
 			if ec.shouldError && err == nil {
 				t.Errorf("Expected error but got none")
 			}
@@ -262,21 +262,21 @@ func TestEdgeCases(t *testing.T) {
 				t.Logf("Edge case '%s' produced error (might be expected): %v", ec.name, err)
 				return
 			}
-			
+
 			if err == nil {
 				if len(embedding) != 1024 {
 					t.Errorf("Unexpected embedding dimension: %d", len(embedding))
 				}
-				
+
 				var nonZeroCount int
 				for _, val := range embedding {
 					if val != 0 {
 						nonZeroCount++
 					}
 				}
-				
+
 				t.Logf("Edge case '%s': %d/%d non-zero values", ec.name, nonZeroCount, len(embedding))
-				
+
 				if nonZeroCount == 0 {
 					t.Logf("Warning: All-zero embedding for '%s'", ec.name)
 				}
@@ -292,30 +292,30 @@ func TestConsistency(t *testing.T) {
 	}
 
 	sentence := "This is a test for consistency"
-	
+
 	firstEmb, err := model.Encode(sentence)
 	if err != nil {
 		t.Fatalf("Failed to encode: %v", err)
 	}
-	
+
 	for i := 0; i < 10; i++ {
 		emb, err := model.Encode(sentence)
 		if err != nil {
 			t.Fatalf("Failed to encode on iteration %d: %v", i, err)
 		}
-		
+
 		sim := CosineSimilarity(firstEmb, emb)
 		if sim < 0.9999 {
 			t.Errorf("Inconsistent embeddings on iteration %d: similarity = %.6f", i, sim)
 		}
-		
+
 		var diff float32
 		for j := range emb {
 			d := firstEmb[j] - emb[j]
 			diff += d * d
 		}
 		diff = float32(math.Sqrt(float64(diff)))
-		
+
 		if diff > 0.001 {
 			t.Errorf("Embeddings differ by %.6f on iteration %d", diff, i)
 		}
@@ -329,7 +329,7 @@ func BenchmarkSingleEncoding(b *testing.B) {
 	}
 
 	sentence := "This is a benchmark test sentence for performance measurement."
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := model.Encode(sentence)
@@ -347,7 +347,7 @@ func BenchmarkSimilarityComputation(b *testing.B) {
 
 	text1 := "First text for similarity comparison"
 	text2 := "Second text for similarity comparison"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := model.Similarity(text1, text2)
@@ -358,7 +358,7 @@ func BenchmarkSimilarityComputation(b *testing.B) {
 }
 
 func containsWord(text, word string) bool {
-	return len(word) > 0 && (text == word || 
+	return len(word) > 0 && (text == word ||
 		(len(text) > len(word) && (text[:len(word)] == word || text[len(text)-len(word):] == word)) ||
 		(len(text) > len(word)+1 && containsWord(text[1:], word)))
 }

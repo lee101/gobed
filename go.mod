@@ -3,7 +3,6 @@ module github.com/lee101/gobed
 go 1.21
 
 require (
-	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sugarme/gotch v0.9.0
 	github.com/sugarme/tokenizer v0.2.2
 	golang.org/x/sys v0.20.0

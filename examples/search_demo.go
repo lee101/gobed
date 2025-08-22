@@ -264,15 +264,15 @@ func similarityExample(model *gobed.EmbeddingModel) {
 
 	// Index documents about different topics
 	topics := map[int]string{
-		1: "Machine learning uses statistical techniques to give computers the ability to learn",
-		2: "Deep learning is part of machine learning based on artificial neural networks",
-		3: "Natural language processing helps computers understand and generate human language",
-		4: "Computer vision enables machines to interpret and understand visual information",
-		5: "Reinforcement learning trains agents to make decisions through trial and error",
-		6: "Supervised learning uses labeled data to train predictive models",
-		7: "Unsupervised learning discovers hidden patterns in unlabeled data",
-		8: "Transfer learning applies knowledge from one domain to another",
-		9: "Federated learning trains models across decentralized data",
+		1:  "Machine learning uses statistical techniques to give computers the ability to learn",
+		2:  "Deep learning is part of machine learning based on artificial neural networks",
+		3:  "Natural language processing helps computers understand and generate human language",
+		4:  "Computer vision enables machines to interpret and understand visual information",
+		5:  "Reinforcement learning trains agents to make decisions through trial and error",
+		6:  "Supervised learning uses labeled data to train predictive models",
+		7:  "Unsupervised learning discovers hidden patterns in unlabeled data",
+		8:  "Transfer learning applies knowledge from one domain to another",
+		9:  "Federated learning trains models across decentralized data",
 		10: "Active learning selects the most informative samples for labeling",
 	}
 

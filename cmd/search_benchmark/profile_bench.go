@@ -18,19 +18,19 @@ import (
 
 // ProfileConfig contains profiling configuration
 type ProfileConfig struct {
-	CPUProfile    bool
-	MemProfile    bool
-	HTTPPprof     bool
-	PProfPort     string
-	ProfileTime   time.Duration
-	OutputDir     string
+	CPUProfile  bool
+	MemProfile  bool
+	HTTPPprof   bool
+	PProfPort   string
+	ProfileTime time.Duration
+	OutputDir   string
 }
 
 // AsyncSearchEngine wraps the search engine with async capabilities
 type AsyncSearchEngine struct {
 	*gobed.SearchEngine
-	indexQueue    chan IndexRequest
-	indexWorkers  int
+	indexQueue   chan IndexRequest
+	indexWorkers int
 	wg           sync.WaitGroup
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -51,7 +51,7 @@ type IndexResponse struct {
 // NewAsyncSearchEngine creates a new async search engine
 func NewAsyncSearchEngine(model *gobed.EmbeddingModel, workers int) *AsyncSearchEngine {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	ase := &AsyncSearchEngine{
 		SearchEngine: gobed.NewSearchEngine(model),
 		indexQueue:   make(chan IndexRequest, 100), // Buffer for 100 requests
@@ -59,20 +59,20 @@ func NewAsyncSearchEngine(model *gobed.EmbeddingModel, workers int) *AsyncSearch
 		ctx:          ctx,
 		cancel:       cancel,
 	}
-	
+
 	// Start index workers
 	for i := 0; i < workers; i++ {
 		ase.wg.Add(1)
 		go ase.indexWorker()
 	}
-	
+
 	return ase
 }
 
 // indexWorker processes async indexing requests
 func (ase *AsyncSearchEngine) indexWorker() {
 	defer ase.wg.Done()
-	
+
 	for {
 		select {
 		case req := <-ase.indexQueue:
@@ -87,7 +87,7 @@ func (ase *AsyncSearchEngine) indexWorker() {
 // IndexBatchAsync performs async batch indexing
 func (ase *AsyncSearchEngine) IndexBatchAsync(documents []string) <-chan IndexResponse {
 	response := make(chan IndexResponse, 1)
-	
+
 	select {
 	case ase.indexQueue <- IndexRequest{Documents: documents, Response: response}:
 		return response
@@ -120,7 +120,7 @@ func (pr *ProfileRunner) StartProfiling() error {
 	if err := os.MkdirAll(pr.config.OutputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	// Start HTTP pprof server if enabled
 	if pr.config.HTTPPprof {
 		go func() {
@@ -128,26 +128,26 @@ func (pr *ProfileRunner) StartProfiling() error {
 			fmt.Printf("Access profiles at: http://localhost:%s/debug/pprof/\n", pr.config.PProfPort)
 			log.Println(http.ListenAndServe(":"+pr.config.PProfPort, nil))
 		}()
-		
+
 		// Give server time to start
 		time.Sleep(100 * time.Millisecond)
 	}
-	
+
 	// Start CPU profiling if enabled
 	if pr.config.CPUProfile {
 		cpuFile, err := os.Create(fmt.Sprintf("%s/cpu_profile.pprof", pr.config.OutputDir))
 		if err != nil {
 			return fmt.Errorf("failed to create CPU profile file: %w", err)
 		}
-		
+
 		if err := pprof.StartCPUProfile(cpuFile); err != nil {
 			cpuFile.Close()
 			return fmt.Errorf("failed to start CPU profiling: %w", err)
 		}
-		
+
 		fmt.Printf("CPU profiling started, will run for %v\n", pr.config.ProfileTime)
 	}
-	
+
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (pr *ProfileRunner) StopProfiling() error {
 		pprof.StopCPUProfile()
 		fmt.Println("CPU profiling stopped")
 	}
-	
+
 	// Write memory profile if enabled
 	if pr.config.MemProfile {
 		memFile, err := os.Create(fmt.Sprintf("%s/mem_profile.pprof", pr.config.OutputDir))
@@ -166,15 +166,15 @@ func (pr *ProfileRunner) StopProfiling() error {
 			return fmt.Errorf("failed to create memory profile file: %w", err)
 		}
 		defer memFile.Close()
-		
+
 		runtime.GC() // Force GC before memory profiling
 		if err := pprof.WriteHeapProfile(memFile); err != nil {
 			return fmt.Errorf("failed to write memory profile: %w", err)
 		}
-		
+
 		fmt.Println("Memory profile written")
 	}
-	
+
 	return nil
 }
 
@@ -191,24 +191,24 @@ type BenchmarkScenario struct {
 // runBenchmarkScenario executes a specific benchmark scenario
 func runBenchmarkScenario(scenario BenchmarkScenario, model *gobed.EmbeddingModel) (*BenchmarkResults, error) {
 	fmt.Printf("\n=== Running Scenario: %s ===\n", scenario.Name)
-	
+
 	results := &BenchmarkResults{
 		Scenario: scenario,
 		Metrics:  make(map[string]interface{}),
 	}
-	
+
 	// Generate test data
 	documents := generateLargeCorpus(scenario.DocumentCount)
 	queries := generateTestQueries(scenario.QueryCount)
-	
+
 	var engine interface {
 		IndexBatch([]string) ([]int, error)
 		Search(string, int) ([]gobed.SearchResult, error)
 		Stats() gobed.SearchEngineStats
 	}
-	
+
 	var asyncEngine *AsyncSearchEngine
-	
+
 	if scenario.UseAsync {
 		asyncEngine = NewAsyncSearchEngine(model, 4) // 4 workers
 		engine = asyncEngine.SearchEngine
@@ -216,23 +216,23 @@ func runBenchmarkScenario(scenario BenchmarkScenario, model *gobed.EmbeddingMode
 	} else {
 		engine = gobed.NewSearchEngine(model)
 	}
-	
+
 	// Measure indexing performance
 	fmt.Printf("Indexing %d documents...\n", scenario.DocumentCount)
 	indexStart := time.Now()
-	
+
 	if scenario.UseAsync {
 		// Async indexing in batches
 		var responses []<-chan IndexResponse
-		
+
 		for i := 0; i < scenario.DocumentCount; i += scenario.BatchSize {
 			end := min(i+scenario.BatchSize, scenario.DocumentCount)
 			batch := documents[i:end]
-			
+
 			response := asyncEngine.IndexBatchAsync(batch)
 			responses = append(responses, response)
 		}
-		
+
 		// Wait for all indexing to complete
 		totalIndexed := 0
 		for _, response := range responses {
@@ -242,7 +242,7 @@ func runBenchmarkScenario(scenario BenchmarkScenario, model *gobed.EmbeddingMode
 			}
 			totalIndexed += len(result.IDs)
 		}
-		
+
 		results.Metrics["total_indexed"] = totalIndexed
 	} else {
 		// Synchronous indexing
@@ -250,42 +250,42 @@ func runBenchmarkScenario(scenario BenchmarkScenario, model *gobed.EmbeddingMode
 		for i := 0; i < scenario.DocumentCount; i += scenario.BatchSize {
 			end := min(i+scenario.BatchSize, scenario.DocumentCount)
 			batch := documents[i:end]
-			
+
 			ids, err := engine.IndexBatch(batch)
 			if err != nil {
 				return nil, fmt.Errorf("indexing failed: %w", err)
 			}
 			totalIndexed += len(ids)
 		}
-		
+
 		results.Metrics["total_indexed"] = totalIndexed
 	}
-	
+
 	indexDuration := time.Since(indexStart)
 	results.IndexTime = indexDuration
 	results.IndexThroughput = float64(scenario.DocumentCount) / indexDuration.Seconds()
-	
+
 	fmt.Printf("Indexing completed in %v (%.0f docs/sec)\n", indexDuration, results.IndexThroughput)
-	
+
 	// Measure search performance with concurrent users
 	fmt.Printf("Running %d searches with %d concurrent users...\n", scenario.QueryCount, scenario.ConcurrentUsers)
-	
+
 	searchStart := time.Now()
 	var searchWg sync.WaitGroup
 	queryChannel := make(chan string, scenario.QueryCount)
-	
+
 	// Fill query channel
 	for _, query := range queries {
 		queryChannel <- query
 	}
 	close(queryChannel)
-	
+
 	// Launch concurrent search workers
 	for i := 0; i < scenario.ConcurrentUsers; i++ {
 		searchWg.Add(1)
 		go func() {
 			defer searchWg.Done()
-			
+
 			for query := range queryChannel {
 				_, err := engine.Search(query, 10)
 				if err != nil {
@@ -294,33 +294,33 @@ func runBenchmarkScenario(scenario BenchmarkScenario, model *gobed.EmbeddingMode
 			}
 		}()
 	}
-	
+
 	searchWg.Wait()
 	searchDuration := time.Since(searchStart)
-	
+
 	results.SearchLatency = searchDuration / time.Duration(scenario.QueryCount)
 	results.SearchThroughput = float64(scenario.QueryCount) / searchDuration.Seconds()
-	
+
 	// Get engine stats
 	stats := engine.Stats()
 	results.Metrics["index_type"] = stats.IndexType
 	results.Metrics["memory_mb"] = stats.MemoryUsageMB
 	results.Metrics["num_documents"] = stats.NumDocuments
-	
-	fmt.Printf("Search completed: %v avg latency, %.0f QPS\n", 
+
+	fmt.Printf("Search completed: %v avg latency, %.0f QPS\n",
 		results.SearchLatency, results.SearchThroughput)
-	
+
 	return results, nil
 }
 
 // BenchmarkResults stores benchmark results
 type BenchmarkResults struct {
-	Scenario        BenchmarkScenario
-	IndexTime       time.Duration
-	IndexThroughput float64
-	SearchLatency   time.Duration
+	Scenario         BenchmarkScenario
+	IndexTime        time.Duration
+	IndexThroughput  float64
+	SearchLatency    time.Duration
 	SearchThroughput float64
-	Metrics         map[string]interface{}
+	Metrics          map[string]interface{}
 }
 
 // generateLargeCorpus generates a large corpus for testing
@@ -334,7 +334,7 @@ func generateLargeCorpus(size int) []string {
 		"API design principles", "containerization platforms", "CI/CD pipelines",
 		"monitoring and observability", "load balancing strategies",
 	}
-	
+
 	templates := []string{
 		"Advanced %s techniques for enterprise applications",
 		"Best practices in %s implementation and deployment",
@@ -345,14 +345,14 @@ func generateLargeCorpus(size int) []string {
 		"Integration patterns for %s in distributed systems",
 		"Monitoring and debugging %s in production environments",
 	}
-	
+
 	corpus := make([]string, size)
 	for i := 0; i < size; i++ {
 		template := templates[rand.Intn(len(templates))]
 		topic := baseTexts[rand.Intn(len(baseTexts))]
 		corpus[i] = fmt.Sprintf(template, topic)
 	}
-	
+
 	return corpus
 }
 
@@ -370,18 +370,18 @@ func generateTestQueries(count int) []string {
 		"DevOps automation tools",
 		"monitoring and alerting systems",
 	}
-	
+
 	result := make([]string, count)
 	for i := 0; i < count; i++ {
 		result[i] = queries[i%len(queries)]
 	}
-	
+
 	return result
 }
 
 func main() {
 	fmt.Println("=== Gobed Search Engine Profiling Suite ===\n")
-	
+
 	// Profile configuration
 	config := ProfileConfig{
 		CPUProfile:  true,
@@ -391,7 +391,7 @@ func main() {
 		ProfileTime: 2 * time.Minute,
 		OutputDir:   "./profiles",
 	}
-	
+
 	// Load model
 	fmt.Println("Loading embedding model...")
 	model, err := gobed.LoadModel()
@@ -399,15 +399,15 @@ func main() {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	fmt.Println("✓ Model loaded\n")
-	
+
 	// Initialize profiler
 	profiler := NewProfileRunner(config)
-	
+
 	// Start profiling
 	if err := profiler.StartProfiling(); err != nil {
 		log.Fatalf("Failed to start profiling: %v", err)
 	}
-	
+
 	// Define benchmark scenarios
 	scenarios := []BenchmarkScenario{
 		{
@@ -459,10 +459,10 @@ func main() {
 			UseAsync:        true,
 		},
 	}
-	
+
 	// Run benchmark scenarios
 	allResults := make([]*BenchmarkResults, 0, len(scenarios))
-	
+
 	for _, scenario := range scenarios {
 		results, err := runBenchmarkScenario(scenario, model)
 		if err != nil {
@@ -470,46 +470,46 @@ func main() {
 			continue
 		}
 		allResults = append(allResults, results)
-		
+
 		// Force GC between scenarios
 		runtime.GC()
 		time.Sleep(1 * time.Second)
 	}
-	
+
 	// Stop profiling
 	if err := profiler.StopProfiling(); err != nil {
 		log.Printf("Failed to stop profiling: %v", err)
 	}
-	
+
 	// Print comprehensive results
 	printProfileResults(allResults)
-	
+
 	fmt.Println("\n=== Profiling Instructions ===")
 	fmt.Println("CPU Profile Analysis:")
 	fmt.Printf("  go tool pprof %s/cpu_profile.pprof\n", config.OutputDir)
 	fmt.Println("  Commands: top, list, web, svg")
-	
+
 	fmt.Println("\nMemory Profile Analysis:")
 	fmt.Printf("  go tool pprof %s/mem_profile.pprof\n", config.OutputDir)
 	fmt.Println("  Commands: top, list, web, svg")
-	
+
 	if config.HTTPPprof {
 		fmt.Printf("\nLive Profiling (if server still running):\n")
 		fmt.Printf("  go tool pprof http://localhost:%s/debug/pprof/profile\n", config.PProfPort)
 		fmt.Printf("  go tool pprof http://localhost:%s/debug/pprof/heap\n", config.PProfPort)
 	}
-	
+
 	fmt.Println("\n✓ Profiling suite completed successfully!")
 }
 
 // printProfileResults prints comprehensive benchmark results
 func printProfileResults(results []*BenchmarkResults) {
 	fmt.Println("\n=== PROFILING RESULTS SUMMARY ===\n")
-	
+
 	// Performance comparison table
 	fmt.Println("| Scenario        | Docs    | Index Time | Index QPS | Search Latency | Search QPS | Memory MB | Index Type |")
 	fmt.Println("|-----------------|---------|------------|-----------|----------------|------------|-----------|------------|")
-	
+
 	for _, r := range results {
 		fmt.Printf("| %-15s | %7d | %10v | %9.0f | %14v | %10.0f | %9.1f | %-10s |\n",
 			r.Scenario.Name,
@@ -521,37 +521,37 @@ func printProfileResults(results []*BenchmarkResults) {
 			r.Metrics["memory_mb"],
 			r.Metrics["index_type"])
 	}
-	
+
 	// Async vs Sync comparison
 	fmt.Println("\n=== ASYNC vs SYNC COMPARISON ===\n")
-	
+
 	syncResults := filterResults(results, false)
 	asyncResults := filterResults(results, true)
-	
+
 	if len(syncResults) > 0 && len(asyncResults) > 0 {
 		fmt.Println("Average Indexing Throughput:")
 		syncAvg := averageIndexThroughput(syncResults)
 		asyncAvg := averageIndexThroughput(asyncResults)
 		improvement := (asyncAvg - syncAvg) / syncAvg * 100
-		
+
 		fmt.Printf("  Synchronous:  %.0f docs/sec\n", syncAvg)
 		fmt.Printf("  Asynchronous: %.0f docs/sec\n", asyncAvg)
 		fmt.Printf("  Improvement:  %.1f%%\n", improvement)
-		
+
 		fmt.Println("\nAverage Search Latency:")
 		syncLatency := averageSearchLatency(syncResults)
 		asyncLatency := averageSearchLatency(asyncResults)
-		
+
 		fmt.Printf("  Synchronous:  %v\n", syncLatency)
 		fmt.Printf("  Asynchronous: %v\n", asyncLatency)
 	}
-	
+
 	// Performance insights
 	fmt.Println("\n=== PERFORMANCE INSIGHTS ===\n")
-	
+
 	for _, r := range results {
 		fmt.Printf("%s:\n", r.Scenario.Name)
-		
+
 		if r.SearchLatency < time.Millisecond {
 			fmt.Printf("  ✨ Sub-millisecond search achieved!\n")
 		} else if r.SearchLatency < 2*time.Millisecond {
@@ -561,11 +561,11 @@ func printProfileResults(results []*BenchmarkResults) {
 		} else {
 			fmt.Printf("  ⚠️  High latency: %v\n", r.SearchLatency)
 		}
-		
+
 		memoryMB := r.Metrics["memory_mb"].(float64)
 		docsPerMB := float64(r.Scenario.DocumentCount) / memoryMB
 		fmt.Printf("  📊 Memory efficiency: %.0f docs/MB\n", docsPerMB)
-		
+
 		fmt.Println()
 	}
 }
@@ -585,7 +585,7 @@ func averageIndexThroughput(results []*BenchmarkResults) float64 {
 	if len(results) == 0 {
 		return 0
 	}
-	
+
 	total := 0.0
 	for _, r := range results {
 		total += r.IndexThroughput
@@ -597,7 +597,7 @@ func averageSearchLatency(results []*BenchmarkResults) time.Duration {
 	if len(results) == 0 {
 		return 0
 	}
-	
+
 	total := time.Duration(0)
 	for _, r := range results {
 		total += r.SearchLatency

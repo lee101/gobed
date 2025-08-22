@@ -57,9 +57,9 @@ func TestPythonCompatibility(t *testing.T) {
 				actual := embedding[i]
 				diff := math.Abs(float64(expected - actual))
 				maxDiff := math.Abs(float64(expected)) * float64(tc.tolerancePercent)
-				
+
 				if diff > maxDiff && diff > 0.001 { // Also allow small absolute difference
-					t.Errorf("Value at index %d differs: expected %.4f, got %.4f (diff: %.4f)", 
+					t.Errorf("Value at index %d differs: expected %.4f, got %.4f (diff: %.4f)",
 						i, expected, actual, diff)
 				}
 			}
@@ -70,17 +70,17 @@ func TestPythonCompatibility(t *testing.T) {
 				sqSum += val * val
 			}
 			norm := float32(math.Sqrt(float64(sqSum)))
-			
+
 			normDiff := math.Abs(float64(tc.expectedNorm - norm))
 			maxNormDiff := float64(tc.expectedNorm * tc.tolerancePercent)
-			
+
 			if normDiff > maxNormDiff {
-				t.Errorf("Norm differs: expected %.2f, got %.2f (diff: %.2f)", 
+				t.Errorf("Norm differs: expected %.2f, got %.2f (diff: %.2f)",
 					tc.expectedNorm, norm, normDiff)
 			}
 
 			t.Logf("✓ Embedding matches Python output within %.1f%% tolerance", tc.tolerancePercent*100)
-			t.Logf("  First 5: [%.4f, %.4f, %.4f, %.4f, %.4f]", 
+			t.Logf("  First 5: [%.4f, %.4f, %.4f, %.4f, %.4f]",
 				embedding[0], embedding[1], embedding[2], embedding[3], embedding[4])
 			t.Logf("  Norm: %.4f (expected: %.4f)", norm, tc.expectedNorm)
 		})
@@ -109,7 +109,7 @@ func TestCosineSimilarityPythonCompatibility(t *testing.T) {
 		},
 		{
 			text1:       "The cat is sleeping",
-			text2:       "The kitten is sleeping", 
+			text2:       "The kitten is sleeping",
 			expectedSim: 0.788, // This is what we measured
 			tolerance:   0.01,
 		},
@@ -127,7 +127,7 @@ func TestCosineSimilarityPythonCompatibility(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to encode text1: %v", err)
 			}
-			
+
 			emb2, err := model.Encode(tp.text2)
 			if err != nil {
 				t.Fatalf("Failed to encode text2: %v", err)
@@ -135,12 +135,12 @@ func TestCosineSimilarityPythonCompatibility(t *testing.T) {
 
 			sim := CosineSimilarity(emb1, emb2)
 			diff := math.Abs(float64(sim - tp.expectedSim))
-			
+
 			if diff > float64(tp.tolerance) {
 				t.Errorf("Similarity differs from Python: expected %.4f, got %.4f (diff: %.4f)",
 					tp.expectedSim, sim, diff)
 			} else {
-				t.Logf("✓ Similarity matches Python: %.4f (expected: %.4f ±%.4f)", 
+				t.Logf("✓ Similarity matches Python: %.4f (expected: %.4f ±%.4f)",
 					sim, tp.expectedSim, tp.tolerance)
 			}
 		})
@@ -174,7 +174,7 @@ func TestBatchProcessingConsistency(t *testing.T) {
 	// In Python, you would batch encode like:
 	// batch_embeddings = model.encode(sentences)
 	// Here we're simulating that by encoding individually
-	
+
 	// Verify consistency
 	for i := range sentences {
 		// In a real batch implementation, we'd compare batch[i] with single[i]
@@ -183,12 +183,12 @@ func TestBatchProcessingConsistency(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to re-encode sentence %d: %v", i, err)
 		}
-		
+
 		sim := CosineSimilarity(singleEmbeddings[i], emb2)
 		if sim < 0.9999 {
 			t.Errorf("Inconsistent encoding for sentence %d: similarity = %.6f", i, sim)
 		}
 	}
-	
+
 	t.Logf("✓ All %d sentences encoded consistently", len(sentences))
 }

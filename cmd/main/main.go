@@ -40,57 +40,57 @@ func RunSimilarityDemo() {
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Println("🚀 Text Embedding Similarity & Distance Examples")
 	fmt.Println(strings.Repeat("=", 80))
-	
+
 	// Load model
 	model, err := gobed.LoadModel()
 	if err != nil {
 		fmt.Printf("❌ Error: %v\\n", err)
 		return
 	}
-	
+
 	// Test similar texts
 	fmt.Println("\\n📊 SIMILARITY BETWEEN RELATED TEXTS")
 	fmt.Println(strings.Repeat("-", 70))
-	
+
 	similarPairs := [][]string{
 		{"Hello world", "Hi there friend"},
 		{"Good morning everyone", "Hello world"},
 		{"Python is a programming language.", "JavaScript runs in browsers."},
 		{"Machine learning is fascinating.", "Deep learning models are powerful."},
 	}
-	
+
 	for _, pair := range similarPairs {
 		sim, err := model.Similarity(pair[0], pair[1])
 		if err != nil {
 			continue
 		}
 		distance := 1.0 - sim
-		
+
 		fmt.Printf("\\n\\\"%s\\\"\\n↔ \\\"%s\\\"\\n", pair[0], pair[1])
 		fmt.Printf("  → Similarity: %.4f | Distance: %.4f\\n", sim, distance)
 	}
-	
+
 	// Test unrelated texts
 	fmt.Println("\\n📊 SIMILARITY BETWEEN UNRELATED TEXTS")
 	fmt.Println(strings.Repeat("-", 70))
-	
+
 	unrelatedPairs := [][]string{
 		{"Hello world", "Pizza tastes delicious."},
 		{"Python is a programming language.", "The weather is nice today."},
 		{"Mathematics requires practice.", "Birds are singing beautifully."},
 	}
-	
+
 	for _, pair := range unrelatedPairs {
 		sim, err := model.Similarity(pair[0], pair[1])
 		if err != nil {
 			continue
 		}
 		distance := 1.0 - sim
-		
+
 		fmt.Printf("\\n\\\"%s\\\"\\n↔ \\\"%s\\\"\\n", pair[0], pair[1])
 		fmt.Printf("  → Similarity: %.4f | Distance: %.4f\\n", sim, distance)
 	}
-	
+
 	fmt.Println("\\n✅ Demo completed!")
 }
 
@@ -122,7 +122,7 @@ func RunDemo() {
 
 	// Test with arbitrary text first
 	testTexts := []string{"This is a test sentence", "Machine learning is fun"}
-	
+
 	for _, text := range testTexts {
 		embedding, err := model.Encode(text)
 		if err != nil {

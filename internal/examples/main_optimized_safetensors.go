@@ -124,7 +124,7 @@ func LoadModel(safetensorsPath, referenceTokensPath string, precision PrecisionM
 // applyInt8Quantization converts FP32 weights to INT8 with scale factor
 func (m *OptimizedEmbedding) applyInt8Quantization() error {
 	m.weightsInt8 = make([][]int8, m.vocabSize)
-	
+
 	// Find global max for symmetric quantization
 	maxVal := float32(0)
 	for i := 0; i < m.vocabSize; i++ {
@@ -135,13 +135,13 @@ func (m *OptimizedEmbedding) applyInt8Quantization() error {
 			}
 		}
 	}
-	
+
 	// Calculate scale factor
 	m.weightsScale = maxVal / 127.0
 	if m.weightsScale == 0 {
 		m.weightsScale = 1.0
 	}
-	
+
 	// Quantize weights
 	for i := 0; i < m.vocabSize; i++ {
 		m.weightsInt8[i] = make([]int8, m.embedDim)
@@ -155,7 +155,7 @@ func (m *OptimizedEmbedding) applyInt8Quantization() error {
 			m.weightsInt8[i][j] = int8(quantized)
 		}
 	}
-	
+
 	log.Printf("🔢 Quantization scale factor: %.6f", m.weightsScale)
 	return nil
 }
@@ -167,7 +167,7 @@ func (m *OptimizedEmbedding) EncodeText(text string) ([]float32, error) {
 	if !exists {
 		return nil, fmt.Errorf("no reference tokens found for text: %s", text)
 	}
-	
+
 	return m.encodeTokenIDs(tokenData.TokenIDs)
 }
 
@@ -431,8 +431,8 @@ func benchmarkInference(model *OptimizedEmbedding, precision PrecisionMode) {
 
 		times[i] = elapsed
 		embeddings[i] = embedding
-		
-		fmt.Printf("   S%d: %8.2fμs - \"%s\"\n", 
+
+		fmt.Printf("   S%d: %8.2fμs - \"%s\"\n",
 			i+1, float64(elapsed.Nanoseconds())/1000, sentence)
 	}
 
@@ -517,7 +517,7 @@ func main() {
 	// Check required files exist
 	modelPath := "cached_model/snapshots/f60985c706f192d45d218078e49e5a8b6f15283a/0_StaticEmbedding/model.safetensors"
 	referenceTokensPath := "model/production_reference_tokens.json"
-	
+
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 		log.Fatalf("❌ Safetensors model file not found: %s", modelPath)
 	}

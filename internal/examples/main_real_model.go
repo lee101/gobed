@@ -31,7 +31,7 @@ type RealEmbeddingModel struct {
 	vocabSize       int
 	embedDim        int
 	referenceTokens map[string]TokenData
-	
+
 	// Pre-allocated buffers for optimization
 	embeddingBuffer []float32
 }
@@ -91,7 +91,7 @@ func (m *RealEmbeddingModel) encodeTokenIDsWithRealWeights(tokenIDs []int) ([]fl
 	}
 
 	validTokens := 0
-	
+
 	// Use real weights from the static-retrieval-mrl-en-v1 model
 	for _, tokenID := range tokenIDs {
 		if tokenID > 0 && tokenID < m.vocabSize {
@@ -124,7 +124,7 @@ func (m *RealEmbeddingModel) encodeTokenIDsWithRealWeights(tokenIDs []int) ([]fl
 // loadRealSafetensorsWeights loads the actual weights from the real model
 func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, error) {
 	log.Printf("📂 Loading real safetensors from: %s", safetensorsPath)
-	
+
 	file, err := os.Open(safetensorsPath)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to open safetensors file: %v", err)
@@ -173,7 +173,7 @@ func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, 
 	// Look for the embedding weights tensor (could be named differently)
 	var info TensorInfo
 	var exists bool
-	
+
 	// Try common embedding weight names
 	possibleNames := []string{"embeddings.weight", "embedding.weight", "word_embeddings.weight"}
 	for _, name := range possibleNames {
@@ -269,12 +269,12 @@ func loadExpectedEmbeddings() ([][]float32, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	sentences := strings.Split(strings.TrimSpace(string(sentencesData)), "\n")
-	
+
 	// For now, return empty embeddings (would need .npy parser for real comparison)
 	embeddings := make([][]float32, len(sentences))
-	
+
 	return embeddings, sentences, nil
 }
 
@@ -417,7 +417,7 @@ func benchmarkRealModel(model *RealEmbeddingModel) {
 	if testSentenceIdx >= 0 && len(embeddings[testSentenceIdx]) >= 5 {
 		embedding := embeddings[testSentenceIdx]
 		maxDiff := float32(0.0)
-		
+
 		for i := 0; i < 5; i++ {
 			diff := float32(math.Abs(float64(embedding[i] - expected[i])))
 			if diff > maxDiff {

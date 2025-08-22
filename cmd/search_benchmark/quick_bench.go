@@ -33,7 +33,7 @@ var sampleTexts = []string{
 	"Data engineering builds pipelines for collecting and processing large datasets",
 	"Web development creates websites and web applications using various technologies",
 	"Mobile app development builds applications for smartphones and tablets",
-	
+
 	// Science & Research (20 texts)
 	"Quantum computing uses quantum mechanics principles for exponentially faster calculations",
 	"CRISPR gene editing allows precise modifications to DNA sequences in organisms",
@@ -55,7 +55,7 @@ var sampleTexts = []string{
 	"Chemistry studies matter properties, composition, and transformations",
 	"Physics explores matter, energy, and fundamental forces of nature",
 	"Biology is the scientific study of life and living organisms",
-	
+
 	// Business & Finance (20 texts)
 	"Stock markets facilitate buying and selling of company shares and securities",
 	"Cryptocurrency uses cryptography for secure digital currency transactions",
@@ -82,20 +82,20 @@ var sampleTexts = []string{
 func generateVariations(base []string, targetSize int) []string {
 	result := make([]string, 0, targetSize)
 	result = append(result, base...)
-	
+
 	prefixes := []string{
 		"Introduction to", "Advanced", "Modern", "Essential", "Practical",
 		"Understanding", "Mastering", "Comprehensive guide to", "The future of",
 	}
-	
+
 	suffixes := []string{
 		"best practices", "in production", "at scale", "for beginners",
 		"explained simply", "deep dive", "case study", "tutorial",
 	}
-	
+
 	for len(result) < targetSize {
 		text := base[rand.Intn(len(base))]
-		
+
 		switch rand.Intn(4) {
 		case 0: // Add prefix
 			text = prefixes[rand.Intn(len(prefixes))] + " " + strings.ToLower(text)
@@ -105,10 +105,10 @@ func generateVariations(base []string, targetSize int) []string {
 			other := base[rand.Intn(len(base))]
 			text = text + " and " + strings.ToLower(other[:len(other)/2])
 		}
-		
+
 		result = append(result, text)
 	}
-	
+
 	return result[:targetSize]
 }
 
@@ -138,19 +138,19 @@ func main() {
 	fmt.Println("=== INDEXING ===")
 	batchSize := 500
 	indexStart := time.Now()
-	
+
 	for i := 0; i < corpusSize; i += batchSize {
 		end := min(i+batchSize, corpusSize)
 		_, err := engine.IndexBatch(corpus[i:end])
 		if err != nil {
 			log.Printf("Index error: %v", err)
 		}
-		
-		if (i+batchSize) % 2000 == 0 {
+
+		if (i+batchSize)%2000 == 0 {
 			fmt.Printf("  Indexed %d/%d documents\n", min(i+batchSize, corpusSize), corpusSize)
 		}
 	}
-	
+
 	indexTime := time.Since(indexStart)
 	fmt.Printf("\n✓ Indexed %d documents in %v\n", corpusSize, indexTime)
 	fmt.Printf("  Throughput: %.0f docs/sec\n\n", float64(corpusSize)/indexTime.Seconds())
@@ -177,18 +177,18 @@ func main() {
 
 	fmt.Println("=== SEARCH BENCHMARK ===")
 	totalTime := time.Duration(0)
-	
+
 	for i, query := range queries {
 		searchStart := time.Now()
 		results, err := engine.Search(query, 5)
 		searchTime := time.Since(searchStart)
 		totalTime += searchTime
-		
+
 		if err != nil {
 			log.Printf("Search error: %v", err)
 			continue
 		}
-		
+
 		fmt.Printf("\n%d. Query: '%s' (%v)\n", i+1, query, searchTime)
 		for j, r := range results[:min(3, len(results))] {
 			text := r.Text
@@ -198,7 +198,7 @@ func main() {
 			fmt.Printf("   %d. [%.3f] %s\n", j+1, r.Similarity, text)
 		}
 	}
-	
+
 	avgLatency := totalTime / time.Duration(len(queries))
 	fmt.Printf("\n=== PERFORMANCE SUMMARY ===\n")
 	fmt.Printf("Dataset: %d documents\n", corpusSize)

@@ -31,7 +31,7 @@ type ProductionEmbeddingModel struct {
 	vocabSize       int
 	embedDim        int
 	referenceTokens map[string]TokenData
-	
+
 	// Pre-allocated buffers for optimization
 	embeddingBuffer []float32
 	validTokensMask []bool
@@ -94,7 +94,7 @@ func (m *ProductionEmbeddingModel) encodeTokenIDsOptimized(tokenIDs []int) ([]fl
 	}
 
 	validTokens := 0
-	
+
 	// Optimized loop with pre-allocated buffers
 	for _, tokenID := range tokenIDs {
 		if tokenID > 0 && tokenID < m.vocabSize { // Skip padding tokens (0)
@@ -125,7 +125,7 @@ func (m *ProductionEmbeddingModel) encodeTokenIDsOptimized(tokenIDs []int) ([]fl
 // BatchEncodeTexts performs batch inference efficiently
 func (m *ProductionEmbeddingModel) BatchEncodeTexts(texts []string) ([][]float32, error) {
 	results := make([][]float32, len(texts))
-	
+
 	for i, text := range texts {
 		embedding, err := m.EncodeText(text)
 		if err != nil {
@@ -133,7 +133,7 @@ func (m *ProductionEmbeddingModel) BatchEncodeTexts(texts []string) ([][]float32
 		}
 		results[i] = embedding
 	}
-	
+
 	return results, nil
 }
 
@@ -375,7 +375,7 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 	batchStart := time.Now()
 	_, batchErr := model.BatchEncodeTexts(sentences)
 	batchTime := time.Since(batchStart)
-	
+
 	if batchErr != nil {
 		log.Printf("Batch processing failed: %v", batchErr)
 	} else {
@@ -389,7 +389,7 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 		fmt.Println("\n🎯 Accuracy verification:")
 		expected := []float32{3.483, -2.513, 3.576, -0.724, 1.369}
 		maxDiff := float32(0.0)
-		
+
 		// Find "This is a test sentence." if available
 		testSentenceIdx := -1
 		for i, sentence := range sentences {
@@ -398,7 +398,7 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 				break
 			}
 		}
-		
+
 		if testSentenceIdx >= 0 {
 			embedding := embeddings[testSentenceIdx]
 			for i := 0; i < 5 && i < len(embedding); i++ {
@@ -407,13 +407,13 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 					maxDiff = diff
 				}
 			}
-			
-			fmt.Printf("   Expected: [%.3f, %.3f, %.3f, %.3f, %.3f]\n", 
+
+			fmt.Printf("   Expected: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
 				expected[0], expected[1], expected[2], expected[3], expected[4])
 			fmt.Printf("   Actual:   [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
 				embedding[0], embedding[1], embedding[2], embedding[3], embedding[4])
 			fmt.Printf("   Max diff: %.6f\n", maxDiff)
-			
+
 			if maxDiff < 0.001 {
 				fmt.Printf("   ✅ PERFECT MATCH!\n")
 			} else if maxDiff < 0.01 {
@@ -442,25 +442,25 @@ func main() {
 	// Use the current working paths (adapt to your setup)
 	safetensorsPath := ""
 	referenceTokensPath := "model/production_reference_tokens.json"
-	
+
 	// Try to find the safetensors file
 	possiblePaths := []string{
 		"cached_model/snapshots/f60985c706f192d45d218078e49e5a8b6f15283a/0_StaticEmbedding/model.safetensors",
 		"model/model.safetensors",
 		"model/embedding_model.safetensors",
 	}
-	
+
 	for _, path := range possiblePaths {
 		if _, err := os.Stat(path); err == nil {
 			safetensorsPath = path
 			break
 		}
 	}
-	
+
 	if safetensorsPath == "" {
 		log.Fatalf("❌ No safetensors model file found. Tried paths: %v", possiblePaths)
 	}
-	
+
 	if _, err := os.Stat(referenceTokensPath); os.IsNotExist(err) {
 		log.Fatalf("❌ Reference tokens file not found: %s", referenceTokensPath)
 	}

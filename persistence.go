@@ -25,28 +25,28 @@ const (
 
 // IndexSnapshot represents a serializable snapshot of a SearchEngine
 type IndexSnapshot struct {
-	Version       string                 `json:"version"`
-	CreatedAt     time.Time              `json:"created_at"`
-	NumDocuments  int                    `json:"num_documents"`
-	Config        SearchConfig           `json:"config"`
-	Documents     map[int]string         `json:"documents"`
-	IndexData     *IndexData             `json:"index_data,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Version      string                 `json:"version"`
+	CreatedAt    time.Time              `json:"created_at"`
+	NumDocuments int                    `json:"num_documents"`
+	Config       SearchConfig           `json:"config"`
+	Documents    map[int]string         `json:"documents"`
+	IndexData    *IndexData             `json:"index_data,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // IndexData contains the serializable index structures
 type IndexData struct {
 	// Core index data
-	Vectors      [][]float32 `json:"-"` // Skip in JSON, too large
-	VectorsBinary []byte     `json:"vectors_binary,omitempty"`
-	IDs          []int       `json:"ids"`
-	
+	Vectors       [][]float32 `json:"-"` // Skip in JSON, too large
+	VectorsBinary []byte      `json:"vectors_binary,omitempty"`
+	IDs           []int       `json:"ids"`
+
 	// Index state
-	IndexType    string      `json:"index_type"`
-	Trained      bool        `json:"trained"`
-	
+	IndexType string `json:"index_type"`
+	Trained   bool   `json:"trained"`
+
 	// Stats
-	MemoryUsageMB float64    `json:"memory_usage_mb"`
+	MemoryUsageMB float64 `json:"memory_usage_mb"`
 }
 
 // SaveOptions configures how the index is saved
@@ -200,7 +200,7 @@ func (se *SearchEngine) extractIndexData() (*IndexData, error) {
 	}
 
 	stats := se.index.Stats()
-	
+
 	data := &IndexData{
 		IndexType:     stats.IndexType,
 		Trained:       stats.PQEnabled || stats.HNSWEnabled, // Approximation
@@ -209,7 +209,7 @@ func (se *SearchEngine) extractIndexData() (*IndexData, error) {
 
 	// For now, we'll need to rebuild the index on load
 	// A full implementation would serialize the internal structures
-	
+
 	return data, nil
 }
 
@@ -221,13 +221,13 @@ func (se *SearchEngine) restoreIndexData(data *IndexData) error {
 
 	// Create new index with saved configuration
 	config := search.DefaultConfig()
-	
+
 	se.index = search.NewEngine(config)
 
 	// Note: Full restoration would require serializing/deserializing the actual
 	// index structures (IVF lists, HNSW graph, PQ codes, etc.)
 	// For now, the index will need to be rebuilt from documents
-	
+
 	return nil
 }
 
@@ -240,7 +240,7 @@ func (se *SearchEngine) saveBinary(path string, snapshot *IndexSnapshot, compres
 	defer file.Close()
 
 	var writer io.Writer = file
-	
+
 	// Add compression if requested
 	if compress {
 		// Could use gzip here
@@ -264,7 +264,7 @@ func (se *SearchEngine) loadBinary(path string) (*IndexSnapshot, error) {
 	defer file.Close()
 
 	var reader io.Reader = file
-	
+
 	// Detect and handle compression
 	// Could check for gzip magic bytes here
 
@@ -345,11 +345,11 @@ func (se *SearchEngine) AutoSave(dir string, interval time.Duration) {
 
 // PersistenceStats returns statistics about saved indexes
 type PersistenceStats struct {
-	LastSaved     time.Time
-	SaveCount     int
-	LoadCount     int
-	LastLoadTime  time.Duration
-	LastSaveTime  time.Duration
+	LastSaved    time.Time
+	SaveCount    int
+	LoadCount    int
+	LastLoadTime time.Duration
+	LastSaveTime time.Duration
 }
 
 var persistenceStats = &PersistenceStats{}

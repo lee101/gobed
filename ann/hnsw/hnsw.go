@@ -11,27 +11,27 @@ import (
 
 // HNSW implements Hierarchical Navigable Small World graph
 type HNSW struct {
-	M              int                    // Max number of connections per node
-	MMax           int                    // Max connections for layer > 0
-	MMax0          int                    // Max connections for layer 0
-	efConstruction int                    // Size of dynamic candidate list
-	ef             int                    // Size of search candidate list
-	ml             float64                // Normalization factor for level assignment
-	seed           int64                  // Random seed
-	
-	nodes          []Node                 // Graph nodes
-	entryPoint     int                    // Entry point for search
-	distFunc       DistanceFunc           // Distance function
-	mu             sync.RWMutex           // Global lock
+	M              int     // Max number of connections per node
+	MMax           int     // Max connections for layer > 0
+	MMax0          int     // Max connections for layer 0
+	efConstruction int     // Size of dynamic candidate list
+	ef             int     // Size of search candidate list
+	ml             float64 // Normalization factor for level assignment
+	seed           int64   // Random seed
+
+	nodes      []Node       // Graph nodes
+	entryPoint int          // Entry point for search
+	distFunc   DistanceFunc // Distance function
+	mu         sync.RWMutex // Global lock
 }
 
 // Node represents a node in the HNSW graph
 type Node struct {
-	ID         int
-	Vector     simd.Vec512
-	Scale      float32
-	Level      int
-	Neighbors  [][]int  // Neighbors at each level
+	ID        int
+	Vector    simd.Vec512
+	Scale     float32
+	Level     int
+	Neighbors [][]int // Neighbors at each level
 }
 
 // DistanceFunc computes distance between two vectors
@@ -42,7 +42,7 @@ func NewHNSW(M, efConstruction int) *HNSW {
 	mMax := M
 	mMax0 := M * 2
 	ml := 1.0 / math.Log(2.0)
-	
+
 	return &HNSW{
 		M:              M,
 		MMax:           mMax,
@@ -71,17 +71,17 @@ func (h *HNSW) SetDistanceFunc(f DistanceFunc) {
 func (h *HNSW) Add(vec simd.Vec512, scale float32, id int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	if len(h.nodes) >= id+1 {
 		// Reallocate if necessary
 		newNodes := make([]Node, id+1)
 		copy(newNodes, h.nodes)
 		h.nodes = newNodes
 	}
-	
+
 	// Assign level
 	level := h.getRandomLevel()
-	
+
 	node := Node{
 		ID:        id,
 		Vector:    vec,
@@ -89,54 +89,54 @@ func (h *HNSW) Add(vec simd.Vec512, scale float32, id int) {
 		Level:     level,
 		Neighbors: make([][]int, level+1),
 	}
-	
+
 	// Initialize neighbor lists
 	for l := 0; l <= level; l++ {
 		node.Neighbors[l] = make([]int, 0)
 	}
-	
+
 	if h.entryPoint == -1 {
 		// First node
 		h.nodes = append(h.nodes, node)
 		h.entryPoint = 0
 		return
 	}
-	
+
 	// Find neighbors using a greedy search
 	candidates := h.searchLayer(&vec, h.entryPoint, 1, level)
-	
+
 	// Insert node
 	nodeIdx := len(h.nodes)
 	h.nodes = append(h.nodes, node)
-	
+
 	// Connect to neighbors at all levels
 	for lc := level; lc >= 0; lc-- {
 		candidates = h.searchLayer(&vec, h.entryPoint, h.efConstruction, lc)
-		
+
 		m := h.MMax
 		if lc == 0 {
 			m = h.MMax0
 		}
-		
+
 		neighbors := h.getNeighbors(candidates, m)
 		h.nodes[nodeIdx].Neighbors[lc] = neighbors
-		
+
 		// Add bidirectional links
 		for _, neighbor := range neighbors {
 			h.nodes[neighbor].Neighbors[lc] = append(h.nodes[neighbor].Neighbors[lc], nodeIdx)
-			
+
 			// Prune connections if needed
 			maxConn := h.MMax
 			if lc == 0 {
 				maxConn = h.MMax0
 			}
-			
+
 			if len(h.nodes[neighbor].Neighbors[lc]) > maxConn {
 				h.pruneConnections(neighbor, lc, maxConn)
 			}
 		}
 	}
-	
+
 	// Update entry point if necessary
 	if level > h.nodes[h.entryPoint].Level {
 		h.entryPoint = nodeIdx
@@ -147,13 +147,13 @@ func (h *HNSW) Add(vec simd.Vec512, scale float32, id int) {
 func (h *HNSW) Search(query *simd.Vec512, k int) []SearchResult {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	if h.entryPoint == -1 {
 		return nil
 	}
-	
+
 	ep := h.entryPoint
-	
+
 	// Search from top layer to layer 0
 	for level := h.nodes[ep].Level; level > 0; level-- {
 		nearest := h.searchLayerSingle(query, ep, 1, level)
@@ -161,10 +161,10 @@ func (h *HNSW) Search(query *simd.Vec512, k int) []SearchResult {
 			ep = nearest[0].ID
 		}
 	}
-	
+
 	// Search at layer 0
 	candidates := h.searchLayer(query, ep, max(h.ef, k), 0)
-	
+
 	// Return top k
 	results := make([]SearchResult, 0, k)
 	for i := 0; i < k && i < len(candidates); i++ {
@@ -173,7 +173,7 @@ func (h *HNSW) Search(query *simd.Vec512, k int) []SearchResult {
 			Distance: candidates[i].Distance,
 		})
 	}
-	
+
 	return results
 }
 
@@ -182,34 +182,34 @@ func (h *HNSW) searchLayer(query *simd.Vec512, ep int, ef int, layer int) []Cand
 	visited := make(map[int]bool)
 	candidates := &CandidateHeap{}
 	heap.Init(candidates)
-	
+
 	w := &CandidateHeap{}
 	heap.Init(w)
-	
+
 	dist := h.distFunc(query, &h.nodes[ep].Vector)
 	heap.Push(candidates, Candidate{ID: ep, Distance: -dist}) // Negative for max heap
 	heap.Push(w, Candidate{ID: ep, Distance: dist})
 	visited[ep] = true
-	
+
 	for candidates.Len() > 0 {
 		current := heap.Pop(candidates).(Candidate)
 		current.Distance = -current.Distance // Convert back
-		
+
 		if current.Distance > (*w)[0].Distance {
 			break
 		}
-		
+
 		// Check neighbors
 		neighbors := h.nodes[current.ID].Neighbors[layer]
 		for _, neighbor := range neighbors {
 			if !visited[neighbor] {
 				visited[neighbor] = true
 				dist := h.distFunc(query, &h.nodes[neighbor].Vector)
-				
+
 				if dist < (*w)[0].Distance || w.Len() < ef {
 					heap.Push(candidates, Candidate{ID: neighbor, Distance: -dist})
 					heap.Push(w, Candidate{ID: neighbor, Distance: dist})
-					
+
 					if w.Len() > ef {
 						heap.Pop(w)
 					}
@@ -217,13 +217,13 @@ func (h *HNSW) searchLayer(query *simd.Vec512, ep int, ef int, layer int) []Cand
 			}
 		}
 	}
-	
+
 	// Convert heap to slice
 	results := make([]Candidate, w.Len())
 	for i := len(results) - 1; i >= 0; i-- {
 		results[i] = heap.Pop(w).(Candidate)
 	}
-	
+
 	return results
 }
 
@@ -241,13 +241,13 @@ func (h *HNSW) getNeighbors(candidates []Candidate, m int) []int {
 		}
 		return neighbors
 	}
-	
+
 	// Select m nearest
 	neighbors := make([]int, m)
 	for i := 0; i < m; i++ {
 		neighbors[i] = candidates[i].ID
 	}
-	
+
 	return neighbors
 }
 
@@ -257,7 +257,7 @@ func (h *HNSW) pruneConnections(nodeIdx int, level int, maxConn int) {
 	if len(neighbors) <= maxConn {
 		return
 	}
-	
+
 	// Sort by distance
 	node := &h.nodes[nodeIdx]
 	candidates := make([]Candidate, len(neighbors))
@@ -265,7 +265,7 @@ func (h *HNSW) pruneConnections(nodeIdx int, level int, maxConn int) {
 		dist := h.distFunc(&node.Vector, &h.nodes[n].Vector)
 		candidates[i] = Candidate{ID: n, Distance: dist}
 	}
-	
+
 	// Sort candidates
 	for i := 0; i < len(candidates); i++ {
 		for j := i + 1; j < len(candidates); j++ {
@@ -274,7 +274,7 @@ func (h *HNSW) pruneConnections(nodeIdx int, level int, maxConn int) {
 			}
 		}
 	}
-	
+
 	// Keep only maxConn nearest
 	h.nodes[nodeIdx].Neighbors[level] = h.nodes[nodeIdx].Neighbors[level][:maxConn]
 	for i := 0; i < maxConn; i++ {

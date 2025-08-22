@@ -7,12 +7,12 @@ import (
 
 // ProductQuantizer performs product quantization on vectors
 type ProductQuantizer struct {
-	M           int             // Number of subquantizers
-	KSub        int             // Codebook size per subquantizer (typically 256 for 8-bit)
-	D           int             // Vector dimension
-	DSub        int             // Dimension per subquantizer
-	Codebooks   [][][]float32   // Codebooks[m][k][d] - m subquantizers, k codes, d dims
-	Trained     bool
+	M         int           // Number of subquantizers
+	KSub      int           // Codebook size per subquantizer (typically 256 for 8-bit)
+	D         int           // Vector dimension
+	DSub      int           // Dimension per subquantizer
+	Codebooks [][][]float32 // Codebooks[m][k][d] - m subquantizers, k codes, d dims
+	Trained   bool
 }
 
 // NewProductQuantizer creates a new product quantizer
@@ -20,7 +20,7 @@ func NewProductQuantizer(d, m, ksub int) *ProductQuantizer {
 	if d%m != 0 {
 		panic("dimension must be divisible by number of subquantizers")
 	}
-	
+
 	dsub := d / m
 	codebooks := make([][][]float32, m)
 	for i := range codebooks {
@@ -29,7 +29,7 @@ func NewProductQuantizer(d, m, ksub int) *ProductQuantizer {
 			codebooks[i][j] = make([]float32, dsub)
 		}
 	}
-	
+
 	return &ProductQuantizer{
 		M:         m,
 		KSub:      ksub,
@@ -45,22 +45,22 @@ func (pq *ProductQuantizer) Train(vectors [][]float32) {
 	if n < pq.KSub*pq.M {
 		panic("not enough training data for PQ")
 	}
-	
+
 	// Train each subquantizer independently
 	for m := 0; m < pq.M; m++ {
 		startDim := m * pq.DSub
 		endDim := startDim + pq.DSub
-		
+
 		// Extract subvectors for this subquantizer
 		subvectors := make([][]float32, n)
 		for i := range subvectors {
 			subvectors[i] = vectors[i][startDim:endDim]
 		}
-		
+
 		// Run k-means on subvectors
 		pq.trainSubquantizer(m, subvectors)
 	}
-	
+
 	pq.Trained = true
 }
 
@@ -69,20 +69,20 @@ func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
 	n := len(subvectors)
 	k := pq.KSub
 	maxIters := 25
-	
+
 	// Initialize centroids with k-means++
 	centroids := pq.Codebooks[m]
 	pq.initializeKMeansPlusPlus(subvectors, centroids)
-	
+
 	assignments := make([]int, n)
-	
+
 	for iter := 0; iter < maxIters; iter++ {
 		// Assignment step
 		changed := false
 		for i, vec := range subvectors {
 			minDist := float32(math.MaxFloat32)
 			bestK := 0
-			
+
 			for ki := 0; ki < k; ki++ {
 				dist := euclideanDistance(vec, centroids[ki])
 				if dist < minDist {
@@ -90,17 +90,17 @@ func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
 					bestK = ki
 				}
 			}
-			
+
 			if assignments[i] != bestK {
 				assignments[i] = bestK
 				changed = true
 			}
 		}
-		
+
 		if !changed && iter > 0 {
 			break
 		}
-		
+
 		// Update step
 		counts := make([]int, k)
 		for i := range centroids {
@@ -108,7 +108,7 @@ func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
 				centroids[i][j] = 0
 			}
 		}
-		
+
 		for i, vec := range subvectors {
 			ki := assignments[i]
 			counts[ki]++
@@ -116,7 +116,7 @@ func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
 				centroids[ki][d] += vec[d]
 			}
 		}
-		
+
 		for ki := 0; ki < k; ki++ {
 			if counts[ki] > 0 {
 				for d := range centroids[ki] {
@@ -136,18 +136,18 @@ func (pq *ProductQuantizer) Encode(vec []float32) []uint8 {
 	if !pq.Trained {
 		panic("PQ must be trained before encoding")
 	}
-	
+
 	codes := make([]uint8, pq.M)
-	
+
 	for m := 0; m < pq.M; m++ {
 		startDim := m * pq.DSub
 		endDim := startDim + pq.DSub
 		subvec := vec[startDim:endDim]
-		
+
 		// Find nearest centroid
 		minDist := float32(math.MaxFloat32)
 		bestK := uint8(0)
-		
+
 		for k := 0; k < pq.KSub; k++ {
 			dist := euclideanDistance(subvec, pq.Codebooks[m][k])
 			if dist < minDist {
@@ -155,10 +155,10 @@ func (pq *ProductQuantizer) Encode(vec []float32) []uint8 {
 				bestK = uint8(k)
 			}
 		}
-		
+
 		codes[m] = bestK
 	}
-	
+
 	return codes
 }
 
@@ -176,19 +176,19 @@ func (pq *ProductQuantizer) Decode(codes []uint8) []float32 {
 	if !pq.Trained {
 		panic("PQ must be trained before decoding")
 	}
-	
+
 	vec := make([]float32, pq.D)
-	
+
 	for m := 0; m < pq.M; m++ {
 		startDim := m * pq.DSub
 		code := codes[m]
 		centroid := pq.Codebooks[m][code]
-		
+
 		for d := 0; d < pq.DSub; d++ {
 			vec[startDim+d] = centroid[d]
 		}
 	}
-	
+
 	return vec
 }
 
@@ -197,20 +197,20 @@ func (pq *ProductQuantizer) ComputeDistance(codes []uint8, query []float32) floa
 	if !pq.Trained {
 		panic("PQ must be trained before computing distances")
 	}
-	
+
 	distance := float32(0)
-	
+
 	for m := 0; m < pq.M; m++ {
 		startDim := m * pq.DSub
 		endDim := startDim + pq.DSub
 		subquery := query[startDim:endDim]
-		
+
 		code := codes[m]
 		centroid := pq.Codebooks[m][code]
-		
+
 		distance += euclideanDistance(subquery, centroid)
 	}
-	
+
 	return distance
 }
 
@@ -218,13 +218,13 @@ func (pq *ProductQuantizer) ComputeDistance(codes []uint8, query []float32) floa
 func (pq *ProductQuantizer) initializeKMeansPlusPlus(vectors [][]float32, centroids [][]float32) {
 	n := len(vectors)
 	k := len(centroids)
-	
+
 	// Choose first centroid randomly
 	first := rand.Intn(n)
 	copy(centroids[0], vectors[first])
-	
+
 	distances := make([]float32, n)
-	
+
 	for ki := 1; ki < k; ki++ {
 		// Compute distances to nearest centroid
 		totalDist := float32(0)
@@ -239,7 +239,7 @@ func (pq *ProductQuantizer) initializeKMeansPlusPlus(vectors [][]float32, centro
 			distances[i] = minDist * minDist // Square for k-means++
 			totalDist += distances[i]
 		}
-		
+
 		// Choose next centroid
 		threshold := rand.Float32() * totalDist
 		cumSum := float32(0)
@@ -273,22 +273,22 @@ func (pq *ProductQuantizer) ComputeADCTable(query []float32) *ADCTable {
 	if !pq.Trained {
 		panic("PQ must be trained before computing ADC table")
 	}
-	
+
 	table := &ADCTable{
 		Distances: make([][]float32, pq.M),
 	}
-	
+
 	for m := 0; m < pq.M; m++ {
 		table.Distances[m] = make([]float32, pq.KSub)
 		startDim := m * pq.DSub
 		endDim := startDim + pq.DSub
 		subquery := query[startDim:endDim]
-		
+
 		for k := 0; k < pq.KSub; k++ {
 			table.Distances[m][k] = euclideanDistance(subquery, pq.Codebooks[m][k])
 		}
 	}
-	
+
 	return table
 }
 
@@ -309,8 +309,8 @@ type PQCode struct {
 
 // EncodedIndex stores PQ-encoded vectors for search
 type EncodedIndex struct {
-	PQ     *ProductQuantizer
-	Codes  []PQCode
+	PQ    *ProductQuantizer
+	Codes []PQCode
 }
 
 // NewEncodedIndex creates a new PQ-encoded index
@@ -330,13 +330,13 @@ func (idx *EncodedIndex) Add(id int, codes []uint8) {
 func (idx *EncodedIndex) Search(query []float32, k int) []SearchResult {
 	// Precompute ADC table
 	table := idx.PQ.ComputeADCTable(query)
-	
+
 	// Compute distances for all codes
 	type scorePair struct {
 		id    int
 		score float32
 	}
-	
+
 	scores := make([]scorePair, len(idx.Codes))
 	for i, code := range idx.Codes {
 		scores[i] = scorePair{
@@ -344,7 +344,7 @@ func (idx *EncodedIndex) Search(query []float32, k int) []SearchResult {
 			score: table.Distance(code.Codes),
 		}
 	}
-	
+
 	// Select top-k (partial sort)
 	for i := 0; i < k && i < len(scores); i++ {
 		minIdx := i
@@ -355,7 +355,7 @@ func (idx *EncodedIndex) Search(query []float32, k int) []SearchResult {
 		}
 		scores[i], scores[minIdx] = scores[minIdx], scores[i]
 	}
-	
+
 	// Return results
 	results := make([]SearchResult, k)
 	for i := 0; i < k && i < len(scores); i++ {
@@ -364,7 +364,7 @@ func (idx *EncodedIndex) Search(query []float32, k int) []SearchResult {
 			Score: scores[i].score,
 		}
 	}
-	
+
 	return results
 }
 

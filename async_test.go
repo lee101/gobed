@@ -236,7 +236,7 @@ func TestAsyncSearchPerformance(t *testing.T) {
 	t.Run("LargeScaleAsync", func(t *testing.T) {
 		numDocs := 5000
 		batchSize := 100
-		
+
 		start := time.Now()
 		responses := make([]<-chan IndexResponse, 0)
 
@@ -280,7 +280,7 @@ func TestAsyncSearchPerformance(t *testing.T) {
 		// Simulate mixed indexing and searching
 		var wg sync.WaitGroup
 		stopCh := make(chan struct{})
-		
+
 		var indexCount int32
 		var searchCount int32
 
@@ -356,7 +356,7 @@ func BenchmarkAsyncIndexing(b *testing.B) {
 
 func BenchmarkAsyncVsSyncIndexing(b *testing.B) {
 	model, _ := LoadModel()
-	
+
 	docs := make([]string, 50)
 	for i := 0; i < 50; i++ {
 		docs[i] = fmt.Sprintf("comparison benchmark document %d with some content", i)
@@ -365,7 +365,7 @@ func BenchmarkAsyncVsSyncIndexing(b *testing.B) {
 	b.Run("Sync", func(b *testing.B) {
 		config := DefaultSearchConfig()
 		engine := NewSearchEngineWithConfig(model, config)
-		
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			engine.IndexBatch(docs)
@@ -375,7 +375,7 @@ func BenchmarkAsyncVsSyncIndexing(b *testing.B) {
 	b.Run("Async", func(b *testing.B) {
 		config := AsyncSearchConfig()
 		engine := NewSearchEngineWithConfig(model, config)
-		
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			response := engine.IndexBatchAsync(docs)

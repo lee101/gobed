@@ -228,7 +228,7 @@ CMakeFiles/gobed_ann_ops.dir/search_ops.cu.o : /home/lee/code/gobed/gpu_search/c
     /usr/include/c++/12/bits/uniform_int_dist.h \
     /usr/include/c++/12/utility \
     /usr/include/c++/12/bits/stl_relops.h \
-    /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/torch.h \
+    /home/lee/code/gobed/libtorch/include/torch/torch.h \
     /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/all.h \
     /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/autograd.h \
     /home/lee/code/gobed/libtorch/include/torch/csrc/autograd/autograd.h \

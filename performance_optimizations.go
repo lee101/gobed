@@ -8,9 +8,9 @@ import (
 
 // ObjectPool provides reusable object pools to reduce allocations
 type ObjectPool struct {
-	vectorPool     sync.Pool
-	slicePool      sync.Pool
-	embeddingPool  sync.Pool
+	vectorPool    sync.Pool
+	slicePool     sync.Pool
+	embeddingPool sync.Pool
 }
 
 // NewObjectPool creates optimized object pools
@@ -24,7 +24,7 @@ func NewObjectPool() *ObjectPool {
 		slicePool: sync.Pool{
 			New: func() interface{} {
 				// Pre-allocate slice with reasonable capacity
-				slice := make([]float32, 0, 1024) 
+				slice := make([]float32, 0, 1024)
 				return &slice
 			},
 		},
@@ -86,9 +86,9 @@ func (p *ObjectPool) PutEmbedding(emb *EmbedInt8Result) {
 
 // BatchProcessor provides optimized batch processing
 type BatchProcessor struct {
-	pool       *ObjectPool
-	batchSize  int
-	workers    int
+	pool      *ObjectPool
+	batchSize int
+	workers   int
 }
 
 // NewBatchProcessor creates an optimized batch processor
@@ -105,36 +105,36 @@ func (bp *BatchProcessor) ProcessBatch(texts []string, model *EmbeddingModel) ([
 	n := len(texts)
 	vectors := make([]simd.Vec512, n)
 	scales := make([]float32, n)
-	
+
 	// Process in chunks to reduce memory allocation peaks
 	chunkSize := bp.batchSize
 	if chunkSize <= 0 {
 		chunkSize = 100 // Default chunk size
 	}
-	
+
 	for i := 0; i < n; i += chunkSize {
 		end := min(i+chunkSize, n)
 		chunk := texts[i:end]
-		
+
 		// Process chunk
 		for j, text := range chunk {
 			embedding, err := model.EmbedInt8(text)
 			if err != nil {
 				return nil, nil, err
 			}
-			
+
 			copy(vectors[i+j][:], embedding.Vector)
 			scales[i+j] = embedding.Scale
 		}
 	}
-	
+
 	return vectors, scales, nil
 }
 
 // VectorBuffer provides a reusable buffer for vector operations
 type VectorBuffer struct {
-	vectors []simd.Vec512
-	scales  []float32
+	vectors  []simd.Vec512
+	scales   []float32
 	capacity int
 }
 
@@ -176,10 +176,10 @@ func (vb *VectorBuffer) Len() int {
 
 // MemoryOptimizedCache provides a cache with memory management
 type MemoryOptimizedCache struct {
-	cache    map[string]*EmbedInt8Result
-	maxSize  int
+	cache       map[string]*EmbedInt8Result
+	maxSize     int
 	currentSize int
-	mu       sync.RWMutex
+	mu          sync.RWMutex
 }
 
 // NewMemoryOptimizedCache creates a memory-optimized embedding cache
@@ -194,7 +194,7 @@ func NewMemoryOptimizedCache(maxSize int) *MemoryOptimizedCache {
 func (c *MemoryOptimizedCache) Get(text string) (*EmbedInt8Result, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	result, exists := c.cache[text]
 	return result, exists
 }
@@ -203,7 +203,7 @@ func (c *MemoryOptimizedCache) Get(text string) (*EmbedInt8Result, bool) {
 func (c *MemoryOptimizedCache) Put(text string, embedding *EmbedInt8Result) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Check if we're at capacity
 	if c.currentSize >= c.maxSize {
 		// Simple eviction: remove oldest entries (in Go map iteration order)
@@ -217,14 +217,14 @@ func (c *MemoryOptimizedCache) Put(text string, embedding *EmbedInt8Result) {
 		}
 		c.currentSize = len(c.cache)
 	}
-	
+
 	// Copy the embedding to avoid external modifications
 	cached := &EmbedInt8Result{
 		Vector: make([]int8, len(embedding.Vector)),
 		Scale:  embedding.Scale,
 	}
 	copy(cached.Vector, embedding.Vector)
-	
+
 	c.cache[text] = cached
 	c.currentSize++
 }
@@ -233,7 +233,7 @@ func (c *MemoryOptimizedCache) Put(text string, embedding *EmbedInt8Result) {
 func (c *MemoryOptimizedCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.cache = make(map[string]*EmbedInt8Result)
 	c.currentSize = 0
 }

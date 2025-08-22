@@ -8,7 +8,7 @@ import (
 	"github.com/lee101/gobed"
 )
 
-func main() {
+func main_disabled() {
 	fmt.Println("=== Gobed Semantic Search Demo ===\n")
 
 	// Load model
@@ -30,28 +30,28 @@ func main() {
 		"Rust guarantees memory safety without garbage collection through its innovative ownership system",
 		"JavaScript powers both client and server applications, dominating web development with frameworks like React and Node.js",
 		"TypeScript adds static typing to JavaScript, improving code maintainability and developer productivity",
-		
+
 		// AI & Machine Learning
 		"Deep learning neural networks with multiple hidden layers can learn complex patterns in data",
 		"Transformer models like GPT and BERT have revolutionized natural language processing",
 		"Reinforcement learning trains agents to make decisions by maximizing cumulative rewards",
 		"Computer vision uses convolutional neural networks to understand and interpret images",
 		"Gradient descent optimizes neural network weights by minimizing the loss function",
-		
+
 		// Databases
 		"PostgreSQL provides ACID compliance, complex queries, and extensibility for relational data",
 		"MongoDB offers flexible document storage with horizontal scaling for unstructured data",
 		"Redis serves as an in-memory cache and message broker with sub-millisecond latency",
 		"Elasticsearch enables full-text search and real-time analytics on large datasets",
 		"Vector databases like Pinecone and Weaviate specialize in similarity search for embeddings",
-		
+
 		// Cloud & DevOps
 		"Kubernetes orchestrates containers with automatic scaling, self-healing, and load balancing",
 		"Docker containers ensure consistent application deployment across different environments",
 		"Terraform enables infrastructure as code for reproducible cloud deployments",
 		"GitHub Actions automates CI/CD pipelines directly from your repository",
 		"Microservices architecture improves scalability by breaking applications into independent services",
-		
+
 		// Security
 		"Zero-trust security assumes no implicit trust and verifies every transaction",
 		"Encryption protects data in transit and at rest using cryptographic algorithms",
@@ -109,20 +109,20 @@ func main() {
 	}
 
 	fmt.Println("=== SEMANTIC SEARCH RESULTS ===\n")
-	
+
 	for i, q := range queries {
 		fmt.Printf("Query %d: \"%s\"\n", i+1, q.query)
 		fmt.Printf("Expected: %s\n", q.explanation)
-		
+
 		start := time.Now()
 		results, err := engine.Search(q.query, 3)
 		latency := time.Since(start)
-		
+
 		if err != nil {
 			log.Printf("Error: %v", err)
 			continue
 		}
-		
+
 		fmt.Printf("Search time: %v\n", latency)
 		fmt.Println("Results:")
 		for j, r := range results {
@@ -137,12 +137,12 @@ func main() {
 	fmt.Printf("Documents indexed: %d\n", stats.NumDocuments)
 	fmt.Printf("Index type: %s\n", stats.IndexType)
 	fmt.Printf("Memory usage: %.2f MB\n", stats.MemoryUsageMB)
-	
+
 	// Document retrieval check
 	fmt.Println("\n=== DOCUMENT RETRIEVAL ===")
 	if text, exists := engine.GetDocument(ids[0]); exists {
 		fmt.Printf("Document ID %d: %s\n", ids[0], text[:50]+"...")
 	}
-	
+
 	fmt.Println("\n✓ Demo completed successfully!")
 }

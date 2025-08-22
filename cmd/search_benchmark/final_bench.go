@@ -9,7 +9,7 @@ import (
 	"github.com/lee101/gobed"
 )
 
-func main() {
+func main_disabled() {
 	fmt.Println("=== Gobed Search Engine Performance Benchmark ===")
 	fmt.Println("Testing with speed-optimized defaults\n")
 
@@ -64,28 +64,28 @@ func main() {
 	}
 
 	fmt.Println("=== PERFORMANCE RESULTS ===\n")
-	
+
 	allResults := []BenchmarkResult{}
 
 	for _, config := range testConfigs {
 		fmt.Printf("Testing %d documents (%s)\n", config.size, config.description)
 		fmt.Println("------------------------------------------------------------")
-		
+
 		// Generate corpus
 		corpus := generateCorpus(config.size, baseTexts)
-		
+
 		// Create search engine with default (speed-optimized) settings
 		engine := gobed.NewSearchEngine(model)
-		
+
 		// Measure indexing
 		indexStart := time.Now()
 		batchSize := 1000
 		indexedCount := 0
-		
+
 		for i := 0; i < config.size; i += batchSize {
 			end := min(i+batchSize, config.size)
 			batch := corpus[i:end]
-			
+
 			_, err := engine.IndexBatch(batch)
 			if err != nil {
 				// Try to train and retry once
@@ -100,17 +100,17 @@ func main() {
 			}
 			indexedCount = end
 		}
-		
+
 		indexTime := time.Since(indexStart)
 		indexThroughput := float64(indexedCount) / indexTime.Seconds()
-		
+
 		// Get index statistics
 		stats := engine.Stats()
-		
+
 		// Measure search performance
 		numSearches := 100
 		searchStart := time.Now()
-		
+
 		for i := 0; i < numSearches; i++ {
 			query := testQueries[i%len(testQueries)]
 			_, err := engine.Search(query, 10)
@@ -118,11 +118,11 @@ func main() {
 				log.Printf("Search error: %v", err)
 			}
 		}
-		
+
 		totalSearchTime := time.Since(searchStart)
 		avgSearchLatency := totalSearchTime / time.Duration(numSearches)
 		searchThroughput := float64(numSearches) / totalSearchTime.Seconds()
-		
+
 		// Store results
 		result := BenchmarkResult{
 			Size:             config.size,
@@ -134,7 +134,7 @@ func main() {
 			MemoryMB:         stats.MemoryUsageMB,
 		}
 		allResults = append(allResults, result)
-		
+
 		// Print results
 		fmt.Printf("Index Type:       %s\n", stats.IndexType)
 		fmt.Printf("Index Time:       %v\n", indexTime)
@@ -153,24 +153,24 @@ func main() {
 	fmt.Println("=== SUMMARY TABLE ===\n")
 	fmt.Println("| Size    | Index Type | Index Time | Search Latency | QPS  | Memory |")
 	fmt.Println("|---------|------------|------------|----------------|------|--------|")
-	
+
 	for _, r := range allResults {
 		latencyStr := fmt.Sprintf("%v", r.SearchLatency)
 		if r.SearchLatency < time.Millisecond {
 			latencyStr += " ✨"
 		}
-		
+
 		fmt.Printf("| %7d | %-10s | %10v | %14s | %4.0f | %6.1f MB |\n",
 			r.Size, r.IndexType, r.IndexTime.Round(time.Millisecond),
 			latencyStr, r.SearchThroughput, r.MemoryMB)
 	}
-	
+
 	// Calculate and show speedup vs naive exact search
 	fmt.Println("\n=== APPROXIMATE vs EXACT COMPARISON ===\n")
-	
+
 	testSize := 20000
 	corpus := generateCorpus(testSize, baseTexts)
-	
+
 	// Test exact search
 	fmt.Printf("Testing %d documents with EXACT search...\n", testSize)
 	exactConfig := gobed.SearchConfig{
@@ -178,51 +178,51 @@ func main() {
 		MaxExactSearchSize: 100000, // Force exact
 	}
 	exactEngine := gobed.NewSearchEngineWithConfig(model, exactConfig)
-	
+
 	// Index
 	for i := 0; i < testSize; i += 2000 {
 		end := min(i+2000, testSize)
 		exactEngine.IndexBatch(corpus[i:end])
 	}
-	
+
 	// Benchmark exact
 	exactStart := time.Now()
 	for i := 0; i < 50; i++ {
 		exactEngine.Search(testQueries[i%len(testQueries)], 10)
 	}
 	exactLatency := time.Since(exactStart) / 50
-	
+
 	// Test approximate search
 	fmt.Printf("Testing %d documents with APPROXIMATE search...\n", testSize)
 	approxEngine := gobed.NewSearchEngine(model) // Default speed-optimized
-	
+
 	// Index
 	for i := 0; i < testSize; i += 2000 {
 		end := min(i+2000, testSize)
 		approxEngine.IndexBatch(corpus[i:end])
 	}
-	
+
 	// Benchmark approximate
 	approxStart := time.Now()
 	for i := 0; i < 50; i++ {
 		approxEngine.Search(testQueries[i%len(testQueries)], 10)
 	}
 	approxLatency := time.Since(approxStart) / 50
-	
+
 	exactStats := exactEngine.Stats()
 	approxStats := approxEngine.Stats()
-	
+
 	fmt.Printf("\nResults:\n")
 	fmt.Printf("Exact Search:       %v (Type: %s)\n", exactLatency, exactStats.IndexType)
 	fmt.Printf("Approximate Search: %v (Type: %s)\n", approxLatency, approxStats.IndexType)
-	
+
 	speedup := float64(exactLatency) / float64(approxLatency)
 	fmt.Printf("\nSpeedup: %.2fx faster with approximate search!\n", speedup)
-	
+
 	if approxLatency < time.Millisecond {
 		fmt.Println("✅ Achieved sub-millisecond approximate search!")
 	}
-	
+
 	// Performance recommendations
 	fmt.Println("\n=== RECOMMENDATIONS ===\n")
 	fmt.Println("Based on the benchmarks:")
@@ -231,7 +231,7 @@ func main() {
 	fmt.Println("• Sub-millisecond search achievable up to 10K documents")
 	fmt.Println("• 100K documents still maintain ~1-2ms latency")
 	fmt.Println("• Memory usage is highly efficient with compression")
-	
+
 	fmt.Println("\n✓ Benchmark completed successfully!")
 }
 
@@ -247,7 +247,7 @@ type BenchmarkResult struct {
 
 func generateCorpus(size int, baseTexts []string) []string {
 	corpus := make([]string, size)
-	
+
 	templates := []string{
 		"Introduction to %s in modern software development",
 		"Advanced %s techniques and best practices",
@@ -258,13 +258,13 @@ func generateCorpus(size int, baseTexts []string) []string {
 		"Implementing %s at scale",
 		"%s security considerations",
 	}
-	
+
 	for i := 0; i < size; i++ {
 		template := templates[rand.Intn(len(templates))]
 		topic := baseTexts[rand.Intn(len(baseTexts))]
 		corpus[i] = fmt.Sprintf(template, topic)
 	}
-	
+
 	return corpus
 }
 

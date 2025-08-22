@@ -15,7 +15,7 @@ type CPUBulkIndexer struct {
 	model      *EmbeddingModel
 	batchSize  int
 	numWorkers int
-	
+
 	// Statistics
 	totalIndexed int64
 	totalTime    time.Duration
@@ -27,7 +27,7 @@ func NewCPUBulkIndexer(index *VectorIndex, batchSize int) *CPUBulkIndexer {
 	if batchSize <= 0 {
 		batchSize = 1000 // Default batch size for CPU
 	}
-	
+
 	return &CPUBulkIndexer{
 		index:      index,
 		model:      index.model,
@@ -41,17 +41,17 @@ func (idx *CPUBulkIndexer) IndexBatch(docs []Document) error {
 	if len(docs) == 0 {
 		return nil
 	}
-	
+
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	
+
 	startTime := time.Now()
 	log.Printf("🔄 CPU Bulk indexing %d documents with %d workers", len(docs), idx.numWorkers)
-	
+
 	// Create channels for work distribution
 	docChan := make(chan Document, len(docs))
 	resultChan := make(chan embeddingResult, len(docs))
-	
+
 	// Start workers
 	var wg sync.WaitGroup
 	for i := 0; i < idx.numWorkers; i++ {
@@ -65,11 +65,11 @@ func (idx *CPUBulkIndexer) IndexBatch(docs []Document) error {
 					log.Printf("Worker %d failed to embed doc %d: %v", workerID, doc.ID, err)
 					continue
 				}
-				
+
 				// Convert to simd vector
 				var vec simd.Vec512
 				copy(vec[:], embedding.Vector)
-				
+
 				resultChan <- embeddingResult{
 					doc:   doc,
 					vec:   vec,
@@ -79,7 +79,7 @@ func (idx *CPUBulkIndexer) IndexBatch(docs []Document) error {
 			}
 		}(i)
 	}
-	
+
 	// Send work to workers
 	go func() {
 		for _, doc := range docs {
@@ -87,13 +87,13 @@ func (idx *CPUBulkIndexer) IndexBatch(docs []Document) error {
 		}
 		close(docChan)
 	}()
-	
+
 	// Collect results
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
-	
+
 	// Add to index
 	successCount := 0
 	for result := range resultChan {
@@ -101,24 +101,24 @@ func (idx *CPUBulkIndexer) IndexBatch(docs []Document) error {
 			log.Printf("Skipping doc %d due to error: %v", result.doc.ID, result.err)
 			continue
 		}
-		
+
 		err := idx.index.engine.Add(result.vec, result.scale, result.doc.ID)
 		if err != nil {
 			log.Printf("Failed to add doc %d to index: %v", result.doc.ID, err)
 			continue
 		}
-		
+
 		successCount++
 	}
-	
+
 	elapsed := time.Since(startTime)
 	idx.totalTime += elapsed
 	atomic.AddInt64(&idx.totalIndexed, int64(successCount))
-	
+
 	throughput := float64(successCount) / elapsed.Seconds()
-	log.Printf("✅ CPU indexed %d/%d documents in %.2fs (%.0f docs/sec)", 
+	log.Printf("✅ CPU indexed %d/%d documents in %.2fs (%.0f docs/sec)",
 		successCount, len(docs), elapsed.Seconds(), throughput)
-	
+
 	return nil
 }
 

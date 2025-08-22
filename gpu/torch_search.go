@@ -270,7 +270,7 @@ func (p *TorchPipeline) IndexTexts(texts []string) error {
 
 	// Generate embeddings using CPU model
 	embeddings := make([][]int8, len(texts))
-	
+
 	batchSize := p.config.BatchSize
 	if batchSize == 0 {
 		batchSize = 128

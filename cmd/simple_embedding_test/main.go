@@ -39,7 +39,7 @@ func main() {
 	fmt.Println("================================================================================")
 	fmt.Println("🔍 SIMPLE EMBEDDING VALIDATION TEST")
 	fmt.Println("================================================================================")
-	
+
 	// Load model
 	fmt.Printf("📦 Loading embedding model...\n")
 	model, err := gobed.LoadModel()
@@ -68,14 +68,14 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("   Text %d: \"%.50s...\" - %dD in %.2fms\n", 
+		fmt.Printf("   Text %d: \"%.50s...\" - %dD in %.2fms\n",
 			i+1, text, len(embedding), float64(elapsed.Nanoseconds())/1e6)
 	}
 
 	// Test int8 quantization
 	fmt.Println("\n🔢 Testing int8 quantization:")
 	testText := "This is a test for quantization accuracy."
-	
+
 	// Float32 embedding
 	start := time.Now()
 	float32Embedding, err := model.Encode(testText)
@@ -113,7 +113,7 @@ func main() {
 
 	// Test vector indexing (CPU only)
 	fmt.Println("\n📚 Testing vector indexing (CPU):")
-	
+
 	docs := []gobed.Document{
 		{ID: 1, Text: "Machine learning algorithms for data analysis."},
 		{ID: 2, Text: "Natural language processing and text understanding."},
@@ -148,11 +148,11 @@ func main() {
 	if err != nil {
 		log.Printf("❌ Search failed: %v", err)
 	} else {
-		fmt.Printf("   Search \"%s\" in %.2fms, %d results\n", 
+		fmt.Printf("   Search \"%s\" in %.2fms, %d results\n",
 			query, float64(searchTime.Nanoseconds())/1e6, len(results))
-		
+
 		for i, result := range results {
-			fmt.Printf("     %d. Doc %d (similarity: %.4f)\n", 
+			fmt.Printf("     %d. Doc %d (similarity: %.4f)\n",
 				i+1, result.ID, result.Similarity)
 		}
 	}

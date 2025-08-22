@@ -15,8 +15,8 @@ import (
 // OptimizedConfig for maximum throughput
 type OptimizedConfig struct {
 	ServerURL       string
-	MaxBatchSize    int           // Much larger batches
-	MaxConcurrent   int           // Parallel requests
+	MaxBatchSize    int // Much larger batches
+	MaxConcurrent   int // Parallel requests
 	RequestTimeout  time.Duration
 	PreallocBuffers bool
 }
@@ -35,17 +35,17 @@ type EmbedResponse struct {
 }
 
 type Stats struct {
-	Texts      int     `json:"texts"`
+	Texts       int     `json:"texts"`
 	TimeSeconds float64 `json:"time_seconds"`
-	Throughput float64 `json:"throughput"`
-	Chunks     int     `json:"chunks"`
+	Throughput  float64 `json:"throughput"`
+	Chunks      int     `json:"chunks"`
 }
 
 type ServerStats struct {
-	TotalEmbedded   int     `json:"total_embedded"`
-	TotalIndexed    int     `json:"total_indexed"`
-	AvgBatchSize    int     `json:"avg_batch_size"`
-	PeakThroughput  float64 `json:"peak_throughput"`
+	TotalEmbedded  int     `json:"total_embedded"`
+	TotalIndexed   int     `json:"total_indexed"`
+	AvgBatchSize   int     `json:"avg_batch_size"`
+	PeakThroughput float64 `json:"peak_throughput"`
 }
 
 // OptimizedGPUClient for maximum performance

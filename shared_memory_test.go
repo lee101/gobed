@@ -99,7 +99,7 @@ func TestSharedMemoryIndex(t *testing.T) {
 
 	t.Run("ReadOnlyAccess", func(t *testing.T) {
 		basePath := testPath + "_readonly"
-		
+
 		// First create and populate index
 		writeConfig := SharedMemoryConfig{
 			BasePath:    basePath,
@@ -324,7 +324,7 @@ func TestSharedMemoryIndex(t *testing.T) {
 		// Verify content
 		for i := 0; i < 512; i++ {
 			if retrieved[i] != testVec[i] {
-				t.Errorf("Vector mismatch at index %d: expected %d, got %d", 
+				t.Errorf("Vector mismatch at index %d: expected %d, got %d",
 					i, testVec[i], retrieved[i])
 				break
 			}

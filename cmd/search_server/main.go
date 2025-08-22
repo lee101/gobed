@@ -24,7 +24,7 @@ func main() {
 		enableMetrics   = flag.Bool("metrics", true, "Enable metrics endpoint")
 		preload         = flag.Bool("preload", false, "Preload model embeddings")
 	)
-	
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Gobed High-Performance Search Server\n\n")
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
@@ -38,12 +38,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  # Start with profiling:\n")
 		fmt.Fprintf(os.Stderr, "  %s --profiling --metrics\n\n", os.Args[0])
 	}
-	
+
 	flag.Parse()
-	
+
 	// Print banner
 	printBanner()
-	
+
 	// Load embedding model
 	log.Println("Loading embedding model...")
 	model, err := gobed.LoadModel()
@@ -51,7 +51,7 @@ func main() {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	log.Println("✓ Model loaded successfully")
-	
+
 	// Configure server
 	config := gobed.ServerConfig{
 		Port:              *port,
@@ -64,36 +64,36 @@ func main() {
 		PreloadEmbeddings: *preload,
 		WorkerThreads:     *workers,
 	}
-	
+
 	// Print configuration
 	printConfig(config)
-	
+
 	// Create and start server
 	server, err := gobed.NewSearchServer(model, config)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
-	
+
 	if err := server.Start(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-	
+
 	// Print endpoints
 	printEndpoints(config)
-	
+
 	// Wait for interrupt signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	
+
 	log.Println("Server is ready. Press Ctrl+C to stop.")
 	<-sigChan
-	
+
 	// Graceful shutdown
 	log.Println("\nShutting down server...")
 	if err := server.Stop(); err != nil {
 		log.Printf("Error during shutdown: %v", err)
 	}
-	
+
 	log.Println("Server stopped successfully")
 }
 
@@ -132,37 +132,37 @@ func printConfig(config gobed.ServerConfig) {
 func printEndpoints(config gobed.ServerConfig) {
 	fmt.Println("\n🌐 Available Endpoints:")
 	fmt.Println("═══════════════════════════════════════")
-	
+
 	baseURL := fmt.Sprintf("http://localhost:%d", config.Port)
-	
+
 	// Search endpoints
 	fmt.Println("\n📍 Search Endpoints:")
 	fmt.Printf("  POST %s/search        - Single search\n", baseURL)
 	fmt.Printf("  POST %s/batch_search  - Batch search\n", baseURL)
-	
+
 	// Index endpoints (if not read-only)
 	if !config.ReadOnly {
 		fmt.Println("\n📝 Indexing Endpoints:")
 		fmt.Printf("  POST %s/index         - Index documents\n", baseURL)
 		fmt.Printf("  POST %s/batch_index   - Batch index documents\n", baseURL)
 	}
-	
+
 	// Monitoring endpoints
 	fmt.Println("\n📊 Monitoring Endpoints:")
 	fmt.Printf("  GET  %s/health        - Health check\n", baseURL)
-	
+
 	if config.EnableMetrics {
 		fmt.Printf("  GET  %s/metrics       - Performance metrics\n", baseURL)
 	}
-	
+
 	if config.EnableProfiling {
 		fmt.Printf("  GET  %s/debug/pprof/  - Profiling data\n", baseURL)
 	}
-	
+
 	// Example requests
 	fmt.Println("\n📖 Example Requests:")
 	fmt.Println("═══════════════════════════════════════")
-	
+
 	fmt.Println("\n1️⃣ Search for documents:")
 	fmt.Println(`curl -X POST http://localhost:` + fmt.Sprint(config.Port) + `/search \
   -H "Content-Type: application/json" \
@@ -170,7 +170,7 @@ func printEndpoints(config gobed.ServerConfig) {
     "query": "machine learning algorithms",
     "k": 10
   }'`)
-	
+
 	if !config.ReadOnly {
 		fmt.Println("\n2️⃣ Index new documents:")
 		fmt.Println(`curl -X POST http://localhost:` + fmt.Sprint(config.Port) + `/index \
@@ -182,12 +182,12 @@ func printEndpoints(config gobed.ServerConfig) {
     ]
   }'`)
 	}
-	
+
 	fmt.Println("\n3️⃣ Check server health:")
 	fmt.Printf("curl http://localhost:%d/health\n", config.Port)
-	
+
 	fmt.Println("\n4️⃣ Get performance metrics:")
 	fmt.Printf("curl http://localhost:%d/metrics\n", config.Port)
-	
+
 	fmt.Println("\n═══════════════════════════════════════")
 }

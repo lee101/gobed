@@ -31,7 +31,7 @@ func (p PrecisionMode) String() string {
 	case FP32:
 		return "FP32"
 	case FP16:
-		return "FP16" 
+		return "FP16"
 	case INT8:
 		return "INT8"
 	default:
@@ -47,17 +47,17 @@ type TokenData struct {
 
 // LibtorchEmbedding represents an optimized embedding model using libtorch
 type LibtorchEmbedding struct {
-	device        gotch.Device
-	tokenizer     *tokenizer.Tokenizer
-	embedLayer    *nn.Embedding
-	vocabSize     int64
-	embedDim      int64
-	precision     PrecisionMode
+	device          gotch.Device
+	tokenizer       *tokenizer.Tokenizer
+	embedLayer      *nn.Embedding
+	vocabSize       int64
+	embedDim        int64
+	precision       PrecisionMode
 	referenceTokens map[string]TokenData
-	
+
 	// Pre-allocated tensors for reuse
-	inputTensor   *ts.Tensor
-	maxSeqLen     int64
+	inputTensor *ts.Tensor
+	maxSeqLen   int64
 }
 
 // LoadModel loads the embedding model with specified precision
@@ -131,7 +131,7 @@ func LoadModel(modelPath, tokenizerPath, referenceTokensPath string, precision P
 	loadTime := time.Since(loadStart)
 	log.Printf("✅ Model loaded successfully in %v", loadTime)
 	log.Printf("📊 Model specs: vocab_size=%d, embed_dim=%d, precision=%s", vocabSize, embedDim, precision)
-	
+
 	return model, nil
 }
 
@@ -139,22 +139,22 @@ func LoadModel(modelPath, tokenizerPath, referenceTokensPath string, precision P
 func loadEmbeddingFromSafetensors(safetensorsPath string, device gotch.Device, precision PrecisionMode) (*nn.Embedding, int64, int64, error) {
 	// This is a simplified version - in practice you'd load from safetensors
 	// For now, let's create a dummy embedding layer with proper dimensions
-	
+
 	// These should match your actual model dimensions
 	vocabSize := int64(250002) // Typical for multilingual models
 	embedDim := int64(384)     // Common embedding dimension
-	
+
 	// Create embedding layer
 	vs := nn.NewVarStore(device)
 	embedConfig := nn.DefaultEmbeddingConfig()
 	embedLayer := nn.NewEmbedding(vs.Root(), vocabSize, embedDim, embedConfig)
-	
+
 	// TODO: Load actual weights from safetensors file
 	// This would involve parsing the safetensors format and loading the weights
 	// For now, we'll use the initialized weights
-	
+
 	log.Printf("📦 Created embedding layer: [%d, %d]", vocabSize, embedDim)
-	
+
 	// Apply precision conversion if needed
 	if precision == FP16 {
 		// Convert to half precision
@@ -163,7 +163,7 @@ func loadEmbeddingFromSafetensors(safetensorsPath string, device gotch.Device, p
 		// Apply quantization
 		log.Printf("🔄 Applying INT8 quantization...")
 	}
-	
+
 	return embedLayer, vocabSize, embedDim, nil
 }
 
@@ -182,7 +182,7 @@ func (m *LibtorchEmbedding) EncodeText(text string) ([]float32, error) {
 	if m.tokenizer != nil {
 		return m.encodeWithTokenizer(text)
 	}
-	
+
 	// Option 2: Use reference tokens
 	if m.referenceTokens != nil {
 		tokenData, exists := m.referenceTokens[text]
@@ -191,7 +191,7 @@ func (m *LibtorchEmbedding) EncodeText(text string) ([]float32, error) {
 		}
 		return m.encodeTokenIDs(tokenData.TokenIDs)
 	}
-	
+
 	return nil, fmt.Errorf("no tokenization method available")
 }
 
@@ -199,19 +199,19 @@ func (m *LibtorchEmbedding) EncodeText(text string) ([]float32, error) {
 func (m *LibtorchEmbedding) encodeWithTokenizer(text string) ([]float32, error) {
 	// Add prefix for retrieval models
 	prefixedText := "query: " + text
-	
+
 	// Tokenize
 	encoding, err := m.tokenizer.EncodeSingle(prefixedText, true)
 	if err != nil {
 		return nil, fmt.Errorf("tokenization failed: %v", err)
 	}
-	
+
 	// Convert to int slice
 	tokenIDs := make([]int, len(encoding.Ids))
 	for i, id := range encoding.Ids {
 		tokenIDs[i] = int(id)
 	}
-	
+
 	return m.encodeTokenIDs(tokenIDs)
 }
 
@@ -219,57 +219,57 @@ func (m *LibtorchEmbedding) encodeWithTokenizer(text string) ([]float32, error) 
 func (m *LibtorchEmbedding) encodeTokenIDs(tokenIDs []int) ([]float32, error) {
 	// Step 1: Prepare input tensor (reuse pre-allocated tensor)
 	m.inputTensor.MustZero_()
-	
+
 	// Copy token IDs to tensor (truncate/pad as needed)
 	seqLen := int64(len(tokenIDs))
 	if seqLen > m.maxSeqLen {
 		seqLen = m.maxSeqLen
 	}
-	
+
 	tokenData := make([]int64, seqLen)
 	for i := int64(0); i < seqLen; i++ {
 		tokenData[i] = int64(tokenIDs[i])
 	}
-	
+
 	// Update input tensor with new token IDs
 	m.inputTensor.MustNarrow(1, 0, seqLen, false).MustCopyData(tokenData, seqLen)
-	
+
 	// Step 2: Forward pass through embedding layer
 	embeddings := m.embedLayer.Forward(m.inputTensor.MustNarrow(1, 0, seqLen, false))
 	defer embeddings.MustDrop()
-	
+
 	// Step 3: Mean pooling (exclude padding tokens)
 	validMask := m.inputTensor.MustNarrow(1, 0, seqLen, false).MustNe(ts.IntScalar(0), false)
 	defer validMask.MustDrop()
-	
+
 	// Apply mask and compute mean
 	maskedEmbeddings := embeddings.MustMul(validMask.MustUnsqueeze(-1, false), false)
 	defer maskedEmbeddings.MustDrop()
-	
+
 	pooledEmbedding := maskedEmbeddings.MustSum1([]int64{1}, false, gotch.Float).MustDiv(validMask.MustSum(gotch.Float).MustUnsqueeze(-1, false), false)
 	defer pooledEmbedding.MustDrop()
-	
+
 	// Step 4: L2 normalization
 	normalized := pooledEmbedding.MustDiv(pooledEmbedding.MustNorm(false).MustUnsqueeze(-1, false), false)
 	defer normalized.MustDrop()
-	
+
 	// Convert to Go slice
 	result := normalized.MustView([]int64{-1}, false).Float64Values()
 	defer normalized.MustDrop()
-	
+
 	// Convert to float32
 	embedding := make([]float32, len(result))
 	for i, v := range result {
 		embedding[i] = float32(v)
 	}
-	
+
 	return embedding, nil
 }
 
 // BatchEncode encodes multiple texts efficiently
 func (m *LibtorchEmbedding) BatchEncode(texts []string) ([][]float32, error) {
 	embeddings := make([][]float32, len(texts))
-	
+
 	for i, text := range texts {
 		embedding, err := m.EncodeText(text)
 		if err != nil {
@@ -277,7 +277,7 @@ func (m *LibtorchEmbedding) BatchEncode(texts []string) ([][]float32, error) {
 		}
 		embeddings[i] = embedding
 	}
-	
+
 	return embeddings, nil
 }
 
@@ -358,14 +358,14 @@ func benchmarkInference(model *LibtorchEmbedding, precision PrecisionMode) {
 
 		times[i] = elapsed
 		embeddings[i] = embedding
-		
+
 		// Truncate sentence for display
 		displaySentence := sentence
 		if len(displaySentence) > 40 {
 			displaySentence = displaySentence[:37] + "..."
 		}
-		
-		fmt.Printf("   S%2d: %8.2fms - \"%s\"\n", 
+
+		fmt.Printf("   S%2d: %8.2fms - \"%s\"\n",
 			i+1, float64(elapsed.Nanoseconds())/1000000, displaySentence)
 	}
 
@@ -413,7 +413,7 @@ func benchmarkInference(model *LibtorchEmbedding, precision PrecisionMode) {
 func testPrecisionModes() {
 	precisions := []PrecisionMode{FP32, FP16, INT8}
 	modelPath := "cached_model/snapshots/f60985c706f192d45d218078e49e5a8b6f15283a/0_StaticEmbedding/model.safetensors"
-	tokenizerPath := ""  // Use reference tokens instead
+	tokenizerPath := "" // Use reference tokens instead
 	referenceTokensPath := "model/production_reference_tokens.json"
 
 	for _, precision := range precisions {

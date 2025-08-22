@@ -1,7 +1,7 @@
 CMakeFiles/gobed_ann_ops.dir/ops_cuda.cpp.o: \
  /home/lee/code/gobed/gpu_search/cuda_ops/ops_cuda.cpp \
  /usr/include/stdc-predef.h \
- /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/torch.h \
+ /home/lee/code/gobed/libtorch/include/torch/torch.h \
  /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/all.h \
  /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/autograd.h \
  /home/lee/code/gobed/libtorch/include/torch/csrc/autograd/autograd.h \

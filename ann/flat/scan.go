@@ -72,14 +72,14 @@ func (idx *FlatIndex) SearchTopK(query *simd.Vec512, K int) []SearchResult {
 	if K <= 0 || len(idx.vectors) == 0 {
 		return nil
 	}
-	
+
 	// Use min-heap to maintain top-K
 	h := &minHeap{}
 	heap.Init(h)
-	
+
 	for i := range idx.vectors {
 		score := simd.Dot512(query, &idx.vectors[i])
-		
+
 		if h.Len() < K {
 			heap.Push(h, SearchResult{ID: idx.ids[i], Score: score})
 		} else if score > (*h)[0].Score {
@@ -87,13 +87,13 @@ func (idx *FlatIndex) SearchTopK(query *simd.Vec512, K int) []SearchResult {
 			heap.Fix(h, 0)
 		}
 	}
-	
+
 	// Extract results in descending order
 	results := make([]SearchResult, h.Len())
 	for i := len(results) - 1; i >= 0; i-- {
 		results[i] = heap.Pop(h).(SearchResult)
 	}
-	
+
 	return results
 }
 
@@ -102,24 +102,24 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 	if K <= 0 || len(idx.vectors) == 0 {
 		return nil
 	}
-	
+
 	numWorkers := runtime.NumCPU()
 	n := len(idx.vectors)
-	
+
 	// If dataset is small, use single-threaded
 	if n < 1000 {
 		return idx.SearchTopK(query, K)
 	}
-	
+
 	chunkSize := (n + numWorkers - 1) / numWorkers
-	
+
 	type chunkResult struct {
 		results []SearchResult
 	}
-	
+
 	resultChan := make(chan chunkResult, numWorkers)
 	var wg sync.WaitGroup
-	
+
 	// Launch workers
 	for w := 0; w < numWorkers; w++ {
 		start := w * chunkSize
@@ -130,18 +130,18 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 		if start >= end {
 			continue
 		}
-		
+
 		wg.Add(1)
 		go func(start, end int) {
 			defer wg.Done()
-			
+
 			// Local heap for this chunk
 			h := &minHeap{}
 			heap.Init(h)
-			
+
 			for i := start; i < end; i++ {
 				score := simd.Dot512(query, &idx.vectors[i])
-				
+
 				if h.Len() < K {
 					heap.Push(h, SearchResult{ID: idx.ids[i], Score: score})
 				} else if score > (*h)[0].Score {
@@ -149,31 +149,31 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 					heap.Fix(h, 0)
 				}
 			}
-			
+
 			// Convert heap to slice
 			results := make([]SearchResult, h.Len())
 			for i := len(results) - 1; i >= 0; i-- {
 				results[i] = heap.Pop(h).(SearchResult)
 			}
-			
+
 			resultChan <- chunkResult{results: results}
 		}(start, end)
 	}
-	
+
 	// Wait for all workers
 	wg.Wait()
 	close(resultChan)
-	
+
 	// Merge results from all chunks
 	allResults := make([]SearchResult, 0, K*numWorkers)
 	for chunk := range resultChan {
 		allResults = append(allResults, chunk.results...)
 	}
-	
+
 	// Final top-K selection
 	h := &minHeap{}
 	heap.Init(h)
-	
+
 	for _, res := range allResults {
 		if h.Len() < K {
 			heap.Push(h, res)
@@ -182,20 +182,20 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 			heap.Fix(h, 0)
 		}
 	}
-	
+
 	// Extract final results
 	results := make([]SearchResult, h.Len())
 	for i := len(results) - 1; i >= 0; i-- {
 		results[i] = heap.Pop(h).(SearchResult)
 	}
-	
+
 	return results
 }
 
 // SearchTopKBatch processes multiple queries in batch for better cache utilization
 func (idx *FlatIndex) SearchTopKBatch(queries []*simd.Vec512, K int) [][]SearchResult {
 	results := make([][]SearchResult, len(queries))
-	
+
 	// Process queries in parallel
 	var wg sync.WaitGroup
 	for q := range queries {
@@ -206,7 +206,7 @@ func (idx *FlatIndex) SearchTopKBatch(queries []*simd.Vec512, K int) [][]SearchR
 		}(q)
 	}
 	wg.Wait()
-	
+
 	return results
 }
 
@@ -215,31 +215,31 @@ func (idx *FlatIndex) SearchTopKTiled(query *simd.Vec512, K int) []SearchResult 
 	if K <= 0 || len(idx.vectors) == 0 {
 		return nil
 	}
-	
+
 	const tileSize = 64 // Process 64 vectors at a time for L2 cache
-	
+
 	h := &minHeap{}
 	heap.Init(h)
-	
+
 	n := len(idx.vectors)
-	
+
 	// Process in tiles
 	for tileStart := 0; tileStart < n; tileStart += tileSize {
 		tileEnd := tileStart + tileSize
 		if tileEnd > n {
 			tileEnd = n
 		}
-		
+
 		// Prefetch next tile
 		if tileEnd < n && tileEnd+tileSize <= n {
 			nextTile := &idx.vectors[tileEnd]
 			_ = unsafe.Sizeof(*nextTile) // Prefetch hint
 		}
-		
+
 		// Process current tile
 		for i := tileStart; i < tileEnd; i++ {
 			score := simd.Dot512(query, &idx.vectors[i])
-			
+
 			if h.Len() < K {
 				heap.Push(h, SearchResult{ID: idx.ids[i], Score: score})
 			} else if score > (*h)[0].Score {
@@ -248,12 +248,12 @@ func (idx *FlatIndex) SearchTopKTiled(query *simd.Vec512, K int) []SearchResult 
 			}
 		}
 	}
-	
+
 	// Extract results
 	results := make([]SearchResult, h.Len())
 	for i := len(results) - 1; i >= 0; i-- {
 		results[i] = heap.Pop(h).(SearchResult)
 	}
-	
+
 	return results
 }

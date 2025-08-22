@@ -19,17 +19,17 @@ type SearchEngine struct {
 	config      SearchConfig
 	mu          sync.RWMutex
 	initialized bool
-	
+
 	// Async indexing support
-	indexQueue    chan IndexRequest
-	indexWorkers  int
-	asyncEnabled  bool
-	workerWg      sync.WaitGroup
-	ctx           context.Context
-	cancel        context.CancelFunc
-	
+	indexQueue   chan IndexRequest
+	indexWorkers int
+	asyncEnabled bool
+	workerWg     sync.WaitGroup
+	ctx          context.Context
+	cancel       context.CancelFunc
+
 	// Performance optimizations
-	objectPool    *ObjectPool
+	objectPool     *ObjectPool
 	batchProcessor *BatchProcessor
 	embeddingCache *MemoryOptimizedCache
 }
@@ -38,6 +38,9 @@ type SearchEngine struct {
 type SearchConfig struct {
 	// Automatic mode - let the engine choose optimal settings
 	AutoMode bool
+	
+	// Preset configuration (when AutoMode is true)
+	Preset SearchPreset // Use predefined configuration preset
 
 	// Manual configuration (when AutoMode is false)
 	MaxExactSearchSize int  // Use exact search below this size (default: 50000)
@@ -46,19 +49,19 @@ type SearchConfig struct {
 	UseCompression     bool // Use PQ compression for large datasets (default: auto)
 	UseGraphRouting    bool // Use HNSW for centroid routing (default: auto)
 	CandidatesToRerank int  // Number of candidates to rerank (default: auto)
-	
+
 	// Async configuration
-	EnableAsync      bool // Enable async indexing (default: false)
-	AsyncWorkers     int  // Number of async workers (default: 4)
-	AsyncQueueSize   int  // Size of async queue (default: 1000)
+	EnableAsync    bool // Enable async indexing (default: false)
+	AsyncWorkers   int  // Number of async workers (default: 4)
+	AsyncQueueSize int  // Size of async queue (default: 1000)
 }
 
 // IndexRequest represents an async indexing request
 type IndexRequest struct {
-	IDs       []int
-	Texts     []string
-	Response  chan IndexResponse
-	Context   context.Context
+	IDs      []int
+	Texts    []string
+	Response chan IndexResponse
+	Context  context.Context
 }
 
 // IndexResponse contains the result of async indexing
@@ -108,15 +111,15 @@ func NewSearchEngineWithConfig(model *EmbeddingModel, config SearchConfig) *Sear
 		documents:      make(map[int]string),
 		config:         config,
 		objectPool:     NewObjectPool(),
-		batchProcessor: NewBatchProcessor(1000, 4), // 1000 batch size, 4 workers
+		batchProcessor: NewBatchProcessor(1000, 4),     // 1000 batch size, 4 workers
 		embeddingCache: NewMemoryOptimizedCache(10000), // Cache up to 10k embeddings
 	}
-	
+
 	// Initialize async indexing if enabled
 	if config.EnableAsync {
 		se.initializeAsync()
 	}
-	
+
 	return se
 }
 
@@ -131,7 +134,7 @@ func (se *SearchEngine) initializeAsync() {
 	se.indexQueue = make(chan IndexRequest, se.config.AsyncQueueSize)
 	se.indexWorkers = se.config.AsyncWorkers
 	se.asyncEnabled = true
-	
+
 	// Start worker goroutines
 	for i := 0; i < se.indexWorkers; i++ {
 		se.workerWg.Add(1)
@@ -162,7 +165,7 @@ func (se *SearchEngine) IndexBatch(texts []string) ([]int, error) {
 	for i := range texts {
 		ids[i] = len(se.documents) + i
 	}
-	
+
 	err := se.IndexBatchWithIDs(ids, texts)
 	return ids, err
 }
@@ -185,18 +188,18 @@ func (se *SearchEngine) IndexBatchAsync(texts []string) <-chan IndexResponse {
 	se.mu.RLock()
 	nextID := len(se.documents)
 	se.mu.RUnlock()
-	
+
 	for i := range texts {
 		ids[i] = nextID + i
 	}
-	
+
 	return se.IndexBatchAsyncWithIDs(ids, texts)
 }
 
 // IndexBatchAsyncWithIDs asynchronously indexes texts with specific IDs
 func (se *SearchEngine) IndexBatchAsyncWithIDs(ids []int, texts []string) <-chan IndexResponse {
 	response := make(chan IndexResponse, 1)
-	
+
 	if !se.asyncEnabled {
 		// Fall back to synchronous indexing
 		go func() {
@@ -208,14 +211,14 @@ func (se *SearchEngine) IndexBatchAsyncWithIDs(ids []int, texts []string) <-chan
 		}()
 		return response
 	}
-	
+
 	req := IndexRequest{
 		IDs:      ids,
 		Texts:    texts,
 		Response: response,
 		Context:  context.Background(),
 	}
-	
+
 	select {
 	case se.indexQueue <- req:
 		return response
@@ -240,19 +243,19 @@ func (se *SearchEngine) IndexBatchAsyncWithIDs(ids []int, texts []string) <-chan
 // indexWorker processes async indexing requests
 func (se *SearchEngine) indexWorker() {
 	defer se.workerWg.Done()
-	
+
 	for {
 		select {
 		case req := <-se.indexQueue:
 			start := time.Now()
-			
+
 			// Process the indexing request
 			se.mu.Lock()
 			err := se.indexBatchInternal(req.IDs, req.Texts)
 			se.mu.Unlock()
-			
+
 			processingTime := time.Since(start)
-			
+
 			// Send response
 			req.Response <- IndexResponse{
 				IDs:   req.IDs,
@@ -262,7 +265,7 @@ func (se *SearchEngine) indexWorker() {
 					ProcessingTime:     processingTime,
 				},
 			}
-			
+
 		case <-se.ctx.Done():
 			return
 		}
@@ -279,7 +282,7 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 	for i, text := range texts {
 		var embedding *EmbedInt8Result
 		var err error
-		
+
 		// Check cache first
 		if cached, found := se.embeddingCache.Get(text); found {
 			embedding = cached
@@ -289,7 +292,7 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 			if err != nil {
 				return fmt.Errorf("failed to embed text %d: %v", i, err)
 			}
-			
+
 			// Cache the result for future use
 			se.embeddingCache.Put(text, embedding)
 		}
@@ -298,7 +301,7 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 		scales[i] = embedding.Scale
 		se.documents[ids[i]] = text
 	}
-	
+
 	// Initialize index if needed
 	if !se.initialized {
 		finalSize := len(se.documents) + len(texts)
@@ -341,7 +344,7 @@ func (se *SearchEngine) SearchWithOptions(query string, opts SearchOptions) ([]S
 	// Generate query embedding with caching
 	var embedding *EmbedInt8Result
 	var err error
-	
+
 	// Check cache first for query
 	if cached, found := se.embeddingCache.Get(query); found {
 		embedding = cached
@@ -351,7 +354,7 @@ func (se *SearchEngine) SearchWithOptions(query string, opts SearchOptions) ([]S
 		if err != nil {
 			return nil, fmt.Errorf("failed to embed query: %v", err)
 		}
-		
+
 		// Cache queries too as they might be repeated
 		se.embeddingCache.Put(query, embedding)
 	}
@@ -369,7 +372,7 @@ func (se *SearchEngine) SearchWithOptions(query string, opts SearchOptions) ([]S
 	searchResults := make([]SearchResult, 0, len(results))
 	for _, r := range results {
 		similarity := r.Score / (127.0 * 127.0 * 512) // Normalize to [0,1]
-		
+
 		// Apply filters
 		if opts.MinSimilarity > 0 && similarity < opts.MinSimilarity {
 			continue
@@ -441,16 +444,16 @@ func (se *SearchEngine) Close() error {
 	if se.asyncEnabled {
 		// Signal workers to stop
 		se.cancel()
-		
+
 		// Close the queue to prevent new requests
 		close(se.indexQueue)
-		
+
 		// Wait for all workers to finish
 		se.workerWg.Wait()
-		
+
 		se.asyncEnabled = false
 	}
-	
+
 	return nil
 }
 
@@ -459,7 +462,7 @@ func (se *SearchEngine) Flush() error {
 	if !se.asyncEnabled {
 		return nil // Nothing to flush
 	}
-	
+
 	// Send a marker request and wait for it to complete
 	done := make(chan IndexResponse, 1)
 	marker := IndexRequest{
@@ -468,7 +471,7 @@ func (se *SearchEngine) Flush() error {
 		Response: done,
 		Context:  context.Background(),
 	}
-	
+
 	select {
 	case se.indexQueue <- marker:
 		// Wait for the marker to be processed
@@ -491,7 +494,7 @@ func (se *SearchEngine) GetDocument(id int) (string, bool) {
 func (se *SearchEngine) GetAllDocuments() map[int]string {
 	se.mu.RLock()
 	defer se.mu.RUnlock()
-	
+
 	// Return a copy to prevent external modifications
 	docs := make(map[int]string, len(se.documents))
 	for id, text := range se.documents {
@@ -562,7 +565,7 @@ func (se *SearchEngine) indexWithID(id int, text string) error {
 func (se *SearchEngine) initializeIndex(estimatedSize int) error {
 	config := se.generateIndexConfig(estimatedSize)
 	se.index = search.NewEngine(config)
-	
+
 	// If we need IVF, we must train first
 	if estimatedSize > config.MaxFlatSize && config.NList > 0 {
 		trainSize := min(estimatedSize/10, 10000)
@@ -571,7 +574,7 @@ func (se *SearchEngine) initializeIndex(estimatedSize int) error {
 			return fmt.Errorf("failed to train index: %v", err)
 		}
 	}
-	
+
 	se.initialized = true
 	return nil
 }
@@ -580,7 +583,7 @@ func (se *SearchEngine) initializeIndex(estimatedSize int) error {
 func (se *SearchEngine) generateTrainingData(trainSize int) error {
 	trainVectors := make([]simd.Vec512, trainSize)
 	trainScales := make([]float32, trainSize)
-	
+
 	// Use existing documents if available, otherwise generate synthetic data
 	if len(se.documents) > 0 {
 		// Use existing documents for training (better than random)
@@ -591,12 +594,12 @@ func (se *SearchEngine) generateTrainingData(trainSize int) error {
 				break
 			}
 		}
-		
+
 		// Fill the rest with synthetic data if needed
 		for len(docTexts) < trainSize {
 			docTexts = append(docTexts, "synthetic training data for machine learning embedding")
 		}
-		
+
 		// Generate embeddings from texts
 		for i, text := range docTexts {
 			embedding, err := se.model.EmbedInt8(text)
@@ -625,7 +628,7 @@ func (se *SearchEngine) generateTrainingData(trainSize int) error {
 			"computer vision and image recognition systems",
 			"blockchain technology and cryptocurrency applications",
 		}
-		
+
 		for i := 0; i < trainSize; i++ {
 			text := syntheticTexts[i%len(syntheticTexts)]
 			embedding, err := se.model.EmbedInt8(text)
@@ -641,7 +644,7 @@ func (se *SearchEngine) generateTrainingData(trainSize int) error {
 			}
 		}
 	}
-	
+
 	// Train the index
 	return se.index.Train(trainVectors, trainScales)
 }
@@ -661,64 +664,8 @@ func (se *SearchEngine) generateIndexConfig(estimatedSize int) search.Config {
 		}
 	}
 
-	// Auto mode - aggressively choose approximate methods for speed
-	if estimatedSize <= 5000 {
-		// Very small dataset - exact search is still fast
-		return search.Config{
-			MaxFlatSize: 10000,
-			UseParallel: true,
-		}
-	} else if estimatedSize <= 20000 {
-		// Small dataset - simple IVF with small clusters
-		return search.Config{
-			MaxFlatSize: 1000,
-			NList:       int(float64(estimatedSize) / 50), // ~50 vectors per cluster
-			NProbe:      4,  // Search only 4 clusters for speed
-			HNSWEnabled: false,
-			RerankSize:  64,  // Small rerank for speed
-			UseParallel: true,
-		}
-	} else if estimatedSize <= 100000 {
-		// Medium dataset - IVF with moderate settings
-		return search.Config{
-			MaxFlatSize: 1000,
-			NList:       int(float64(estimatedSize) / 100), // ~100 vectors per cluster
-			NProbe:      8,   // Still fast with 8 probes
-			M:           32,  // Light PQ compression
-			NBits:       8,
-			HNSWEnabled: false,  // Skip HNSW for simplicity
-			RerankSize:  100,
-			UseParallel: true,
-		}
-	} else if estimatedSize <= 500000 {
-		// Large dataset - IVF with HNSW routing
-		return search.Config{
-			MaxFlatSize: 1000,
-			NList:       min(4096, int(float64(estimatedSize) / 200)), // ~200 vectors per cluster
-			NProbe:      12,
-			M:           64,
-			NBits:       8,
-			HNSWEnabled: true,  // Use HNSW for faster routing
-			HNSWM:       8,     // Small graph for speed
-			HNSWEfC:     100,   // Faster construction
-			RerankSize:  150,
-			UseParallel: true,
-		}
-	} else {
-		// Very large dataset - maximum speed optimization
-		return search.Config{
-			MaxFlatSize: 1000,
-			NList:       8192,  // Fixed large number of clusters
-			NProbe:      16,    // Still relatively few probes
-			M:           64,
-			NBits:       6,     // Aggressive compression
-			HNSWEnabled: true,
-			HNSWM:       16,
-			HNSWEfC:     200,
-			RerankSize:  200,   // Moderate reranking
-			UseParallel: true,
-		}
-	}
+	// Use preset configuration for simplicity
+	return GetSearchConfig(se.config.Preset, estimatedSize)
 }
 
 // Optimize rebuilds the index with optimal parameters for current data

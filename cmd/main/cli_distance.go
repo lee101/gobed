@@ -248,7 +248,7 @@ func CosineSimilarity(a, b []float32) float32 {
 func main() {
 	var text1, text2 string
 	var showHelp bool
-	
+
 	flag.StringVar(&text1, "text1", "", "First text to compare")
 	flag.StringVar(&text2, "text2", "", "Second text to compare")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
@@ -312,7 +312,7 @@ func main() {
 	fmt.Println(strings.Repeat("-", 70))
 	fmt.Printf("🎯 Cosine Similarity: %.6f\n", similarity)
 	fmt.Printf("📐 Distance (1-similarity): %.6f\n", distance)
-	
+
 	// Interpretation
 	fmt.Println("\n📊 INTERPRETATION:")
 	if similarity > 0.7 {
@@ -326,12 +326,12 @@ func main() {
 	} else {
 		fmt.Println("❄️  Opposite texts")
 	}
-	
+
 	// Show embedding previews
 	fmt.Printf("\n🔍 Embedding dimensions: %d\n", len(emb1))
-	fmt.Printf("📊 Text 1 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n", 
+	fmt.Printf("📊 Text 1 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
 		emb1[0], emb1[1], emb1[2], emb1[3], emb1[4])
-	fmt.Printf("📊 Text 2 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n", 
+	fmt.Printf("📊 Text 2 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
 		emb2[0], emb2[1], emb2[2], emb2[3], emb2[4])
 
 	fmt.Println("\n✅ Real embedding calculation completed!")

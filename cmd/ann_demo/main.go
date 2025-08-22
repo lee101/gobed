@@ -13,7 +13,7 @@ import (
 
 func main() {
 	fmt.Println("=== Gobed ANN Search Demo ===\n")
-	
+
 	// Load the embedding model
 	fmt.Println("Loading embedding model...")
 	model, err := gobed.LoadModel()
@@ -21,20 +21,20 @@ func main() {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	fmt.Println("✓ Model loaded successfully\n")
-	
+
 	// Demo 1: Small-scale exact search (SIMD-Flat)
 	demoSmallScale(model)
-	
+
 	// Demo 2: Large-scale approximate search (IVF-HNSW-PQ)
 	demoLargeScale()
-	
+
 	// Demo 3: Real text search with gobed embeddings
 	demoTextSearch(model)
 }
 
 func demoSmallScale(model *gobed.EmbeddingModel) {
 	fmt.Println("=== Demo 1: Small-scale Exact Search (SIMD-Flat) ===")
-	
+
 	// Create sample documents
 	documents := []gobed.Document{
 		{ID: 1, Text: "Machine learning is a subset of artificial intelligence"},
@@ -48,15 +48,15 @@ func demoSmallScale(model *gobed.EmbeddingModel) {
 		{ID: 9, Text: "BERT and GPT are popular transformer-based models"},
 		{ID: 10, Text: "Convolutional neural networks excel at image recognition"},
 	}
-	
+
 	// Create index with flat configuration
 	config := gobed.VectorIndexConfig{
 		MaxFlatSize: 1000, // Force flat index
 		UseParallel: true,
 	}
-	
+
 	index := gobed.NewVectorIndex(model, config)
-	
+
 	// Add documents
 	fmt.Printf("Indexing %d documents...\n", len(documents))
 	start := time.Now()
@@ -65,17 +65,17 @@ func demoSmallScale(model *gobed.EmbeddingModel) {
 		log.Fatalf("Failed to add documents: %v", err)
 	}
 	fmt.Printf("✓ Indexed in %v\n\n", time.Since(start))
-	
+
 	// Perform searches
 	queries := []string{
 		"neural network architectures",
 		"language understanding systems",
 		"visual perception in AI",
 	}
-	
+
 	for _, query := range queries {
 		fmt.Printf("Query: '%s'\n", query)
-		
+
 		start := time.Now()
 		results, err := index.Search(query, 3)
 		if err != nil {
@@ -83,14 +83,14 @@ func demoSmallScale(model *gobed.EmbeddingModel) {
 			continue
 		}
 		latency := time.Since(start)
-		
+
 		fmt.Printf("Results (latency: %v):\n", latency)
 		for i, r := range results {
 			fmt.Printf("  %d. Doc #%d (similarity: %.3f)\n", i+1, r.ID, r.Similarity)
 		}
 		fmt.Println()
 	}
-	
+
 	// Print stats
 	stats := index.Stats()
 	fmt.Printf("Index Stats: Type=%s, Size=%d, Memory=%.2f MB\n\n",
@@ -99,15 +99,15 @@ func demoSmallScale(model *gobed.EmbeddingModel) {
 
 func demoLargeScale() {
 	fmt.Println("=== Demo 2: Large-scale Approximate Search (IVF-HNSW-PQ) ===")
-	
+
 	// Generate synthetic data
 	numVectors := 100000
 	fmt.Printf("Generating %d synthetic vectors...\n", numVectors)
-	
+
 	vectors := make([]simd.Vec512, numVectors)
 	scales := make([]float32, numVectors)
 	ids := make([]int, numVectors)
-	
+
 	for i := 0; i < numVectors; i++ {
 		for j := 0; j < 512; j++ {
 			vectors[i][j] = int8(rand.Intn(256) - 128)
@@ -115,23 +115,23 @@ func demoLargeScale() {
 		scales[i] = 1.0
 		ids[i] = i
 	}
-	
+
 	// Create engine with IVF-HNSW-PQ configuration
 	config := search.Config{
 		MaxFlatSize: 10000,
-		NList:       1024,  // 1024 clusters
-		NProbe:      8,     // Search 8 clusters
-		M:           64,    // 64 subquantizers
-		NBits:       8,     // 8 bits per code
-		HNSWEnabled: true,  // Use HNSW for routing
+		NList:       1024, // 1024 clusters
+		NProbe:      8,    // Search 8 clusters
+		M:           64,   // 64 subquantizers
+		NBits:       8,    // 8 bits per code
+		HNSWEnabled: true, // Use HNSW for routing
 		HNSWM:       16,
 		HNSWEfC:     200,
-		RerankSize:  128,   // Rerank top 128
+		RerankSize:  128, // Rerank top 128
 		UseParallel: true,
 	}
-	
+
 	engine := search.NewEngine(config)
-	
+
 	// Train the index
 	fmt.Println("Training index...")
 	trainStart := time.Now()
@@ -141,7 +141,7 @@ func demoLargeScale() {
 		log.Fatalf("Failed to train: %v", err)
 	}
 	fmt.Printf("✓ Training completed in %v\n", time.Since(trainStart))
-	
+
 	// Add vectors in batches
 	fmt.Println("Adding vectors to index...")
 	addStart := time.Now()
@@ -155,14 +155,14 @@ func demoLargeScale() {
 		fmt.Printf("  Added %d/%d vectors\r", end, numVectors)
 	}
 	fmt.Printf("\n✓ Indexing completed in %v\n\n", time.Since(addStart))
-	
+
 	// Perform benchmark searches
 	numQueries := 100
 	k := 10
-	
+
 	fmt.Printf("Running %d searches (k=%d)...\n", numQueries, k)
 	searchStart := time.Now()
-	
+
 	for i := 0; i < numQueries; i++ {
 		query := &vectors[rand.Intn(numVectors)]
 		results, err := engine.Search(query, k)
@@ -172,15 +172,15 @@ func demoLargeScale() {
 		}
 		_ = results // Process results
 	}
-	
+
 	searchTime := time.Since(searchStart)
 	avgLatency := searchTime / time.Duration(numQueries)
 	qps := float64(numQueries) / searchTime.Seconds()
-	
+
 	fmt.Printf("✓ Search benchmark completed\n")
 	fmt.Printf("  Average latency: %v\n", avgLatency)
 	fmt.Printf("  Throughput: %.1f QPS\n", qps)
-	
+
 	// Print stats
 	stats := engine.Stats()
 	fmt.Printf("\nIndex Stats:\n")
@@ -194,7 +194,7 @@ func demoLargeScale() {
 
 func demoTextSearch(model *gobed.EmbeddingModel) {
 	fmt.Println("=== Demo 3: Real Text Search with Semantic Understanding ===")
-	
+
 	// Create a corpus of technical documents
 	corpus := []gobed.Document{
 		{ID: 1, Text: "Python is a high-level programming language known for its simplicity"},
@@ -218,7 +218,7 @@ func demoTextSearch(model *gobed.EmbeddingModel) {
 		{ID: 19, Text: "CI/CD pipelines automate software deployment processes"},
 		{ID: 20, Text: "Cloud computing provides on-demand computing resources"},
 	}
-	
+
 	// Create index optimized for this size
 	config := gobed.VectorIndexConfig{
 		MaxFlatSize: 100,   // Use IVF for demonstration
@@ -227,21 +227,21 @@ func demoTextSearch(model *gobed.EmbeddingModel) {
 		UseHNSW:     false, // Not needed for this size
 		RerankSize:  10,
 	}
-	
+
 	index := gobed.NewVectorIndex(model, config)
-	
+
 	// Train on the corpus
 	texts := make([]string, len(corpus))
 	for i, doc := range corpus {
 		texts[i] = doc.Text
 	}
-	
+
 	fmt.Printf("Training index on %d documents...\n", len(corpus))
 	err := index.Train(texts)
 	if err != nil {
 		log.Printf("Warning: Training failed: %v", err)
 	}
-	
+
 	// Add documents
 	fmt.Println("Indexing documents...")
 	err = index.AddDocuments(corpus)
@@ -249,7 +249,7 @@ func demoTextSearch(model *gobed.EmbeddingModel) {
 		log.Fatalf("Failed to index: %v", err)
 	}
 	fmt.Printf("✓ Indexed %d documents\n\n", len(corpus))
-	
+
 	// Semantic search queries
 	queries := []struct {
 		query string
@@ -261,11 +261,11 @@ func demoTextSearch(model *gobed.EmbeddingModel) {
 		{"compiled systems programming", "Finding low-level languages"},
 		{"machine learning frameworks", "Looking for ML tools"},
 	}
-	
+
 	for _, q := range queries {
 		fmt.Printf("Query: '%s'\n", q.query)
 		fmt.Printf("(%s)\n", q.desc)
-		
+
 		start := time.Now()
 		results, err := index.Search(q.query, 3)
 		if err != nil {
@@ -273,7 +273,7 @@ func demoTextSearch(model *gobed.EmbeddingModel) {
 			continue
 		}
 		latency := time.Since(start)
-		
+
 		fmt.Printf("Top 3 results (latency: %v):\n", latency)
 		for i, r := range results {
 			doc := corpus[r.ID-1] // IDs are 1-based
@@ -281,7 +281,7 @@ func demoTextSearch(model *gobed.EmbeddingModel) {
 		}
 		fmt.Println()
 	}
-	
+
 	// Final stats
 	stats := index.Stats()
 	fmt.Printf("Final Index Stats:\n")

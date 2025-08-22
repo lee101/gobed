@@ -24,8 +24,9 @@ type EmbeddingModel struct {
 	EmbedDim        int
 	weights         [][]float32 // Real safetensors weights [vocab_size, embed_dim]
 	referenceTokens map[string]TokenData
-	embeddingBuffer []float32 // Pre-allocated for performance
+	embeddingBuffer []float32            // Pre-allocated for performance
 	tokenizer       *tokenizer.Tokenizer // BERT tokenizer for arbitrary text
+	objectPool      *ObjectPool          // Object pool for memory reuse
 }
 
 // TensorInfo contains safetensors tensor metadata
@@ -81,7 +82,7 @@ func LoadModel() (*EmbeddingModel, error) {
 	}
 	// Load the actual static-retrieval-mrl-en-v1 tokenizer
 	var tk *tokenizer.Tokenizer
-	
+
 	// Try loading from JSON file
 	if _, statErr := os.Stat(tokenizerPath); statErr == nil {
 		var tokErr error
@@ -91,7 +92,7 @@ func LoadModel() (*EmbeddingModel, error) {
 			tk = nil
 		}
 	}
-	
+
 	// If loading failed, skip tokenizer (fall back to reference tokens only)
 	if tk == nil {
 		fmt.Println("Warning: tokenizer not available, using reference tokens only")
@@ -118,6 +119,7 @@ func LoadModel() (*EmbeddingModel, error) {
 		referenceTokens: referenceTokens,
 		embeddingBuffer: make([]float32, embedDim),
 		tokenizer:       tk,
+		objectPool:      NewObjectPool(),
 	}
 
 	loadTime := time.Since(start)
@@ -131,7 +133,7 @@ func (m *EmbeddingModel) Encode(text string) ([]float32, error) {
 	if m.tokenizer != nil {
 		return m.encodeWithTokenizer(text)
 	}
-	
+
 	// Fallback: check if we have reference tokens for this text
 	tokenData, exists := m.referenceTokens[text]
 	if !exists {
@@ -145,18 +147,18 @@ func (m *EmbeddingModel) Encode(text string) ([]float32, error) {
 func (m *EmbeddingModel) encodeWithTokenizer(text string) ([]float32, error) {
 	// Normalize and clean text
 	cleanText := normalizeText(text)
-	
+
 	// Handle empty text after normalization
 	if strings.TrimSpace(cleanText) == "" {
 		// Return zero embedding for empty text
 		result := make([]float32, m.EmbedDim)
 		return result, nil
 	}
-	
+
 	// Tokenize with recovery from panics
 	var encoding *tokenizer.Encoding
 	var err error
-	
+
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -165,18 +167,18 @@ func (m *EmbeddingModel) encodeWithTokenizer(text string) ([]float32, error) {
 		}()
 		encoding, err = m.tokenizer.EncodeSingle(cleanText, false)
 	}()
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("tokenization failed for text '%s': %v", truncateForError(text), err)
 	}
-	
+
 	// Handle empty tokenization result
 	if encoding == nil || len(encoding.Ids) == 0 {
 		// Return zero embedding for texts that produce no tokens
 		result := make([]float32, m.EmbedDim)
 		return result, nil
 	}
-	
+
 	// Convert uint32 token IDs to int, filtering out invalid tokens
 	validTokenIDs := make([]int, 0, len(encoding.Ids))
 	for _, id := range encoding.Ids {
@@ -186,14 +188,14 @@ func (m *EmbeddingModel) encodeWithTokenizer(text string) ([]float32, error) {
 			validTokenIDs = append(validTokenIDs, tokenID)
 		}
 	}
-	
+
 	// Handle case where all tokens were filtered out
 	if len(validTokenIDs) == 0 {
 		// Return zero embedding
 		result := make([]float32, m.EmbedDim)
 		return result, nil
 	}
-	
+
 	return m.computeEmbedding(validTokenIDs)
 }
 
@@ -227,12 +229,12 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 	// Mean pooling (exactly like StaticEmbedding model) with safety checks
 	if validTokens > 0 {
 		invValidTokens := 1.0 / float32(validTokens)
-		
+
 		// Check for division by zero and ensure result is finite
 		if !math.IsNaN(float64(invValidTokens)) && !math.IsInf(float64(invValidTokens), 0) {
 			for i := 0; i < len(m.embeddingBuffer) && i < m.EmbedDim; i++ {
 				m.embeddingBuffer[i] *= invValidTokens
-				
+
 				// Ensure final values are finite
 				if math.IsNaN(float64(m.embeddingBuffer[i])) || math.IsInf(float64(m.embeddingBuffer[i]), 0) {
 					m.embeddingBuffer[i] = 0
@@ -242,16 +244,17 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 	}
 
 	// StaticEmbedding does NOT normalize - return raw mean pooled values
+	// TODO: Use object pool here when API allows returning pooled objects
 	result := make([]float32, m.EmbedDim)
 	copy(result, m.embeddingBuffer)
-	
+
 	// Final sanity check on result
 	for i, val := range result {
 		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
 			result[i] = 0
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -418,7 +421,7 @@ func normalizeText(text string) string {
 		// Fix invalid UTF-8 by replacing invalid sequences
 		text = strings.ToValidUTF8(text, "")
 	}
-	
+
 	// Remove or replace control characters (except common whitespace)
 	var result strings.Builder
 	for _, r := range text {
@@ -438,22 +441,22 @@ func normalizeText(text string) string {
 		}
 	}
 	text = result.String()
-	
+
 	// Remove zero-width characters that can cause tokenization issues
 	zeroWidthChars := regexp.MustCompile("[\u200B\u200C\u200D\u2060\uFEFF]")
 	text = zeroWidthChars.ReplaceAllString(text, "")
-	
+
 	// Normalize multiple consecutive whitespace to single space
 	multiSpace := regexp.MustCompile(`\s+`)
 	text = multiSpace.ReplaceAllString(text, " ")
-	
+
 	// Handle bidirectional text override characters that might confuse tokenizers
 	bidiOverride := regexp.MustCompile("[\u202A-\u202E\u2066-\u2069]")
 	text = bidiOverride.ReplaceAllString(text, "")
-	
+
 	// Trim leading/trailing whitespace
 	text = strings.TrimSpace(text)
-	
+
 	return text
 }
 
@@ -478,7 +481,7 @@ func (m *EmbeddingModel) safeComputeEmbedding(tokenIDs []int) ([]float32, error)
 		result := make([]float32, m.EmbedDim)
 		return result, nil
 	}
-	
+
 	// Filter out any invalid tokens
 	validTokens := make([]int, 0, len(tokenIDs))
 	for _, tokenID := range tokenIDs {
@@ -486,12 +489,12 @@ func (m *EmbeddingModel) safeComputeEmbedding(tokenIDs []int) ([]float32, error)
 			validTokens = append(validTokens, tokenID)
 		}
 	}
-	
+
 	if len(validTokens) == 0 {
 		// All tokens were invalid, return zero embedding
 		result := make([]float32, m.EmbedDim)
 		return result, nil
 	}
-	
+
 	return m.computeEmbedding(validTokens)
 }

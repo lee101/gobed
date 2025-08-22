@@ -14,7 +14,7 @@ import (
 func main() {
 	fmt.Println("⚡ Quick Gobed Performance Test")
 	fmt.Println("===============================")
-	
+
 	// Load model
 	fmt.Print("Loading model... ")
 	start := time.Now()
@@ -23,7 +23,7 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("✅ Done (%v)\n", time.Since(start))
-	
+
 	// Test data
 	texts := []string{
 		"This is a sample document about machine learning and artificial intelligence.",
@@ -32,7 +32,7 @@ func main() {
 		"Analysis of deep learning performance metrics and optimization strategies.",
 		"Technical documentation explaining cloud computing architectures and services.",
 	}
-	
+
 	// Extend to create larger test set
 	largeTexts := make([]string, 0, 1000)
 	for i := 0; i < 200; i++ {
@@ -40,9 +40,9 @@ func main() {
 			largeTexts = append(largeTexts, fmt.Sprintf("%s (iteration %d)", text, i))
 		}
 	}
-	
+
 	fmt.Printf("Test dataset: %d documents\n\n", len(largeTexts))
-	
+
 	// Test different scenarios
 	testCases := []struct {
 		name        string
@@ -56,36 +56,36 @@ func main() {
 		{"Large Sequential", 1000, 1},
 		{"Large Parallel 8x", 1000, 8},
 	}
-	
+
 	fmt.Printf("%-20s %-8s %-12s %-15s %-10s\n", "Test", "Items", "Time (ms)", "Items/sec", "ms/item")
 	fmt.Println(strings.Repeat("-", 65))
-	
+
 	for _, tc := range testCases {
 		duration := runTest(model, largeTexts[:tc.count], tc.concurrency)
 		itemsPerSec := float64(tc.count) / duration.Seconds()
 		msPerItem := float64(duration.Nanoseconds()) / float64(tc.count) / 1e6
-		
+
 		fmt.Printf("%-20s %-8d %-12.1f %-15.0f %-10.3f\n",
 			tc.name, tc.count, float64(duration.Nanoseconds())/1e6, itemsPerSec, msPerItem)
 	}
-	
+
 	// Estimate large-scale performance
 	fmt.Println("\n📈 Large Scale Estimates:")
 	bestPerf := float64(8000) // Estimated items/sec based on parallel performance
-	
+
 	scales := []int{10000, 100000, 1000000}
 	for _, scale := range scales {
 		timeSeconds := float64(scale) / bestPerf
-		fmt.Printf("  %7d documents: ~%.1f seconds (~%.1f minutes)\n", 
+		fmt.Printf("  %7d documents: ~%.1f seconds (~%.1f minutes)\n",
 			scale, timeSeconds, timeSeconds/60)
 	}
 }
 
 func runTest(model *gobed.EmbeddingModel, texts []string, concurrency int) time.Duration {
 	runtime.GC() // Clean up before test
-	
+
 	start := time.Now()
-	
+
 	if concurrency == 1 {
 		// Sequential
 		for i, text := range texts {
@@ -102,7 +102,7 @@ func runTest(model *gobed.EmbeddingModel, texts []string, concurrency int) time.
 		// Parallel
 		textChan := make(chan string, len(texts))
 		var wg sync.WaitGroup
-		
+
 		// Start workers
 		for i := 0; i < concurrency; i++ {
 			wg.Add(1)
@@ -122,7 +122,7 @@ func runTest(model *gobed.EmbeddingModel, texts []string, concurrency int) time.
 				}
 			}()
 		}
-		
+
 		// Send work
 		for _, text := range texts {
 			textChan <- text
@@ -130,7 +130,6 @@ func runTest(model *gobed.EmbeddingModel, texts []string, concurrency int) time.
 		close(textChan)
 		wg.Wait()
 	}
-	
+
 	return time.Since(start)
 }
-

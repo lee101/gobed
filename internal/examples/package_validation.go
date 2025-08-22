@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-
 	// Import the gobed package if needed
 )
 
@@ -28,7 +27,7 @@ func TestPackageImport() {
 	if !ok || vocabSize != 30522 {
 		log.Fatalf("❌ Expected vocab size 30522, got %v", vocabSize)
 	}
-	
+
 	embedDim, ok := info["embedding_dim"].(int)
 	if !ok || embedDim != 1024 {
 		log.Fatalf("❌ Expected embedding dim 1024, got %v", embedDim)
@@ -50,22 +49,22 @@ func TestPackageImport() {
 	if err != nil {
 		log.Fatalf("❌ Failed to encode text: %v", err)
 	}
-	
+
 	if len(embedding) != 1024 {
 		log.Fatalf("❌ Expected 1024 dimensions, got %d", len(embedding))
 	}
-	
+
 	// Check expected values (from our validation)
 	expectedFirst5 := []float32{1.610, 9.781, 2.476, -8.095, 6.863}
 	tolerance := float32(0.001)
-	
+
 	for i := 0; i < 5; i++ {
 		diff := embedding[i] - expectedFirst5[i]
 		if diff < 0 {
 			diff = -diff
 		}
 		if diff > tolerance {
-			log.Fatalf("❌ Embedding mismatch at index %d: expected %.3f, got %.3f", 
+			log.Fatalf("❌ Embedding mismatch at index %d: expected %.3f, got %.3f",
 				i, expectedFirst5[i], embedding[i])
 		}
 	}
@@ -79,12 +78,12 @@ func TestPackageImport() {
 		"Python is a programming language.",
 		"Hello world",
 	}
-	
+
 	embeddings, err := model.BatchEncode(texts)
 	if err != nil {
 		log.Fatalf("❌ Failed to batch encode: %v", err)
 	}
-	
+
 	if len(embeddings) != len(texts) {
 		log.Fatalf("❌ Expected %d embeddings, got %d", len(texts), len(embeddings))
 	}
@@ -94,10 +93,10 @@ func TestPackageImport() {
 	fmt.Println("\n6. Testing similarity calculation...")
 	emb1 := embeddings[0] // "Machine learning is fascinating."
 	emb2 := embeddings[1] // "Python is a programming language."
-	
+
 	similarity := gobed.CosineSimilarity(emb1, emb2)
 	expectedSimilarity := float32(0.143751)
-	
+
 	diff := similarity - expectedSimilarity
 	if diff < 0 {
 		diff = -diff
@@ -111,11 +110,11 @@ func TestPackageImport() {
 	fmt.Println("\n7. Testing utility functions...")
 	norm := gobed.CalculateNorm(emb1)
 	distance := gobed.EuclideanDistance(emb1, emb2)
-	
+
 	if norm <= 0 {
 		log.Fatal("❌ Norm calculation failed")
 	}
-	
+
 	if distance <= 0 {
 		log.Fatal("❌ Distance calculation failed")
 	}

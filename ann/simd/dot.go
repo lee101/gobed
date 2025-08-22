@@ -25,12 +25,12 @@ func DotN(a, b []int8) int32 {
 	if len(a) != len(b) {
 		panic("vector length mismatch")
 	}
-	
+
 	n := len(a)
 	if n == 512 {
 		return Dot512((*Vec512)(a), (*Vec512)(b))
 	}
-	
+
 	// For non-512 dimensions, use generic implementation
 	var sum int32
 	// Unroll by 8 for better performance

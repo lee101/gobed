@@ -92,7 +92,7 @@ var baseCorpus = []string{
 	"Private equity invests in companies for restructuring",
 	"Options trading provides leverage and hedging strategies",
 	"ESG investing considers environmental and social factors",
-	
+
 	// Healthcare (25)
 	"Telemedicine enables remote medical consultations via technology",
 	"Personalized medicine tailors treatments to individual genetics",
@@ -123,35 +123,35 @@ var baseCorpus = []string{
 
 func expandCorpus(size int) []string {
 	corpus := make([]string, 0, size)
-	
+
 	// Modifiers to create variations
 	prefixes := []string{
 		"", "Introduction to ", "Advanced ", "Modern ", "Essential ",
 		"Practical ", "Understanding ", "The future of ", "Exploring ",
 		"Fundamentals of ", "Mastering ", "Complete guide to ",
 	}
-	
+
 	suffixes := []string{
 		"", " explained", " in practice", " for beginners", " at scale",
 		" best practices", " case study", " deep dive", " overview",
 		" trends", " innovations", " strategies",
 	}
-	
+
 	contexts := []string{
 		"", " in 2024", " for enterprises", " for startups", " in production",
 		" for developers", " for managers", " for students", " for professionals",
 	}
-	
+
 	// Generate variations
 	for len(corpus) < size {
 		// Pick a random base text
 		base := baseCorpus[rand.Intn(len(baseCorpus))]
-		
+
 		// Apply random modifications
 		prefix := prefixes[rand.Intn(len(prefixes))]
 		suffix := suffixes[rand.Intn(len(suffixes))]
 		context := contexts[rand.Intn(len(contexts))]
-		
+
 		// Construct variation
 		text := prefix
 		if prefix != "" {
@@ -160,9 +160,9 @@ func expandCorpus(size int) []string {
 			text = base
 		}
 		text += suffix + context
-		
+
 		corpus = append(corpus, text)
-		
+
 		// Sometimes combine two topics
 		if rand.Float32() < 0.2 && len(corpus) < size {
 			other := baseCorpus[rand.Intn(len(baseCorpus))]
@@ -170,11 +170,11 @@ func expandCorpus(size int) []string {
 			corpus = append(corpus, combined)
 		}
 	}
-	
+
 	return corpus[:size]
 }
 
-func main() {
+func main_disabled() {
 	fmt.Println("=== Gobed Large-Scale Search Benchmark ===")
 	fmt.Println("Testing with 100,000 documents\n")
 
@@ -197,12 +197,12 @@ func main() {
 	// Create search engine with optimized config for 100k
 	config := gobed.SearchConfig{
 		AutoMode:           false,
-		MaxExactSearchSize: 10000,  // Use IVF for this size
-		NumClusters:        1000,    // sqrt(100k) ≈ 316, use 1000 for better distribution
-		SearchClusters:     10,      // Search 1% of clusters
-		UseCompression:     false,   // Skip PQ for better accuracy at 100k
-		UseGraphRouting:    false,   // Skip HNSW for simplicity at 100k
-		CandidatesToRerank: 100,     // Rerank top 100
+		MaxExactSearchSize: 10000, // Use IVF for this size
+		NumClusters:        1000,  // sqrt(100k) ≈ 316, use 1000 for better distribution
+		SearchClusters:     10,    // Search 1% of clusters
+		UseCompression:     false, // Skip PQ for better accuracy at 100k
+		UseGraphRouting:    false, // Skip HNSW for simplicity at 100k
+		CandidatesToRerank: 100,   // Rerank top 100
 	}
 	engine := gobed.NewSearchEngineWithConfig(model, config)
 
@@ -210,25 +210,25 @@ func main() {
 	fmt.Println("=== INDEXING PHASE ===")
 	batchSize := 2000
 	indexStart := time.Now()
-	
+
 	for i := 0; i < corpusSize; i += batchSize {
 		end := min(i+batchSize, corpusSize)
 		batchStart := time.Now()
-		
+
 		_, err := engine.IndexBatch(corpus[i:end])
 		if err != nil {
 			log.Printf("Failed to index batch: %v", err)
 			continue
 		}
-		
-		if (i/batchSize+1) % 10 == 0 {
+
+		if (i/batchSize+1)%10 == 0 {
 			elapsed := time.Since(indexStart)
 			rate := float64(i+batchSize) / elapsed.Seconds()
-			fmt.Printf("  Progress: %d/%d documents (%.0f docs/sec)\n", 
+			fmt.Printf("  Progress: %d/%d documents (%.0f docs/sec)\n",
 				min(i+batchSize, corpusSize), corpusSize, rate)
 		}
 	}
-	
+
 	indexTime := time.Since(indexStart)
 	fmt.Printf("\n✓ Indexing completed\n")
 	fmt.Printf("  Total time: %v\n", indexTime)
@@ -255,8 +255,8 @@ func main() {
 
 	// Test queries covering different domains
 	testQueries := []struct {
-		query    string
-		domain   string
+		query  string
+		domain string
 	}{
 		{"deep learning neural network architectures", "AI/ML"},
 		{"kubernetes container orchestration deployment", "DevOps"},
@@ -277,7 +277,7 @@ func main() {
 
 	fmt.Println("=== SEARCH PERFORMANCE ===")
 	fmt.Printf("Running %d search queries...\n\n", len(testQueries))
-	
+
 	totalSearchTime := time.Duration(0)
 	k := 5
 
@@ -286,16 +286,16 @@ func main() {
 		results, err := engine.Search(tq.query, k)
 		searchTime := time.Since(searchStart)
 		totalSearchTime += searchTime
-		
+
 		if err != nil {
 			log.Printf("Search failed: %v", err)
 			continue
 		}
-		
+
 		fmt.Printf("Query %d: \"%s\"\n", i+1, tq.query)
 		fmt.Printf("Domain: %s | Latency: %v\n", tq.domain, searchTime)
 		fmt.Println("Top 3 results:")
-		
+
 		for j := 0; j < min(3, len(results)); j++ {
 			text := results[j].Text
 			if len(text) > 75 {
@@ -315,24 +315,24 @@ func main() {
 	fmt.Printf("  Size: %d documents\n", corpusSize)
 	fmt.Printf("  Index type: %s\n", stats.IndexType)
 	fmt.Printf("  Memory usage: %.2f MB\n", stats.MemoryUsageMB)
-	
+
 	fmt.Println("\nIndexing Performance:")
 	fmt.Printf("  Total time: %v\n", indexTime)
 	fmt.Printf("  Throughput: %.0f docs/sec\n", float64(corpusSize)/indexTime.Seconds())
 	fmt.Printf("  Avg latency: %.3f ms/doc\n", float64(indexTime.Milliseconds())/float64(corpusSize))
-	
+
 	fmt.Println("\nSearch Performance:")
 	fmt.Printf("  Avg latency: %v\n", avgSearchLatency)
 	fmt.Printf("  P50 estimate: %v\n", avgSearchLatency*9/10)
 	fmt.Printf("  P99 estimate: %v\n", avgSearchLatency*2)
 	fmt.Printf("  Throughput: %.1f QPS\n", searchQPS)
-	
+
 	if avgSearchLatency < time.Millisecond {
 		fmt.Println("\n✅ SUB-MILLISECOND SEARCH ACHIEVED!")
 	} else if avgSearchLatency < 2*time.Millisecond {
 		fmt.Println("\n✅ Target latency achieved (<2ms)")
 	}
-	
+
 	fmt.Println("\n✓ Benchmark completed successfully!")
 }
 

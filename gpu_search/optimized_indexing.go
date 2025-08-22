@@ -1,5 +1,5 @@
 // optimized_indexing.go - Drop-in optimization for gobed GPU indexing
-package main
+package main // Keep this as main package
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 
 	log.Printf("🚀 Starting parallel GPU indexing of %d texts", len(texts))
 	log.Printf("📦 Chunk size: %d (optimized for GPU)", chunkSize)
-	
+
 	start := time.Now()
 
 	// Create chunks for optimal GPU batching
@@ -34,7 +34,7 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 	// Parallel processing with controlled concurrency
 	const maxConcurrent = 8 // Adjust based on GPU memory
 	semaphore := make(chan struct{}, maxConcurrent)
-	
+
 	var wg sync.WaitGroup
 	errors := make(chan error, len(chunks))
 	progress := make(chan int, len(chunks))
@@ -48,8 +48,8 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 				percent := float64(completed) / float64(len(chunks)) * 100
 				elapsed := time.Since(start)
 				rate := float64(completed*chunkSize) / elapsed.Seconds()
-				
-				log.Printf("📈 Progress: %.1f%% (%d/%d chunks, %.0f texts/sec)", 
+
+				log.Printf("📈 Progress: %.1f%% (%d/%d chunks, %.0f texts/sec)",
 					percent, completed, len(chunks), rate)
 			}
 		}
@@ -70,7 +70,7 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 			type Indexer interface {
 				IndexTexts([]string) error
 			}
-			
+
 			indexer, ok := pipeline.(Indexer)
 			if !ok {
 				errors <- fmt.Errorf("pipeline does not implement IndexTexts")
@@ -86,10 +86,10 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 
 			chunkTime := time.Since(chunkStart)
 			chunkRate := float64(len(chunkTexts)) / chunkTime.Seconds()
-			
+
 			// Report chunk completion (optional detailed logging)
 			if len(chunks) <= 20 { // Only log details for smaller jobs
-				log.Printf("✅ Chunk %d: %d texts in %v (%.0f texts/sec)", 
+				log.Printf("✅ Chunk %d: %d texts in %v (%.0f texts/sec)",
 					chunkNum+1, len(chunkTexts), chunkTime, chunkRate)
 			}
 
@@ -140,12 +140,12 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 }
 
 // OptimizedConfig provides optimized settings for maximum throughput
-type OptimizedConfig struct {
-	BatchSize      int  `json:"batch_size"`      // GPU batch size
-	ChunkSize      int  `json:"chunk_size"`      // Parallel chunk size  
-	MaxConcurrent  int  `json:"max_concurrent"`  // Parallel workers
+type OptimizedConfig_disabled struct { // Renamed to avoid conflict
+	BatchSize      int  `json:"batch_size"`     // GPU batch size
+	ChunkSize      int  `json:"chunk_size"`     // Parallel chunk size
+	MaxConcurrent  int  `json:"max_concurrent"` // Parallel workers
 	UseGPUIndexing bool `json:"use_gpu_indexing"`
-	PreloadGPU     bool `json:"preload_gpu"`     
+	PreloadGPU     bool `json:"preload_gpu"`
 	MaxVectors     int  `json:"max_vectors"`
 	GPUOnlyMode    bool `json:"gpu_only_mode"`
 }
@@ -154,7 +154,7 @@ type OptimizedConfig struct {
 func GetOptimizedConfig(gpuMemoryGB float64) OptimizedConfig {
 	// Scale settings based on GPU memory
 	var batchSize, chunkSize, maxConcurrent int
-	
+
 	if gpuMemoryGB >= 16 {
 		// High-end GPU (RTX 3080, 4080, etc.)
 		batchSize = 4096
@@ -190,7 +190,7 @@ func main() {
 
 	// Get optimized configuration
 	optConfig := GetOptimizedConfig(16.0) // Your GPU memory in GB
-	
+
 	config := gpu.Config{
 		ModelPath:      *modelPath,
 		GPUServerURL:   *gpuServer,
@@ -220,15 +220,15 @@ func main() {
 	// OPTIMIZED INDEXING - Replace your IndexTexts call with this:
 	log.Println("🚀 Starting optimized indexing...")
 	start := time.Now()
-	
+
 	if err := IndexTextsParallel(pipeline, texts, optConfig.ChunkSize); err != nil {
 		log.Fatalf("Failed to index texts: %v", err)
 	}
-	
+
 	indexTime := time.Since(start)
 	throughput := float64(len(texts)) / indexTime.Seconds()
-	
-	log.Printf("✅ Indexing complete: %.0f texts/sec (%.1fx improvement)", 
+
+	log.Printf("✅ Indexing complete: %.0f texts/sec (%.1fx improvement)",
 		throughput, throughput/700) // Compare to current ~700 texts/sec
 
 	// ... rest of your code ...

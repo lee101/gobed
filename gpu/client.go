@@ -22,12 +22,12 @@ func (c *SearchClient) Health() (*HealthResponse, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	var result HealthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	
+
 	return &result, nil
 }
 
@@ -38,23 +38,23 @@ func (c *SearchClient) LoadDatabase(embeddings [][]int8) (*LoadResponse, error) 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	resp, err := c.Client.Post(c.BaseURL+"/load", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("load failed: %s", body)
 	}
-	
+
 	var result LoadResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	
+
 	return &result, nil
 }
 
@@ -65,23 +65,23 @@ func (c *SearchClient) Search(query []int8, k int) (*SearchResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	resp, err := c.Client.Post(c.BaseURL+"/search", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("search failed: %s", body)
 	}
-	
+
 	var result SearchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	
+
 	return &result, nil
 }
 
@@ -92,23 +92,23 @@ func (c *SearchClient) BatchSearch(queries [][]int8, k int) (*BatchSearchRespons
 	if err != nil {
 		return nil, err
 	}
-	
+
 	resp, err := c.Client.Post(c.BaseURL+"/batch_search", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("batch search failed: %s", body)
 	}
-	
+
 	var result BatchSearchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	
+
 	return &result, nil
 }
 
@@ -119,23 +119,23 @@ func (c *SearchClient) EmbedTexts(texts []string) (*EmbedResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	resp, err := c.Client.Post(c.BaseURL+"/embed", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("embed failed: %s", body)
 	}
-	
+
 	var result EmbedResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	
+
 	return &result, nil
 }
 
@@ -146,12 +146,12 @@ func (c *SearchClient) Benchmark() (*BenchmarkResult, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	var result BenchmarkResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	
+
 	return &result, nil
 }
 

@@ -4828,7 +4828,7 @@ CMakeFiles/gobed_ann_ops.dir/i8_dot512.cu.o : /home/lee/code/gobed/gpu_search/cu
     /home/lee/code/gobed/libtorch/include/ATen/Version.h \
     /home/lee/code/gobed/libtorch/include/ATen/core/Scalar.h \
     /home/lee/code/gobed/libtorch/include/ATen/core/UnsafeFromTH.h \
-    /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/torch.h \
+    /home/lee/code/gobed/libtorch/include/torch/torch.h \
     /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/all.h \
     /home/lee/code/gobed/libtorch/include/torch/csrc/api/include/torch/autograd.h \
     /home/lee/code/gobed/libtorch/include/torch/csrc/autograd/autograd.h \

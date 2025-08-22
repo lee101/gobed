@@ -1,4 +1,4 @@
-package main
+package main_disabled // Disabled to fix duplicate main
 
 import (
 	"encoding/json"
@@ -77,51 +77,51 @@ func (m *ComparisonModel) EncodeText(text string) ([]float32, error) {
 // In production, this would use actual safetensors weights
 func (m *ComparisonModel) simulateEmbeddingComputation(tokenIDs []int, text string) ([]float32, error) {
 	embedding := make([]float32, m.embedDim)
-	
+
 	// Simulate realistic embedding computation work
 	// This mimics the matrix multiplication and mean pooling operations
 	for i := 0; i < m.embedDim; i++ {
 		value := float32(0)
 		validTokens := 0
-		
+
 		// Simulate embedding lookup and accumulation
 		for _, tokenID := range tokenIDs {
 			if tokenID > 0 { // Skip padding tokens
 				// Simulate weight lookup (deterministic based on token and dimension)
-				weight := float32(math.Sin(float64(tokenID*m.embedDim + i))) * 0.1
+				weight := float32(math.Sin(float64(tokenID*m.embedDim+i))) * 0.1
 				value += weight
 				validTokens++
 			}
 		}
-		
+
 		// Mean pooling
 		if validTokens > 0 {
 			value /= float32(validTokens)
 		}
-		
+
 		embedding[i] = value
 	}
-	
+
 	// L2 normalization to match sentence-transformers
 	norm := float32(0)
 	for _, val := range embedding {
 		norm += val * val
 	}
 	norm = float32(math.Sqrt(float64(norm)))
-	
+
 	if norm > 0 {
 		for i := range embedding {
 			embedding[i] /= norm
 		}
 	}
-	
+
 	return embedding, nil
 }
 
 // BatchEncodeTexts performs batch inference
 func (m *ComparisonModel) BatchEncodeTexts(texts []string) ([][]float32, error) {
 	results := make([][]float32, len(texts))
-	
+
 	for i, text := range texts {
 		embedding, err := m.EncodeText(text)
 		if err != nil {
@@ -129,7 +129,7 @@ func (m *ComparisonModel) BatchEncodeTexts(texts []string) ([][]float32, error) 
 		}
 		results[i] = embedding
 	}
-	
+
 	return results, nil
 }
 
@@ -252,7 +252,7 @@ func benchmarkPureInference(model *ComparisonModel) {
 	batchStart := time.Now()
 	_, batchErr := model.BatchEncodeTexts(sentences)
 	batchTime := time.Since(batchStart)
-	
+
 	if batchErr != nil {
 		log.Printf("Batch processing failed: %v", batchErr)
 	} else {
@@ -267,11 +267,11 @@ func benchmarkPureInference(model *ComparisonModel) {
 		sim := CosineSimilarity(embeddings[0], embeddings[1])
 		fmt.Printf("   Go similarity (S1 vs S2): %.4f\n", sim)
 	}
-	
+
 	// Load Python results for comparison
 	if pythonEmbeddings, pythonSentences, err := loadPythonResults(); err == nil {
 		fmt.Printf("   Found Python results for comparison\n")
-		
+
 		// Compare first few embeddings if they match
 		matches := 0
 		for i, goSentence := range sentences {
@@ -279,7 +279,7 @@ func benchmarkPureInference(model *ComparisonModel) {
 				if goSentence == pythonSentence && i < len(embeddings) && j < len(pythonEmbeddings) {
 					goCosine := CosineSimilarity(embeddings[i], embeddings[i])
 					pythonCosine := CosineSimilarity(pythonEmbeddings[j], pythonEmbeddings[j])
-					fmt.Printf("   '%s': Go=%.4f, Python=%.4f\n", 
+					fmt.Printf("   '%s': Go=%.4f, Python=%.4f\n",
 						goSentence[:min(30, len(goSentence))], goCosine, pythonCosine)
 					matches++
 					break
@@ -301,19 +301,19 @@ func loadPythonResults() ([][]float32, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	// Load Python sentences
 	sentencesData, err := ioutil.ReadFile("python_production_sentences.txt")
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	sentences := strings.Split(strings.TrimSpace(string(sentencesData)), "\n")
-	
+
 	// For this demo, we'll just return empty embeddings since parsing .npy is complex
 	// In production, you'd use a proper .npy parser
 	embeddings := make([][]float32, len(sentences))
-	
+
 	return embeddings, sentences, nil
 }
 
@@ -324,7 +324,7 @@ func min(a, b int) int {
 	return b
 }
 
-func main() {
+func main_disabled() {
 	fmt.Println("================================================================================")
 	fmt.Println("🚀 GO vs PYTHON EMBEDDING COMPARISON")
 	fmt.Println("================================================================================")
@@ -354,7 +354,7 @@ func main() {
 	fmt.Println("✅ Go vs Python comparison completed!")
 	fmt.Println("🎯 Key insights:")
 	fmt.Println("   • Go LoadModel() approach: Fast loading, optimized inference")
-	fmt.Println("   • Python sentence-transformers: GPU acceleration, mature ecosystem") 
+	fmt.Println("   • Python sentence-transformers: GPU acceleration, mature ecosystem")
 	fmt.Println("   • Both use separated loading vs inference timing")
 	fmt.Println("⚡ Next: Add real safetensors + LibTorch for exact matching")
 	fmt.Println(strings.Repeat("=", 80))

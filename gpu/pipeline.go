@@ -81,16 +81,16 @@ func (p *Pipeline) IndexTexts(texts []string) error {
 	}
 
 	allEmbeddings := make([][]int8, 0, len(texts))
-	
+
 	// Process in batches using GPU embedding
 	for i := 0; i < len(texts); i += batchSize {
 		end := i + batchSize
 		if end > len(texts) {
 			end = len(texts)
 		}
-		
+
 		batch := texts[i:end]
-		
+
 		// Use GPU embedding if available, fallback to CPU
 		if p.config.UseGPUIndexing {
 			embedResp, err := p.searchClient.EmbedTexts(batch)
@@ -103,7 +103,7 @@ func (p *Pipeline) IndexTexts(texts []string) error {
 				}
 				allEmbeddings = append(allEmbeddings, int8Embeddings...)
 			} else {
-				fmt.Printf("GPU embedded %d texts in %.1fms (%.0f texts/sec)\n", 
+				fmt.Printf("GPU embedded %d texts in %.1fms (%.0f texts/sec)\n",
 					embedResp.Count, embedResp.EmbedTimeMs, embedResp.TextsPerSec)
 				allEmbeddings = append(allEmbeddings, embedResp.Embeddings...)
 			}
@@ -116,20 +116,20 @@ func (p *Pipeline) IndexTexts(texts []string) error {
 			allEmbeddings = append(allEmbeddings, int8Embeddings...)
 		}
 	}
-	
+
 	// Store texts
 	p.texts = append(p.texts, texts...)
 	p.database = append(p.database, allEmbeddings...)
-	
+
 	// Upload to GPU
 	loadResp, err := p.searchClient.LoadDatabase(p.database)
 	if err != nil {
 		return fmt.Errorf("failed to load to GPU: %w", err)
 	}
-	
-	fmt.Printf("Indexed %d texts to GPU (%.1f MB)\n", 
+
+	fmt.Printf("Indexed %d texts to GPU (%.1f MB)\n",
 		len(texts), loadResp.MemoryMB)
-	
+
 	// Clear CPU memory if GPU-only mode is enabled
 	if p.config.GPUOnlyMode {
 		fmt.Printf("🗑️  Clearing CPU embeddings (GPU-only mode)\n")
@@ -139,7 +139,7 @@ func (p *Pipeline) IndexTexts(texts []string) error {
 		runtime.GC()
 		fmt.Printf("✅ CPU memory freed, using only GPU storage\n")
 	}
-	
+
 	return nil
 }
 
@@ -172,17 +172,17 @@ func (p *Pipeline) Search(query string, k int) ([]Result, error) {
 		}
 		queryInt8 = Float32ToInt8(queryEmb)
 	}
-	
+
 	// Search on GPU
 	searchResp, err := p.searchClient.Search(queryInt8, k)
 	if err != nil {
 		return nil, fmt.Errorf("GPU search failed: %w", err)
 	}
-	
+
 	// Build results
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	results := make([]Result, len(searchResp.IDs))
 	for i, id := range searchResp.IDs {
 		if id < len(p.texts) {
@@ -193,7 +193,7 @@ func (p *Pipeline) Search(query string, k int) ([]Result, error) {
 			}
 		}
 	}
-	
+
 	return results, nil
 }
 
@@ -228,17 +228,17 @@ func (p *Pipeline) BatchSearch(queries []string, k int) ([][]Result, error) {
 			queryEmbeddings[i] = Float32ToInt8(emb)
 		}
 	}
-	
+
 	// Batch search on GPU
 	batchResp, err := p.searchClient.BatchSearch(queryEmbeddings, k)
 	if err != nil {
 		return nil, fmt.Errorf("GPU batch search failed: %w", err)
 	}
-	
+
 	// Build results
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	allResults := make([][]Result, len(queries))
 	for i := range queries {
 		results := make([]Result, len(batchResp.BatchIDs[i]))
@@ -253,7 +253,7 @@ func (p *Pipeline) BatchSearch(queries []string, k int) ([][]Result, error) {
 		}
 		allResults[i] = results
 	}
-	
+
 	return allResults, nil
 }
 
@@ -262,7 +262,7 @@ func (p *Pipeline) StreamingIndex(textChan <-chan string, batchSize int) error {
 	batch := make([]string, 0, batchSize)
 	ticker := time.NewTicker(1 * time.Second) // Flush every second
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case text, ok := <-textChan:
@@ -273,9 +273,9 @@ func (p *Pipeline) StreamingIndex(textChan <-chan string, batchSize int) error {
 				}
 				return nil
 			}
-			
+
 			batch = append(batch, text)
-			
+
 			// Index when batch is full
 			if len(batch) >= batchSize {
 				if err := p.IndexTexts(batch); err != nil {
@@ -283,7 +283,7 @@ func (p *Pipeline) StreamingIndex(textChan <-chan string, batchSize int) error {
 				}
 				batch = batch[:0] // Reset batch
 			}
-			
+
 		case <-ticker.C:
 			// Flush partial batch periodically
 			if len(batch) > 0 {
@@ -302,26 +302,26 @@ func (p *Pipeline) GetStats() (*Stats, error) {
 	numTexts := len(p.texts)
 	numEmbeddings := len(p.database)
 	p.mu.RUnlock()
-	
+
 	// Calculate CPU memory usage
 	cpuMemoryMB := 0.0
 	if p.database != nil {
 		// Each int8 embedding is 512 bytes, plus slice overhead
-		cpuMemoryMB = float64(numEmbeddings * 512) / 1e6
+		cpuMemoryMB = float64(numEmbeddings*512) / 1e6
 	}
-	
+
 	// Get GPU stats
 	health, err := p.searchClient.Health()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get benchmark results
 	benchmark, err := p.searchClient.Benchmark()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &Stats{
 		NumTexts:       numTexts,
 		NumEmbeddings:  numEmbeddings,
@@ -369,7 +369,7 @@ func (p *Pipeline) embedBatchCPU(batch []string) ([][]int8, error) {
 // Float32ToInt8 converts float32 embeddings to int8 with scaling
 func Float32ToInt8(input []float32) []int8 {
 	output := make([]int8, len(input))
-	
+
 	// Find max absolute value for scaling
 	maxAbs := float32(0)
 	for _, v := range input {
@@ -380,7 +380,7 @@ func Float32ToInt8(input []float32) []int8 {
 			maxAbs = v
 		}
 	}
-	
+
 	// Scale to int8 range
 	scale := float32(127.0) / maxAbs
 	for i, v := range input {
@@ -393,6 +393,6 @@ func Float32ToInt8(input []float32) []int8 {
 			output[i] = int8(scaled)
 		}
 	}
-	
+
 	return output
 }

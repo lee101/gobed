@@ -16,59 +16,59 @@ import (
 type Engine struct {
 	// Configuration
 	config Config
-	
+
 	// Components
-	flatIndex    *flat.FlatIndex          // For small datasets
-	ivfIndex     *ivf.IVFIndex            // IVF for partitioning
-	hnswRouter   *hnsw.HNSW               // HNSW for fast centroid routing
-	pq           *pq.ProductQuantizer     // Product quantizer
-	pqCodes      [][]uint8                // PQ encoded vectors
-	rawVectors   []simd.Vec512            // Original int8 vectors for reranking
-	scales       []float32                // Vector scales
-	ids          []int                    // External IDs
-	
+	flatIndex  *flat.FlatIndex      // For small datasets
+	ivfIndex   *ivf.IVFIndex        // IVF for partitioning
+	hnswRouter *hnsw.HNSW           // HNSW for fast centroid routing
+	pq         *pq.ProductQuantizer // Product quantizer
+	pqCodes    [][]uint8            // PQ encoded vectors
+	rawVectors []simd.Vec512        // Original int8 vectors for reranking
+	scales     []float32            // Vector scales
+	ids        []int                // External IDs
+
 	// State
-	trained      bool
-	size         int
-	mu           sync.RWMutex
+	trained bool
+	size    int
+	mu      sync.RWMutex
 }
 
 // Config holds engine configuration
 type Config struct {
 	// Index type threshold
-	MaxFlatSize    int  // Use flat index below this size (default: 50000)
-	
+	MaxFlatSize int // Use flat index below this size (default: 50000)
+
 	// IVF parameters
-	NList          int  // Number of clusters (default: 4096)
-	NProbe         int  // Number of clusters to search (default: 8)
-	
+	NList  int // Number of clusters (default: 4096)
+	NProbe int // Number of clusters to search (default: 8)
+
 	// PQ parameters
-	M              int  // Number of subquantizers (default: 64)
-	NBits          int  // Bits per subquantizer (default: 8)
-	
+	M     int // Number of subquantizers (default: 64)
+	NBits int // Bits per subquantizer (default: 8)
+
 	// HNSW parameters
-	HNSWEnabled    bool // Use HNSW for centroid routing (default: true)
-	HNSWM          int  // HNSW connections (default: 16)
-	HNSWEfC        int  // HNSW construction parameter (default: 200)
-	
+	HNSWEnabled bool // Use HNSW for centroid routing (default: true)
+	HNSWM       int  // HNSW connections (default: 16)
+	HNSWEfC     int  // HNSW construction parameter (default: 200)
+
 	// Search parameters
-	RerankSize     int  // Number of candidates to rerank (default: 128)
-	UseParallel    bool // Use parallel search (default: true)
+	RerankSize  int  // Number of candidates to rerank (default: 128)
+	UseParallel bool // Use parallel search (default: true)
 }
 
 // DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		MaxFlatSize:    5000,  // Use approximate search much earlier for speed
-		NList:          4096,
-		NProbe:         8,
-		M:              64,
-		NBits:          8,
-		HNSWEnabled:    true,
-		HNSWM:          16,
-		HNSWEfC:        200,
-		RerankSize:     128,
-		UseParallel:    true,
+		MaxFlatSize: 5000, // Use approximate search much earlier for speed
+		NList:       4096,
+		NProbe:      8,
+		M:           64,
+		NBits:       8,
+		HNSWEnabled: true,
+		HNSWM:       16,
+		HNSWEfC:     200,
+		RerankSize:  128,
+		UseParallel: true,
 	}
 }
 
@@ -93,7 +93,7 @@ func NewEngine(config Config) *Engine {
 	if config.RerankSize <= 0 {
 		config.RerankSize = 128
 	}
-	
+
 	return &Engine{
 		config:     config,
 		flatIndex:  flat.NewFlatIndex(config.MaxFlatSize),
@@ -107,25 +107,25 @@ func NewEngine(config Config) *Engine {
 func (e *Engine) Train(vectors []simd.Vec512, scales []float32) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	n := len(vectors)
 	if n == 0 {
 		return fmt.Errorf("no training data provided")
 	}
-	
+
 	// For small datasets, no training needed
 	if n <= e.config.MaxFlatSize {
 		e.trained = true
 		return nil
 	}
-	
+
 	fmt.Printf("Training index on %d vectors...\n", n)
 	start := time.Now()
-	
+
 	// Initialize IVF
 	e.ivfIndex = ivf.NewIVFIndex(e.config.NList, e.config.NProbe)
 	e.ivfIndex.Train(vectors, scales)
-	
+
 	// Train PQ on residuals (only if we have enough data)
 	if e.config.M > 0 && n >= e.config.M*256 {
 		// Convert int8 to float32 for PQ training
@@ -133,24 +133,24 @@ func (e *Engine) Train(vectors []simd.Vec512, scales []float32) error {
 		for i := range vectors {
 			floatVectors[i] = dequantizeVector(&vectors[i], scales[i])
 		}
-		
+
 		e.pq = pq.NewProductQuantizer(512, e.config.M, 256)
 		e.pq.Train(floatVectors)
 	}
-	
+
 	// Build HNSW on centroids if enabled
 	if e.config.HNSWEnabled && e.ivfIndex != nil {
 		e.hnswRouter = hnsw.NewHNSW(e.config.HNSWM, e.config.HNSWEfC)
-		
+
 		// Add centroids to HNSW
 		for i, centroid := range e.ivfIndex.KMeans.Centroids {
 			e.hnswRouter.Add(centroid, e.ivfIndex.KMeans.Scales[i], i)
 		}
 	}
-	
+
 	e.trained = true
 	fmt.Printf("Training completed in %v\n", time.Since(start))
-	
+
 	return nil
 }
 
@@ -158,19 +158,19 @@ func (e *Engine) Train(vectors []simd.Vec512, scales []float32) error {
 func (e *Engine) Add(vec simd.Vec512, scale float32, id int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	if !e.trained {
 		// Auto-train on first batch if needed
 		if e.size == 0 {
 			e.trained = true
 		}
 	}
-	
+
 	// Store raw vector for reranking
 	e.rawVectors = append(e.rawVectors, vec)
 	e.scales = append(e.scales, scale)
 	e.ids = append(e.ids, id)
-	
+
 	// Add to appropriate index
 	if e.size < e.config.MaxFlatSize {
 		e.flatIndex.Add(vec, scale, id)
@@ -178,9 +178,9 @@ func (e *Engine) Add(vec simd.Vec512, scale float32, id int) error {
 		if e.ivfIndex == nil {
 			return fmt.Errorf("index not trained for large dataset")
 		}
-		
+
 		e.ivfIndex.Add(vec, scale, id)
-		
+
 		// Encode with PQ if enabled
 		if e.pq != nil && e.pq.Trained {
 			floatVec := dequantizeVector(&vec, scale)
@@ -188,7 +188,7 @@ func (e *Engine) Add(vec simd.Vec512, scale float32, id int) error {
 			e.pqCodes = append(e.pqCodes, codes)
 		}
 	}
-	
+
 	e.size++
 	return nil
 }
@@ -197,12 +197,12 @@ func (e *Engine) Add(vec simd.Vec512, scale float32, id int) error {
 func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	n := len(vectors)
 	if n == 0 {
 		return nil
 	}
-	
+
 	// Auto-train if needed
 	if !e.trained && e.size == 0 {
 		if n > e.config.MaxFlatSize {
@@ -217,12 +217,12 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 			e.trained = true
 		}
 	}
-	
+
 	// Store raw vectors
 	e.rawVectors = append(e.rawVectors, vectors...)
 	e.scales = append(e.scales, scales...)
 	e.ids = append(e.ids, ids...)
-	
+
 	// Add to index
 	if e.size+n <= e.config.MaxFlatSize {
 		e.flatIndex.AddBatch(vectors, scales, ids)
@@ -230,9 +230,9 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 		if e.ivfIndex == nil {
 			return fmt.Errorf("index not trained for large dataset")
 		}
-		
+
 		e.ivfIndex.AddBatch(vectors, scales, ids)
-		
+
 		// Batch encode with PQ
 		if e.pq != nil && e.pq.Trained {
 			floatVectors := make([][]float32, n)
@@ -243,7 +243,7 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 			e.pqCodes = append(e.pqCodes, codes...)
 		}
 	}
-	
+
 	e.size += n
 	return nil
 }
@@ -252,11 +252,11 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	if e.size == 0 {
 		return nil, nil
 	}
-	
+
 	// Use flat index for small datasets
 	if e.size <= e.config.MaxFlatSize {
 		var flatResults []flat.SearchResult
@@ -265,7 +265,7 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 		} else {
 			flatResults = e.flatIndex.SearchTopK(query, k)
 		}
-		
+
 		// Convert results
 		results := make([]SearchResult, len(flatResults))
 		for i, r := range flatResults {
@@ -277,12 +277,12 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 		}
 		return results, nil
 	}
-	
+
 	// Use IVF-HNSW-PQ for large datasets
 	if e.ivfIndex == nil {
 		return nil, fmt.Errorf("index not trained")
 	}
-	
+
 	// Step 1: Route to clusters using HNSW or k-means
 	var clusters []int
 	if e.hnswRouter != nil {
@@ -296,10 +296,10 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 		// Fall back to k-means
 		clusters = e.ivfIndex.KMeans.PredictMultiple(query, e.config.NProbe)
 	}
-	
+
 	// Step 2: Collect candidates from selected clusters
 	candidates := e.collectCandidates(clusters)
-	
+
 	// Step 3: Score with PQ if available, otherwise use exact distance
 	var topCandidates []int
 	if e.pq != nil && e.pq.Trained {
@@ -307,17 +307,17 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 	} else {
 		topCandidates = e.scoreExactCandidates(query, candidates, e.config.RerankSize)
 	}
-	
+
 	// Step 4: Rerank top candidates with exact SIMD distance
 	results := e.rerankCandidates(query, topCandidates, k)
-	
+
 	return results, nil
 }
 
 // collectCandidates collects vector indices from selected clusters
 func (e *Engine) collectCandidates(clusters []int) []int {
 	candidateSet := make(map[int]bool)
-	
+
 	for _, cluster := range clusters {
 		if cluster >= 0 && cluster < len(e.ivfIndex.Lists) {
 			e.ivfIndex.ListLocks[cluster].RLock()
@@ -327,12 +327,12 @@ func (e *Engine) collectCandidates(clusters []int) []int {
 			e.ivfIndex.ListLocks[cluster].RUnlock()
 		}
 	}
-	
+
 	candidates := make([]int, 0, len(candidateSet))
 	for idx := range candidateSet {
 		candidates = append(candidates, idx)
 	}
-	
+
 	return candidates
 }
 
@@ -341,19 +341,19 @@ func (e *Engine) scorePQCandidates(query *simd.Vec512, candidates []int, R int) 
 	if len(candidates) == 0 {
 		return nil
 	}
-	
+
 	// Dequantize query for PQ
 	queryFloat := dequantizeVector(query, 1.0)
-	
+
 	// Compute ADC table
 	adcTable := e.pq.ComputeADCTable(queryFloat)
-	
+
 	// Score all candidates
 	type scorePair struct {
 		idx   int
 		score float32
 	}
-	
+
 	scores := make([]scorePair, len(candidates))
 	for i, idx := range candidates {
 		scores[i] = scorePair{
@@ -361,12 +361,12 @@ func (e *Engine) scorePQCandidates(query *simd.Vec512, candidates []int, R int) 
 			score: adcTable.Distance(e.pqCodes[idx]),
 		}
 	}
-	
+
 	// Partial sort to get top R
 	if R > len(scores) {
 		R = len(scores)
 	}
-	
+
 	for i := 0; i < R; i++ {
 		minIdx := i
 		for j := i + 1; j < len(scores); j++ {
@@ -376,13 +376,13 @@ func (e *Engine) scorePQCandidates(query *simd.Vec512, candidates []int, R int) 
 		}
 		scores[i], scores[minIdx] = scores[minIdx], scores[i]
 	}
-	
+
 	// Extract top R indices
 	topIndices := make([]int, R)
 	for i := 0; i < R; i++ {
 		topIndices[i] = scores[i].idx
 	}
-	
+
 	return topIndices
 }
 
@@ -391,12 +391,12 @@ func (e *Engine) scoreExactCandidates(query *simd.Vec512, candidates []int, R in
 	if len(candidates) == 0 {
 		return nil
 	}
-	
+
 	type scorePair struct {
 		idx   int
 		score int32
 	}
-	
+
 	scores := make([]scorePair, len(candidates))
 	for i, idx := range candidates {
 		scores[i] = scorePair{
@@ -404,12 +404,12 @@ func (e *Engine) scoreExactCandidates(query *simd.Vec512, candidates []int, R in
 			score: simd.Dot512(query, &e.rawVectors[idx]),
 		}
 	}
-	
+
 	// Partial sort to get top R (higher score is better for dot product)
 	if R > len(scores) {
 		R = len(scores)
 	}
-	
+
 	for i := 0; i < R; i++ {
 		maxIdx := i
 		for j := i + 1; j < len(scores); j++ {
@@ -419,12 +419,12 @@ func (e *Engine) scoreExactCandidates(query *simd.Vec512, candidates []int, R in
 		}
 		scores[i], scores[maxIdx] = scores[maxIdx], scores[i]
 	}
-	
+
 	topIndices := make([]int, R)
 	for i := 0; i < R; i++ {
 		topIndices[i] = scores[i].idx
 	}
-	
+
 	return topIndices
 }
 
@@ -433,12 +433,12 @@ func (e *Engine) rerankCandidates(query *simd.Vec512, candidates []int, k int) [
 	if len(candidates) == 0 {
 		return nil
 	}
-	
+
 	type scorePair struct {
 		idx   int
 		score int32
 	}
-	
+
 	scores := make([]scorePair, len(candidates))
 	for i, idx := range candidates {
 		scores[i] = scorePair{
@@ -446,7 +446,7 @@ func (e *Engine) rerankCandidates(query *simd.Vec512, candidates []int, k int) [
 			score: simd.Dot512(query, &e.rawVectors[idx]),
 		}
 	}
-	
+
 	// Sort by score (descending)
 	for i := 0; i < len(scores); i++ {
 		for j := i + 1; j < len(scores); j++ {
@@ -455,12 +455,12 @@ func (e *Engine) rerankCandidates(query *simd.Vec512, candidates []int, k int) [
 			}
 		}
 	}
-	
+
 	// Return top k
 	if k > len(scores) {
 		k = len(scores)
 	}
-	
+
 	results := make([]SearchResult, k)
 	for i := 0; i < k; i++ {
 		idx := scores[i].idx
@@ -470,7 +470,7 @@ func (e *Engine) rerankCandidates(query *simd.Vec512, candidates []int, k int) [
 			Distance: float32(-scores[i].score),
 		}
 	}
-	
+
 	return results
 }
 
@@ -485,13 +485,13 @@ type SearchResult struct {
 func (e *Engine) Stats() IndexStats {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	stats := IndexStats{
 		Size:        e.size,
 		IndexType:   "flat",
 		MemoryUsage: int64(e.size * 512), // Approximate
 	}
-	
+
 	if e.size > e.config.MaxFlatSize {
 		stats.IndexType = "ivf-hnsw-pq"
 		if e.ivfIndex != nil {
@@ -507,7 +507,7 @@ func (e *Engine) Stats() IndexStats {
 			stats.HNSWEnabled = true
 		}
 	}
-	
+
 	return stats
 }
 

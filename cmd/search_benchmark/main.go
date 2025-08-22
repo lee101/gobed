@@ -25,7 +25,7 @@ var baseTexts = []string{
 	"PostgreSQL is a powerful, open-source relational database management system with advanced features",
 	"Redis is an in-memory data structure store used as a database, cache, and message broker",
 	"Git is a distributed version control system for tracking changes in source code during development",
-	
+
 	// Science & Research
 	"Quantum computing leverages quantum mechanical phenomena to process information in fundamentally new ways",
 	"CRISPR gene editing technology allows precise modifications to DNA sequences in living organisms",
@@ -37,7 +37,7 @@ var baseTexts = []string{
 	"DNA stores genetic information using four nucleotide bases: adenine, guanine, cytosine, and thymine",
 	"Evolution by natural selection explains the diversity of life through inherited variations",
 	"The human brain contains approximately 86 billion neurons connected by trillions of synapses",
-	
+
 	// Business & Finance
 	"Blockchain technology provides a decentralized, immutable ledger for recording transactions",
 	"Cryptocurrency is a digital or virtual currency secured by cryptography and distributed networks",
@@ -49,7 +49,7 @@ var baseTexts = []string{
 	"Digital marketing uses online channels to promote products and reach target audiences",
 	"E-commerce enables buying and selling goods and services over the internet",
 	"Data analytics helps organizations make informed decisions by analyzing large datasets",
-	
+
 	// Health & Medicine
 	"Vaccines stimulate the immune system to develop immunity against specific diseases",
 	"Antibiotics are medications that destroy or slow down the growth of bacteria",
@@ -61,7 +61,7 @@ var baseTexts = []string{
 	"Cancer occurs when abnormal cells divide uncontrollably and invade other tissues",
 	"The immune system protects the body against disease-causing microorganisms and foreign substances",
 	"Nutrition is the process of providing the body with food necessary for health and growth",
-	
+
 	// Education & Learning
 	"Online learning platforms provide educational content accessible from anywhere with internet",
 	"Critical thinking involves analyzing information objectively to form reasoned judgments",
@@ -78,10 +78,10 @@ var baseTexts = []string{
 // generateCorpus creates a large corpus by generating variations
 func generateCorpus(targetSize int) []string {
 	corpus := make([]string, 0, targetSize)
-	
+
 	// Add original texts
 	corpus = append(corpus, baseTexts...)
-	
+
 	// Generate variations
 	variations := []string{
 		"Understanding", "Exploring", "Introduction to", "Advanced", "Modern",
@@ -89,40 +89,40 @@ func generateCorpus(targetSize int) []string {
 		"Comprehensive guide to", "The science of", "The art of", "Mastering",
 		"Deep dive into", "Overview of", "Principles of", "The future of",
 	}
-	
+
 	domains := []string{
 		"in production", "for beginners", "for experts", "in practice",
 		"at scale", "in the cloud", "for enterprise", "for startups",
 		"in 2024", "best practices", "case studies", "real-world applications",
 		"industry trends", "research perspectives", "technical details",
 	}
-	
+
 	// Generate combinations
 	for len(corpus) < targetSize {
 		base := baseTexts[rand.Intn(len(baseTexts))]
-		
+
 		// Sometimes add prefix
 		if rand.Float32() < 0.5 {
 			prefix := variations[rand.Intn(len(variations))]
 			base = prefix + " " + strings.ToLower(base)
 		}
-		
+
 		// Sometimes add suffix
 		if rand.Float32() < 0.5 {
 			suffix := domains[rand.Intn(len(domains))]
 			base = base + " " + suffix
 		}
-		
+
 		// Sometimes combine two topics
 		if rand.Float32() < 0.3 && len(corpus) < targetSize-1 {
 			other := baseTexts[rand.Intn(len(baseTexts))]
 			combined := base + " and " + strings.ToLower(other)
 			corpus = append(corpus, combined)
 		}
-		
+
 		corpus = append(corpus, base)
 	}
-	
+
 	return corpus[:targetSize]
 }
 
@@ -175,15 +175,15 @@ func main() {
 	// Benchmark indexing
 	fmt.Println("=== INDEXING BENCHMARK ===")
 	fmt.Printf("Indexing %d documents...\n", corpusSize)
-	
+
 	batchSize := 1000
 	startTime = time.Now()
 	indexingStart := time.Now()
-	
+
 	for i := 0; i < corpusSize; i += batchSize {
 		end := min(i+batchSize, corpusSize)
 		batch := corpus[i:end]
-		
+
 		batchStart := time.Now()
 		_, err := engine.IndexBatch(batch)
 		if err != nil {
@@ -191,19 +191,19 @@ func main() {
 			continue
 		}
 		batchTime := time.Since(batchStart)
-		
+
 		// Progress update every 10k
-		if (i+batchSize) % 10000 == 0 {
+		if (i+batchSize)%10000 == 0 {
 			elapsed := time.Since(indexingStart)
 			docsPerSec := float64(i+batchSize) / elapsed.Seconds()
-			fmt.Printf("  Indexed %d/%d documents (%.0f docs/sec, batch: %v)\n", 
+			fmt.Printf("  Indexed %d/%d documents (%.0f docs/sec, batch: %v)\n",
 				min(i+batchSize, corpusSize), corpusSize, docsPerSec, batchTime)
 		}
 	}
-	
+
 	totalIndexTime := time.Since(indexingStart)
 	indexingThroughput := float64(corpusSize) / totalIndexTime.Seconds()
-	
+
 	fmt.Printf("\n✓ Indexing completed in %v\n", totalIndexTime)
 	fmt.Printf("  Throughput: %.0f documents/second\n", indexingThroughput)
 	fmt.Printf("  Average: %.2f ms/document\n\n", float64(totalIndexTime.Milliseconds())/float64(corpusSize))
@@ -236,18 +236,18 @@ func main() {
 	for i, bq := range benchmarkQueries {
 		fmt.Printf("Query %d: \"%s\"\n", i+1, bq.query)
 		fmt.Printf("Category: %s\n", bq.description)
-		
+
 		// Measure search time
 		searchStart := time.Now()
 		results, err := engine.Search(bq.query, k)
 		searchTime := time.Since(searchStart)
 		totalSearchTime += searchTime
-		
+
 		if err != nil {
 			log.Printf("Search failed: %v", err)
 			continue
 		}
-		
+
 		fmt.Printf("Search time: %v\n", searchTime)
 		fmt.Println("Top 5 results:")
 		for j, result := range results {
@@ -281,33 +281,33 @@ func main() {
 	// Interactive search demo
 	fmt.Println("\n=== INTERACTIVE SEARCH ===")
 	fmt.Println("Enter your search queries (or 'quit' to exit):")
-	
+
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("\nQuery> ")
 		if !scanner.Scan() {
 			break
 		}
-		
+
 		query := strings.TrimSpace(scanner.Text())
 		if query == "quit" || query == "exit" || query == "q" {
 			break
 		}
-		
+
 		if query == "" {
 			continue
 		}
-		
+
 		// Search
 		searchStart := time.Now()
 		results, err := engine.Search(query, 10)
 		searchTime := time.Since(searchStart)
-		
+
 		if err != nil {
 			fmt.Printf("Search error: %v\n", err)
 			continue
 		}
-		
+
 		fmt.Printf("\nResults for '%s' (found in %v):\n", query, searchTime)
 		for i, result := range results {
 			// Show more of the text in interactive mode

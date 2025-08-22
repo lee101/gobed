@@ -109,16 +109,16 @@ func benchmarkCPUParallel(model *gobed.EmbeddingModel, docs []string) map[int]ti
 		}
 
 		fmt.Printf("\nTesting with %d workers:\n", workers)
-		
+
 		engine := gobed.NewSearchEngine(model)
-		
+
 		start := time.Now()
 		indexParallelCPU(engine, docs, workers)
 		elapsed := time.Since(start)
 
 		results[workers] = elapsed
-		
-		fmt.Printf("  Time: %v (%.0f docs/sec)\n", 
+
+		fmt.Printf("  Time: %v (%.0f docs/sec)\n",
 			elapsed, float64(len(docs))/elapsed.Seconds())
 	}
 
@@ -141,7 +141,7 @@ func indexParallelCPU(engine *gobed.SearchEngine, docs []string, numWorkers int)
 		wg.Add(1)
 		go func(chunk []string) {
 			defer wg.Done()
-			
+
 			// Process chunk (simulated - would use engine's methods)
 			// In real implementation, would use engine.IndexBatch(chunk)
 			_ = chunk
@@ -157,7 +157,7 @@ func benchmarkGPU(model *gobed.EmbeddingModel, docs []string) time.Duration {
 
 	// Check if GPU would be available
 	gpuAvailable := runtime.GOOS != "darwin"
-	
+
 	if !gpuAvailable {
 		fmt.Println("⚠️  GPU not available on this system")
 		return 0
@@ -166,22 +166,22 @@ func benchmarkGPU(model *gobed.EmbeddingModel, docs []string) time.Duration {
 	// Simulate GPU performance (typically 10-50x faster for batch operations)
 	// Real GPU would process entire batch in parallel
 	simulatedGPUSpeedup := 10.0
-	
+
 	// Simulate batch processing time
 	start := time.Now()
-	
+
 	// GPU processes in large batches
 	batchSize := 1000
 	numBatches := (len(docs) + batchSize - 1) / batchSize
-	
+
 	// Simulate GPU processing time
 	baseTime := time.Duration(float64(len(docs)) * 0.5 * float64(time.Millisecond))
 	gpuTime := time.Duration(float64(baseTime) / simulatedGPUSpeedup)
-	
+
 	time.Sleep(gpuTime) // Simulate GPU processing
-	
+
 	elapsed := time.Since(start)
-	
+
 	fmt.Printf("✓ Indexed %d documents in %v (simulated)\n", len(docs), elapsed)
 	fmt.Printf("✓ Throughput: %.0f docs/sec\n", float64(len(docs))/elapsed.Seconds())
 	fmt.Printf("✓ Batches: %d × %d docs\n", numBatches, batchSize)
@@ -192,21 +192,21 @@ func benchmarkGPU(model *gobed.EmbeddingModel, docs []string) time.Duration {
 func printComparison(size int, sequential, async time.Duration, parallel map[int]time.Duration, gpu time.Duration) {
 	fmt.Printf("\n📈 Performance Comparison (%d documents)\n", size)
 	fmt.Println("=========================================")
-	
+
 	fmt.Println("\n| Method              | Time        | Speedup | Docs/sec |")
 	fmt.Println("|---------------------|-------------|---------|----------|")
-	
+
 	// Sequential (baseline)
 	fmt.Printf("| Sequential          | %11v | %7s | %8.0f |\n",
 		sequential, "1.00x", float64(size)/sequential.Seconds())
-	
+
 	// Async
 	if async > 0 {
 		speedup := float64(sequential) / float64(async)
 		fmt.Printf("| Async (4 workers)   | %11v | %6.2fx | %8.0f |\n",
 			async, speedup, float64(size)/async.Seconds())
 	}
-	
+
 	// Parallel CPU
 	for workers, elapsed := range parallel {
 		if elapsed > 0 {
@@ -215,37 +215,37 @@ func printComparison(size int, sequential, async time.Duration, parallel map[int
 				workers, elapsed, speedup, float64(size)/elapsed.Seconds())
 		}
 	}
-	
+
 	// GPU
 	if gpu > 0 {
 		speedup := float64(sequential) / float64(gpu)
 		fmt.Printf("| GPU (simulated)     | %11v | %6.2fx | %8.0f |\n",
 			gpu, speedup, float64(size)/gpu.Seconds())
 	}
-	
+
 	// Find best performer
 	fmt.Println("\n🏆 Best Performance:")
-	
+
 	best := sequential
 	bestMethod := "Sequential"
-	
+
 	if async > 0 && async < best {
 		best = async
 		bestMethod = "Async"
 	}
-	
+
 	for workers, elapsed := range parallel {
 		if elapsed > 0 && elapsed < best {
 			best = elapsed
 			bestMethod = fmt.Sprintf("Parallel (%d workers)", workers)
 		}
 	}
-	
+
 	if gpu > 0 && gpu < best {
 		best = gpu
 		bestMethod = "GPU"
 	}
-	
+
 	improvement := float64(sequential) / float64(best)
 	fmt.Printf("  • Method: %s\n", bestMethod)
 	fmt.Printf("  • Time: %v\n", best)
@@ -255,7 +255,7 @@ func printComparison(size int, sequential, async time.Duration, parallel map[int
 
 func generateDocuments(n int) []string {
 	docs := make([]string, n)
-	
+
 	templates := []string{
 		"Advanced machine learning algorithms for data analysis in document %d",
 		"Deep neural networks and artificial intelligence systems number %d",
@@ -266,11 +266,11 @@ func generateDocuments(n int) []string {
 		"Robotics and autonomous systems development %d",
 		"Blockchain technology and decentralized applications %d",
 	}
-	
+
 	for i := 0; i < n; i++ {
 		template := templates[i%len(templates)]
 		docs[i] = fmt.Sprintf(template, i)
 	}
-	
+
 	return docs
 }

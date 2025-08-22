@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-
 	// Import the gobed package if needed
 )
 
