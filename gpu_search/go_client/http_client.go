@@ -62,11 +62,11 @@ type LoadRequest struct {
 
 // LoadResponse from loading embeddings
 type LoadResponse struct {
-	Status   string    `json:"status"`
-	Count    int       `json:"count"`
-	Shape    []int     `json:"shape"`
-	Device   string    `json:"device"`
-	MemoryMB float64   `json:"memory_mb"`
+	Status   string  `json:"status"`
+	Count    int     `json:"count"`
+	Shape    []int   `json:"shape"`
+	Device   string  `json:"device"`
+	MemoryMB float64 `json:"memory_mb"`
 }
 
 // HealthResponse from health check

@@ -37,7 +37,7 @@ const (
 type EmbeddingModel struct {
 	VocabSize       int
 	EmbedDim        int
-	weights         [][]float32          // Real safetensors weights [vocab_size, embed_dim]
+	weights         [][]float32 // Real safetensors weights [vocab_size, embed_dim]
 	referenceTokens map[string]TokenData
 	bufferPool      sync.Pool            // Thread-safe pool for embedding buffers
 	tokenizer       *tokenizer.Tokenizer // BERT tokenizer for arbitrary text
@@ -71,13 +71,13 @@ func findModelFile(filename string) (string, error) {
 		"../../model/" + filename,
 		"./model/" + filename,
 	}
-	
+
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {
 			return path, nil
 		}
 	}
-	
+
 	return "", fmt.Errorf("file not found: %s", filename)
 }
 
@@ -120,7 +120,7 @@ func LoadModel() (*EmbeddingModel, error) {
 	// Load real reference tokens (for backward compatibility)
 	tokensPath, _ := findModelFile("real_reference_tokens.json")
 	var referenceTokens map[string]TokenData
-	
+
 	if tokensPath != "" {
 		referenceTokens, err = loadReferenceTokens(tokensPath)
 		if err != nil {
@@ -139,7 +139,7 @@ func LoadModel() (*EmbeddingModel, error) {
 		tokenizer:       tk,
 		objectPool:      NewObjectPool(),
 	}
-	
+
 	// Initialize buffer pool for thread-safe embedding computation
 	model.bufferPool = sync.Pool{
 		New: func() interface{} {
@@ -229,7 +229,7 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 	// Get a buffer from the pool for thread-safe computation
 	buffer := m.bufferPool.Get().([]float32)
 	defer m.bufferPool.Put(buffer)
-	
+
 	// Reset buffer
 	for i := range buffer {
 		buffer[i] = 0
@@ -310,7 +310,7 @@ func (m *EmbeddingModel) FindMostSimilar(query string, candidates []string, limi
 
 	var results []SimilarityResult
 	var skippedCount int
-	
+
 	for _, candidate := range candidates {
 		candEmb, err := m.Encode(candidate)
 		if err != nil {
@@ -329,7 +329,7 @@ func (m *EmbeddingModel) FindMostSimilar(query string, candidates []string, limi
 			Similarity: sim,
 		})
 	}
-	
+
 	if skippedCount > 5 {
 		fmt.Printf("Warning: skipped %d total texts that couldn't be encoded\n", skippedCount)
 	}

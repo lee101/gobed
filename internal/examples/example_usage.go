@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+
+	"github.com/lee101/gobed"
 	// Import the gobed package if needed
 )
 

@@ -8,7 +8,7 @@ type SearchPreset int
 const (
 	// FastPreset prioritizes speed for small datasets (<50K vectors)
 	FastPreset SearchPreset = iota
-	// BalancedPreset balances speed and accuracy for medium datasets (50K-500K vectors)  
+	// BalancedPreset balances speed and accuracy for medium datasets (50K-500K vectors)
 	BalancedPreset
 	// AccuratePreset prioritizes accuracy for large datasets (>500K vectors)
 	AccuratePreset
@@ -36,12 +36,12 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 		return search.Config{
 			MaxFlatSize: 1000,
 			NList:       min(256, estimatedSize/50), // Few clusters
-			NProbe:      4,                           // Minimal probes
+			NProbe:      4,                          // Minimal probes
 			HNSWEnabled: false,                      // Skip graph for simplicity
 			RerankSize:  50,                         // Small rerank
 			UseParallel: true,
 		}
-		
+
 	case BalancedPreset:
 		// Balance between speed and accuracy
 		if estimatedSize <= 10000 {
@@ -64,7 +64,7 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 			RerankSize:  100,
 			UseParallel: true,
 		}
-		
+
 	case AccuratePreset:
 		// Prioritize accuracy over speed
 		return search.Config{
@@ -79,7 +79,7 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 			RerankSize:  200, // Large rerank for better accuracy
 			UseParallel: true,
 		}
-		
+
 	default:
 		// Default to balanced
 		return GetSearchConfig(BalancedPreset, estimatedSize)

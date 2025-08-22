@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/lee101/gobed"
 	// Import the gobed package if needed
 )
 

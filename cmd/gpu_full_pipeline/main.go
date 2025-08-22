@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sugarme/gotch"

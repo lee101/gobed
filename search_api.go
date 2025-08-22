@@ -38,7 +38,7 @@ type SearchEngine struct {
 type SearchConfig struct {
 	// Automatic mode - let the engine choose optimal settings
 	AutoMode bool
-	
+
 	// Preset configuration (when AutoMode is true)
 	Preset SearchPreset // Use predefined configuration preset
 

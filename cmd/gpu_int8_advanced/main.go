@@ -12,7 +12,6 @@ import (
 	"unsafe"
 
 	"github.com/sugarme/gotch"
-	"github.com/sugarme/gotch/nn"
 	"github.com/sugarme/gotch/ts"
 )
 

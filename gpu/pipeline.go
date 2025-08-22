@@ -4,7 +4,6 @@ package gpu
 import (
 	"fmt"
 	"net/http"
-	"runtime"
 	"sync"
 	"time"
 
@@ -13,12 +12,12 @@ import (
 
 // Constants for configuration
 const (
-	DefaultBatchSize        = 128
-	DefaultTimeout          = 30 * time.Second
-	MaxConcurrentWorkers    = 8
-	StreamingFlushInterval  = 1 * time.Second
-	EmbeddingDimension      = 512
-	BytesPerEmbedding       = 512
+	DefaultBatchSize       = 128
+	DefaultTimeout         = 30 * time.Second
+	MaxConcurrentWorkers   = 8
+	StreamingFlushInterval = 1 * time.Second
+	EmbeddingDimension     = 512
+	BytesPerEmbedding      = 512
 )
 
 // Pipeline provides end-to-end GPU acceleration from text to search
@@ -395,7 +394,7 @@ func Float32ToInt8(input []float32) []int8 {
 		// Return zero vector if input is all zeros
 		return output
 	}
-	
+
 	scale := float32(127.0) / maxAbs
 	for i, v := range input {
 		scaled := v * scale

@@ -4,12 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., v1.0.0)'
-        required: true
-        type: string
 
 env:
   GO_VERSION: '1.21'
@@ -31,22 +25,17 @@ jobs:
     - name: Get version
       id: get_version
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="${{ github.event.inputs.version }}"
-        else
-          VERSION=${GITHUB_REF#refs/tags/}
-        fi
+        VERSION=${GITHUB_REF#refs/tags/}
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
     
     - name: Generate changelog
       id: changelog
       run: |
-        # Generate changelog from git history
-        echo "## What's Changed" > changelog.md
-        git log --pretty=format:"* %s (%h)" $(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD >> changelog.md
+        # Simple changelog from recent commits
+        echo "## Changes in ${{ steps.get_version.outputs.version }}" > changelog.md
         echo "" >> changelog.md
-        echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo 'initial')...${{ steps.get_version.outputs.version }}" >> changelog.md
+        git log --pretty=format:"* %s" -10 >> changelog.md
     
     - name: Create Release
       id: create_release
