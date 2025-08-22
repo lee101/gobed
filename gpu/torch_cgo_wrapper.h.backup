@@ -1,0 +1,41 @@
+// torch_cgo_wrapper.h - Direct LibTorch C wrapper for Go
+#ifndef TORCH_CGO_WRAPPER_H
+#define TORCH_CGO_WRAPPER_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Opaque pointer types for Go
+typedef void* TorchModule;
+typedef void* TorchTensor;
+
+// Error handling
+typedef struct {
+    int code;
+    char* message;
+} TorchError;
+
+// Module management
+TorchModule torch_load_module(const char* path, TorchError* error);
+void torch_free_module(TorchModule module);
+
+// Tensor operations
+TorchTensor torch_create_int8_tensor(const char* data, long* shape, int ndim, TorchError* error);
+void torch_free_tensor(TorchTensor tensor);
+
+// Search operations  
+int torch_load_database(TorchModule module, TorchTensor embeddings, TorchError* error);
+int torch_search(TorchModule module, TorchTensor query, int k, float* scores, int* indices, TorchError* error);
+int torch_batch_search(TorchModule module, TorchTensor queries, int k, float* scores, int* indices, TorchError* error);
+
+// Utility functions
+int torch_cuda_available();
+int torch_cuda_device_count();
+void torch_set_device(int device_id);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TORCH_CGO_WRAPPER_H

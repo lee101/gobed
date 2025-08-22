@@ -1,0 +1,350 @@
+// torch_native.go - Native LibTorch integration via CGO
+package gpu
+
+/*
+#cgo CPPFLAGS: -I${SRCDIR} -I/home/lee/code/gobed/libtorch/include -I/home/lee/code/gobed/libtorch/include/torch/csrc/api/include -std=c++17
+#cgo LDFLAGS: -L${SRCDIR} -L/home/lee/code/gobed/libtorch/lib -ltorch_cgo_wrapper -ltorch -ltorch_cpu -lc10 -lstdc++
+#include "torch_cgo_wrapper.h"
+#include <stdlib.h>
+*/
+import "C"
+import (
+	"fmt"
+	"path/filepath"
+	"unsafe"
+
+	"github.com/lee101/gobed"
+)
+
+// NativeTorchClient provides pure Go LibTorch integration
+type NativeTorchClient struct {
+	module C.TorchModule
+}
+
+// NewNativeTorchClient creates a new native LibTorch client
+func NewNativeTorchClient(modelPath string) (*NativeTorchClient, error) {
+	if !isCudaAvailable() {
+		return nil, fmt.Errorf("CUDA not available for LibTorch")
+	}
+
+	cPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cPath))
+
+	var err C.TorchError
+	module := C.torch_load_module(cPath, &err)
+	
+	if err.code != 0 {
+		errorMsg := C.GoString(err.message)
+		C.free(unsafe.Pointer(err.message))
+		return nil, fmt.Errorf("failed to load module: %s", errorMsg)
+	}
+
+	if module == nil {
+		return nil, fmt.Errorf("failed to load module: unknown error")
+	}
+
+	fmt.Printf("✅ Loaded native LibTorch module: %s\n", modelPath)
+	
+	return &NativeTorchClient{
+		module: module,
+	}, nil
+}
+
+// Close releases the LibTorch module
+func (c *NativeTorchClient) Close() error {
+	if c.module != nil {
+		C.torch_free_module(c.module)
+		c.module = nil
+	}
+	return nil
+}
+
+// LoadDatabase loads embeddings into the GPU module
+func (c *NativeTorchClient) LoadDatabase(embeddings [][]int8) error {
+	if len(embeddings) == 0 {
+		return fmt.Errorf("empty embeddings")
+	}
+
+	numVectors := len(embeddings)
+	dims := len(embeddings[0])
+
+	// Flatten embeddings to contiguous memory
+	data := make([]int8, numVectors*dims)
+	for i, emb := range embeddings {
+		copy(data[i*dims:(i+1)*dims], emb)
+	}
+
+	// Create tensor
+	shape := []C.long{C.long(numVectors), C.long(dims)}
+	
+	var err C.TorchError
+	tensor := C.torch_create_int8_tensor(
+		(*C.char)(unsafe.Pointer(&data[0])),
+		&shape[0],
+		2,
+		&err,
+	)
+	
+	if err.code != 0 {
+		errorMsg := C.GoString(err.message)
+		C.free(unsafe.Pointer(err.message))
+		return fmt.Errorf("failed to create tensor: %s", errorMsg)
+	}
+	
+	defer C.torch_free_tensor(tensor)
+
+	// Load to module
+	success := C.torch_load_database(c.module, tensor, &err)
+	if err.code != 0 {
+		errorMsg := C.GoString(err.message)
+		C.free(unsafe.Pointer(err.message))
+		return fmt.Errorf("failed to load database: %s", errorMsg)
+	}
+
+	if success == 0 {
+		return fmt.Errorf("failed to load database")
+	}
+
+	fmt.Printf("📚 Loaded %d vectors (%d dims) to native LibTorch\n", numVectors, dims)
+	return nil
+}
+
+// Search performs similarity search
+func (c *NativeTorchClient) Search(query []int8, k int) (*SearchResponse, error) {
+	// Create query tensor
+	shape := []C.long{C.long(len(query))}
+	
+	var err C.TorchError
+	queryTensor := C.torch_create_int8_tensor(
+		(*C.char)(unsafe.Pointer(&query[0])),
+		&shape[0],
+		1,
+		&err,
+	)
+	
+	if err.code != 0 {
+		errorMsg := C.GoString(err.message)
+		C.free(unsafe.Pointer(err.message))
+		return nil, fmt.Errorf("failed to create query tensor: %s", errorMsg)
+	}
+	
+	defer C.torch_free_tensor(queryTensor)
+
+	// Prepare output arrays
+	scores := make([]float32, k)
+	indices := make([]int, k)
+
+	// Perform search
+	actualK := C.torch_search(
+		c.module,
+		queryTensor,
+		C.int(k),
+		(*C.float)(unsafe.Pointer(&scores[0])),
+		(*C.int)(unsafe.Pointer(&indices[0])),
+		&err,
+	)
+
+	if err.code != 0 {
+		errorMsg := C.GoString(err.message)
+		C.free(unsafe.Pointer(err.message))
+		return nil, fmt.Errorf("search failed: %s", errorMsg)
+	}
+
+	if actualK <= 0 {
+		return &SearchResponse{IDs: []int{}, Scores: []float32{}}, nil
+	}
+
+	// Trim to actual results
+	k = int(actualK)
+	return &SearchResponse{
+		IDs:    indices[:k],
+		Scores: scores[:k],
+	}, nil
+}
+
+// BatchSearch performs batch similarity search
+func (c *NativeTorchClient) BatchSearch(queries [][]int8, k int) (*BatchSearchResponse, error) {
+	if len(queries) == 0 {
+		return &BatchSearchResponse{}, nil
+	}
+
+	batchSize := len(queries)
+	dims := len(queries[0])
+
+	// Flatten queries to contiguous memory
+	data := make([]int8, batchSize*dims)
+	for i, query := range queries {
+		copy(data[i*dims:(i+1)*dims], query)
+	}
+
+	// Create queries tensor
+	shape := []C.long{C.long(batchSize), C.long(dims)}
+	
+	var err C.TorchError
+	queriesTensor := C.torch_create_int8_tensor(
+		(*C.char)(unsafe.Pointer(&data[0])),
+		&shape[0],
+		2,
+		&err,
+	)
+	
+	if err.code != 0 {
+		errorMsg := C.GoString(err.message)
+		C.free(unsafe.Pointer(err.message))
+		return nil, fmt.Errorf("failed to create queries tensor: %s", errorMsg)
+	}
+	
+	defer C.torch_free_tensor(queriesTensor)
+
+	// Prepare output arrays
+	totalResults := batchSize * k
+	scores := make([]float32, totalResults)
+	indices := make([]int, totalResults)
+
+	// Perform batch search
+	actualResults := C.torch_batch_search(
+		c.module,
+		queriesTensor,
+		C.int(k),
+		(*C.float)(unsafe.Pointer(&scores[0])),
+		(*C.int)(unsafe.Pointer(&indices[0])),
+		&err,
+	)
+
+	if err.code != 0 {
+		errorMsg := C.GoString(err.message)
+		C.free(unsafe.Pointer(err.message))
+		return nil, fmt.Errorf("batch search failed: %s", errorMsg)
+	}
+
+	if actualResults <= 0 {
+		return &BatchSearchResponse{
+			BatchScores: make([][]float32, batchSize),
+			BatchIDs:    make([][]int, batchSize),
+		}, nil
+	}
+
+	// Reshape results
+	actualK := int(actualResults) / batchSize
+	batchScores := make([][]float32, batchSize)
+	batchIDs := make([][]int, batchSize)
+
+	for i := 0; i < batchSize; i++ {
+		start := i * actualK
+		end := start + actualK
+		batchScores[i] = scores[start:end]
+		batchIDs[i] = indices[start:end]
+	}
+
+	return &BatchSearchResponse{
+		BatchScores: batchScores,
+		BatchIDs:    batchIDs,
+	}, nil
+}
+
+// NativeTorchPipeline provides end-to-end native LibTorch pipeline
+type NativeTorchPipeline struct {
+	embedder   *gobed.EmbeddingModel
+	torchClient *NativeTorchClient
+	texts      []string
+	config     Config
+}
+
+// NewNativeTorchPipeline creates a native LibTorch pipeline
+func NewNativeTorchPipeline(config Config) (*NativeTorchPipeline, error) {
+	// Initialize CPU embedder
+	embedder, err := gobed.LoadModel()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load embedding model: %w", err)
+	}
+
+	// Initialize native LibTorch client
+	modelPath := filepath.Join(config.ModelPath, "simple_gpu_search_module.pt")
+	torchClient, err := NewNativeTorchClient(modelPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create native torch client: %w", err)
+	}
+
+	return &NativeTorchPipeline{
+		embedder:   embedder,
+		torchClient: torchClient,
+		texts:      make([]string, 0),
+		config:     config,
+	}, nil
+}
+
+// IndexTexts processes and indexes texts using native LibTorch
+func (p *NativeTorchPipeline) IndexTexts(texts []string) error {
+	if len(texts) == 0 {
+		return nil
+	}
+
+	// Generate embeddings using CPU model
+	embeddings := make([][]int8, len(texts))
+	
+	for i, text := range texts {
+		emb, err := p.embedder.Encode(text)
+		if err != nil {
+			return fmt.Errorf("failed to encode text %d: %w", i, err)
+		}
+		embeddings[i] = Float32ToInt8(emb)
+	}
+
+	// Store texts for search results
+	p.texts = append(p.texts, texts...)
+
+	// Load to native LibTorch
+	return p.torchClient.LoadDatabase(embeddings)
+}
+
+// Search performs similarity search using native LibTorch
+func (p *NativeTorchPipeline) Search(query string, k int) ([]Result, error) {
+	// Encode query
+	queryEmb, err := p.embedder.Encode(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode query: %w", err)
+	}
+
+	queryInt8 := Float32ToInt8(queryEmb)
+
+	// Search using native LibTorch
+	resp, err := p.torchClient.Search(queryInt8, k)
+	if err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
+	}
+
+	// Build results
+	results := make([]Result, len(resp.IDs))
+	for i, id := range resp.IDs {
+		if id < len(p.texts) {
+			results[i] = Result{
+				Text:  p.texts[id],
+				Score: resp.Scores[i],
+				ID:    id,
+			}
+		}
+	}
+
+	return results, nil
+}
+
+// Close releases all resources
+func (p *NativeTorchPipeline) Close() error {
+	if p.torchClient != nil {
+		return p.torchClient.Close()
+	}
+	return nil
+}
+
+// Utility functions
+func isCudaAvailable() bool {
+	return int(C.torch_cuda_available()) == 1
+}
+
+func getCudaDeviceCount() int {
+	return int(C.torch_cuda_device_count())
+}
+
+func setCudaDevice(deviceID int) {
+	C.torch_set_device(C.int(deviceID))
+}

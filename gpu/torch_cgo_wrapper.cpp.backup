@@ -1,0 +1,202 @@
+// torch_cgo_wrapper.cpp - Direct LibTorch C++ implementation for Go
+#include "torch_cgo_wrapper.h"
+#include <torch/torch.h>
+#include <torch/script.h>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <memory>
+
+// Error handling helpers
+static void set_error(TorchError* error, int code, const std::string& message) {
+    if (error) {
+        error->code = code;
+        error->message = strdup(message.c_str());
+    }
+}
+
+static void clear_error(TorchError* error) {
+    if (error) {
+        error->code = 0;
+        if (error->message) {
+            free(error->message);
+            error->message = nullptr;
+        }
+    }
+}
+
+// Module management
+extern "C" TorchModule torch_load_module(const char* path, TorchError* error) {
+    clear_error(error);
+    
+    try {
+        auto module = std::make_shared<torch::jit::script::Module>(torch::jit::load(path));
+        return static_cast<TorchModule>(new std::shared_ptr<torch::jit::script::Module>(module));
+    } catch (const std::exception& e) {
+        set_error(error, 1, std::string("Failed to load module: ") + e.what());
+        return nullptr;
+    }
+}
+
+extern "C" void torch_free_module(TorchModule module) {
+    if (module) {
+        auto* mod_ptr = static_cast<std::shared_ptr<torch::jit::script::Module>*>(module);
+        delete mod_ptr;
+    }
+}
+
+// Tensor operations
+extern "C" TorchTensor torch_create_int8_tensor(const char* data, long* shape, int ndim, TorchError* error) {
+    clear_error(error);
+    
+    try {
+        std::vector<int64_t> tensor_shape(shape, shape + ndim);
+        
+        // Calculate total elements
+        int64_t total_elements = 1;
+        for (int i = 0; i < ndim; i++) {
+            total_elements *= shape[i];
+        }
+        
+        // Create tensor from data
+        auto tensor = torch::from_blob(
+            const_cast<char*>(data),
+            tensor_shape,
+            torch::dtype(torch::kInt8)
+        ).clone(); // Clone to own the data
+        
+        return static_cast<TorchTensor>(new torch::Tensor(tensor));
+    } catch (const std::exception& e) {
+        set_error(error, 1, std::string("Failed to create tensor: ") + e.what());
+        return nullptr;
+    }
+}
+
+extern "C" void torch_free_tensor(TorchTensor tensor) {
+    if (tensor) {
+        auto* tensor_ptr = static_cast<torch::Tensor*>(tensor);
+        delete tensor_ptr;
+    }
+}
+
+// Search operations
+extern "C" int torch_load_database(TorchModule module, TorchTensor embeddings, TorchError* error) {
+    clear_error(error);
+    
+    try {
+        auto* mod_ptr = static_cast<std::shared_ptr<torch::jit::script::Module>*>(module);
+        auto* tensor_ptr = static_cast<torch::Tensor*>(embeddings);
+        
+        if (!mod_ptr || !tensor_ptr) {
+            set_error(error, 1, "Invalid module or tensor pointer");
+            return 0;
+        }
+        
+        auto result = (*mod_ptr)->run_method("load_database", *tensor_ptr);
+        return 1;
+    } catch (const std::exception& e) {
+        set_error(error, 1, std::string("Failed to load database: ") + e.what());
+        return 0;
+    }
+}
+
+extern "C" int torch_search(TorchModule module, TorchTensor query, int k, float* scores, int* indices, TorchError* error) {
+    clear_error(error);
+    
+    try {
+        auto* mod_ptr = static_cast<std::shared_ptr<torch::jit::script::Module>*>(module);
+        auto* query_ptr = static_cast<torch::Tensor*>(query);
+        
+        if (!mod_ptr || !query_ptr) {
+            set_error(error, 1, "Invalid module or query pointer");
+            return 0;
+        }
+        
+        auto output = (*mod_ptr)->run_method("search", *query_ptr, k);
+        auto output_tuple = output.toTuple();
+        
+        if (output_tuple->elements().size() != 2) {
+            set_error(error, 1, "Unexpected output format from search");
+            return 0;
+        }
+        
+        auto scores_tensor = output_tuple->elements()[0].toTensor();
+        auto indices_tensor = output_tuple->elements()[1].toTensor();
+        
+        // Copy results to output arrays
+        auto scores_accessor = scores_tensor.accessor<float, 1>();
+        auto indices_accessor = indices_tensor.accessor<int64_t, 1>();
+        
+        int actual_k = scores_tensor.size(0);
+        for (int i = 0; i < actual_k; i++) {
+            scores[i] = scores_accessor[i];
+            indices[i] = static_cast<int>(indices_accessor[i]);
+        }
+        
+        return actual_k;
+    } catch (const std::exception& e) {
+        set_error(error, 1, std::string("Search failed: ") + e.what());
+        return 0;
+    }
+}
+
+extern "C" int torch_batch_search(TorchModule module, TorchTensor queries, int k, float* scores, int* indices, TorchError* error) {
+    clear_error(error);
+    
+    try {
+        auto* mod_ptr = static_cast<std::shared_ptr<torch::jit::script::Module>*>(module);
+        auto* queries_ptr = static_cast<torch::Tensor*>(queries);
+        
+        if (!mod_ptr || !queries_ptr) {
+            set_error(error, 1, "Invalid module or queries pointer");
+            return 0;
+        }
+        
+        auto output = (*mod_ptr)->run_method("batch_search", *queries_ptr, k);
+        auto output_tuple = output.toTuple();
+        
+        if (output_tuple->elements().size() != 2) {
+            set_error(error, 1, "Unexpected output format from batch search");
+            return 0;
+        }
+        
+        auto scores_tensor = output_tuple->elements()[0].toTensor();
+        auto indices_tensor = output_tuple->elements()[1].toTensor();
+        
+        // Copy results to output arrays
+        auto scores_accessor = scores_tensor.accessor<float, 2>();
+        auto indices_accessor = indices_tensor.accessor<int64_t, 2>();
+        
+        int batch_size = scores_tensor.size(0);
+        int actual_k = scores_tensor.size(1);
+        
+        for (int i = 0; i < batch_size; i++) {
+            for (int j = 0; j < actual_k; j++) {
+                int idx = i * actual_k + j;
+                scores[idx] = scores_accessor[i][j];
+                indices[idx] = static_cast<int>(indices_accessor[i][j]);
+            }
+        }
+        
+        return batch_size * actual_k;
+    } catch (const std::exception& e) {
+        set_error(error, 1, std::string("Batch search failed: ") + e.what());
+        return 0;
+    }
+}
+
+// Utility functions
+extern "C" int torch_cuda_available() {
+    return torch::cuda::is_available() ? 1 : 0;
+}
+
+extern "C" int torch_cuda_device_count() {
+    return torch::cuda::is_available() ? static_cast<int>(torch::cuda::device_count()) : 0;
+}
+
+extern "C" void torch_set_device(int device_id) {
+    if (torch::cuda::is_available() && device_id >= 0 && device_id < torch::cuda::device_count()) {
+        // Set default device - this LibTorch version may not have set_device
+        // The device will be set when creating tensors
+    }
+}
