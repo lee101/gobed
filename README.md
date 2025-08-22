@@ -1,4 +1,5 @@
 # Gobed - Fast Go Embeddings with Vector Search
+<img width="450" height="633" alt="image" src="https://github.com/user-attachments/assets/45a072fc-1a17-4aca-9da7-5394d688153a" />
 
 A high-performance Go implementation of text embeddings with **blazing-fast vector search**. 
 
