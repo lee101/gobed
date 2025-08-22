@@ -1,0 +1,161 @@
+# golangci-lint configuration
+run:
+  timeout: 10m
+  tests: true
+  skip-dirs:
+    - vendor
+    - third_party
+    - testdata
+    - examples
+    - .github
+  skip-files:
+    - ".*_test.go"
+    - ".*\\.pb\\.go"
+    - "mock_.*\\.go"
+
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - errcheck
+    - staticcheck
+    - gosimple
+    - ineffassign
+    - unused
+    - typecheck
+    - gosec
+    - megacheck
+    - misspell
+    - nakedret
+    - prealloc
+    - exportloopref
+    - gocritic
+    - gochecknoinits
+    - gochecknoglobals
+    - gocognit
+    - godox
+    - funlen
+    - whitespace
+    - wsl
+    - goprintffuncname
+    - goconst
+    - gocyclo
+    - makezero
+    - exhaustive
+
+  disable:
+    - dupl # Disabled as we have known duplication issues
+    - lll  # Line length limit - too strict
+    - gci  # Import ordering - we use goimports
+    - godot # Comments ending in period
+    - wrapcheck # Error wrapping - too strict
+    - testpackage # Test packages - not needed
+    - paralleltest # Parallel tests - not always needed
+    - exhaustivestruct # Too strict for our use case
+    - goerr113 # Error vars - too strict
+    - nlreturn # New line returns - style preference
+    - gofumpt # Stricter than gofmt
+    - gomnd # Magic numbers - would flag too much
+
+linters-settings:
+  gofmt:
+    simplify: true
+  
+  goimports:
+    local-prefixes: github.com/lee101/gobed
+  
+  govet:
+    check-shadowing: true
+    enable-all: true
+  
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+    exclude-functions:
+      - io.Copy
+      - fmt.Fprintln
+      - fmt.Fprintf
+  
+  staticcheck:
+    checks: ["all"]
+  
+  gosec:
+    excludes:
+      - G104 # Unhandled errors - covered by errcheck
+      - G304 # File path from variable
+    confidence: medium
+  
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - hugeParam # Large params - sometimes needed
+      - rangeValCopy # Range value copies - performance
+      - appendAssign # Append assignment - clarity
+  
+  gocognit:
+    min-complexity: 30
+  
+  gocyclo:
+    min-complexity: 20
+  
+  funlen:
+    lines: 100
+    statements: 60
+  
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  
+  misspell:
+    locale: US
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - funlen
+        - gocognit
+        - goconst
+        - gochecknoglobals
+    
+    # Exclude known issues in specific files
+    - path: cmd/
+      linters:
+        - gochecknoinits
+        - gochecknoglobals
+    
+    # Ignore error checks in main functions
+    - path: main\.go
+      linters:
+        - errcheck
+    
+    # Exclude generated files
+    - path: ".*\\.gen\\.go"
+      linters:
+        - gosec
+        - errcheck
+        - staticcheck
+  
+  exclude-use-default: false
+  max-issues-per-linter: 50
+  max-same-issues: 10
+  new: false
+
+severity:
+  default-severity: warning
+  case-sensitive: false
+  rules:
+    - linters:
+        - gosec
+      severity: error
+    - linters:
+        - errcheck
+      severity: error

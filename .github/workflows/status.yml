@@ -1,0 +1,39 @@
+name: CI Status Check
+
+on:
+  workflow_run:
+    workflows: ["CI", "Code Quality", "Benchmarks"]
+    types:
+      - completed
+
+jobs:
+  update-status:
+    name: Update Status
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check workflow status
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const workflow = context.payload.workflow_run;
+          const conclusion = workflow.conclusion;
+          const workflowName = workflow.name;
+          
+          console.log(`Workflow ${workflowName} completed with status: ${conclusion}`);
+          
+          // Create a status check
+          await github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: workflow.head_sha,
+            state: conclusion === 'success' ? 'success' : 'failure',
+            target_url: workflow.html_url,
+            description: `${workflowName} ${conclusion}`,
+            context: `ci/${workflowName.toLowerCase().replace(/\s+/g, '-')}`
+          });
+    
+    - name: Update README badge
+      if: github.event.workflow_run.name == 'CI'
+      run: |
+        echo "CI workflow completed with status: ${{ github.event.workflow_run.conclusion }}"

@@ -11,6 +11,16 @@ import (
 	"github.com/lee101/gobed"
 )
 
+// Constants for configuration
+const (
+	DefaultBatchSize        = 128
+	DefaultTimeout          = 30 * time.Second
+	MaxConcurrentWorkers    = 8
+	StreamingFlushInterval  = 1 * time.Second
+	EmbeddingDimension      = 512
+	BytesPerEmbedding       = 512
+)
+
 // Pipeline provides end-to-end GPU acceleration from text to search
 type Pipeline struct {
 	embedder     *gobed.EmbeddingModel
@@ -44,7 +54,7 @@ func NewPipeline(config Config) (*Pipeline, error) {
 	searchClient := &SearchClient{
 		BaseURL: config.GPUServerURL,
 		Client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: DefaultTimeout,
 		},
 	}
 
@@ -77,7 +87,7 @@ func (p *Pipeline) IndexTexts(texts []string) error {
 
 	batchSize := p.config.BatchSize
 	if batchSize == 0 {
-		batchSize = 128 // Increased default for better GPU utilization
+		batchSize = DefaultBatchSize
 	}
 
 	allEmbeddings := make([][]int8, 0, len(texts))
@@ -135,8 +145,7 @@ func (p *Pipeline) IndexTexts(texts []string) error {
 		fmt.Printf("🗑️  Clearing CPU embeddings (GPU-only mode)\n")
 		// Clear the database slice but keep texts for search results
 		p.database = nil
-		// Force garbage collection to free memory immediately
-		runtime.GC()
+		// Note: Removed force GC as it causes pauses
 		fmt.Printf("✅ CPU memory freed, using only GPU storage\n")
 	}
 
@@ -260,7 +269,7 @@ func (p *Pipeline) BatchSearch(queries []string, k int) ([][]Result, error) {
 // StreamingIndex adds texts to GPU as they arrive
 func (p *Pipeline) StreamingIndex(textChan <-chan string, batchSize int) error {
 	batch := make([]string, 0, batchSize)
-	ticker := time.NewTicker(1 * time.Second) // Flush every second
+	ticker := time.NewTicker(StreamingFlushInterval)
 	defer ticker.Stop()
 
 	for {
@@ -306,8 +315,8 @@ func (p *Pipeline) GetStats() (*Stats, error) {
 	// Calculate CPU memory usage
 	cpuMemoryMB := 0.0
 	if p.database != nil {
-		// Each int8 embedding is 512 bytes, plus slice overhead
-		cpuMemoryMB = float64(numEmbeddings*512) / 1e6
+		// Each int8 embedding is BytesPerEmbedding bytes, plus slice overhead
+		cpuMemoryMB = float64(numEmbeddings*BytesPerEmbedding) / 1e6
 	}
 
 	// Get GPU stats
@@ -381,7 +390,12 @@ func Float32ToInt8(input []float32) []int8 {
 		}
 	}
 
-	// Scale to int8 range
+	// Scale to int8 range (handle zero vector case)
+	if maxAbs == 0 {
+		// Return zero vector if input is all zeros
+		return output
+	}
+	
 	scale := float32(127.0) / maxAbs
 	for i, v := range input {
 		scaled := v * scale

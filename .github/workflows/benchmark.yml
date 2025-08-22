@@ -1,0 +1,122 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [opened, synchronize]
+  schedule:
+    # Run benchmarks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Install dependencies
+      run: |
+        go mod download
+    
+    - name: Run CPU benchmarks
+      run: |
+        echo "## 🚀 CPU Performance Benchmarks" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        go test -bench=BenchmarkEmbedding -benchmem -benchtime=10s -count=3 ./... | tee cpu_bench.txt | head -50 >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+    
+    - name: Run memory benchmarks
+      run: |
+        echo "## 💾 Memory Benchmarks" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        go test -bench=BenchmarkMemory -benchmem -benchtime=10s ./... | tee memory_bench.txt | head -50 >> $GITHUB_STEP_SUMMARY 2>&1 || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+    
+    - name: Run search benchmarks
+      run: |
+        echo "## 🔍 Search Performance" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        go test -bench=BenchmarkSearch -benchmem -benchtime=10s ./... | tee search_bench.txt | head -50 >> $GITHUB_STEP_SUMMARY 2>&1 || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+    
+    - name: Run parallel processing benchmarks
+      run: |
+        echo "## ⚡ Parallel Processing" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        go test -bench=BenchmarkParallel -benchmem -benchtime=10s ./... | tee parallel_bench.txt | head -50 >> $GITHUB_STEP_SUMMARY 2>&1 || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+    
+    - name: Combine all benchmarks
+      run: |
+        cat cpu_bench.txt memory_bench.txt search_bench.txt parallel_bench.txt > all_benchmarks.txt 2>/dev/null || true
+    
+    - name: Store benchmark result
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'go'
+        output-file-path: all_benchmarks.txt
+        benchmark-data-dir-path: 'benchmarks'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        comment-on-alert: true
+        alert-threshold: '150%'
+        comment-always: true
+        fail-on-alert: false
+    
+    - name: Upload benchmark artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results-${{ github.sha }}
+        path: |
+          *_bench.txt
+          all_benchmarks.txt
+    
+    - name: Performance regression check
+      if: github.event_name == 'pull_request'
+      run: |
+        echo "## 📈 Performance Impact" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Compare with main branch benchmarks if available
+        if [ -f "benchmarks/go-benchmark-data.json" ]; then
+          echo "Comparing with main branch performance..." >> $GITHUB_STEP_SUMMARY
+          # This would require more sophisticated comparison logic
+          echo "⚠️ Manual review required for performance changes" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "No baseline benchmarks available for comparison" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Memory profiling
+      run: |
+        echo "## 🔬 Memory Profile Analysis" >> $GITHUB_STEP_SUMMARY
+        # Run a simple memory profile
+        go test -run=^$ -bench=BenchmarkEmbedding -memprofile=mem.prof ./... 2>/dev/null || true
+        if [ -f mem.prof ]; then
+          go tool pprof -top mem.prof | head -20 >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: CPU profiling
+      run: |
+        echo "## 🔬 CPU Profile Analysis" >> $GITHUB_STEP_SUMMARY
+        # Run a simple CPU profile
+        go test -run=^$ -bench=BenchmarkEmbedding -cpuprofile=cpu.prof ./... 2>/dev/null || true
+        if [ -f cpu.prof ]; then
+          go tool pprof -top cpu.prof | head -20 >> $GITHUB_STEP_SUMMARY
+        fi

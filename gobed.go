@@ -4,12 +4,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -18,13 +19,27 @@ import (
 	"github.com/sugarme/tokenizer/pretrained"
 )
 
+// Pre-compiled regexes for performance
+var (
+	zeroWidthCharsRegex = regexp.MustCompile("[\u200B\u200C\u200D\u2060\uFEFF]")
+	multiSpaceRegex     = regexp.MustCompile(`\s+`)
+	bidiOverrideRegex   = regexp.MustCompile("[\u202A-\u202E\u2066-\u2069]")
+)
+
+// Constants for configuration
+const (
+	MaxErrorTextLength = 50
+	DefaultBatchSize   = 256
+	DefaultTimeout     = 30 * time.Second
+)
+
 // EmbeddingModel provides a clean API for text embeddings using the real static-retrieval-mrl-en-v1 model
 type EmbeddingModel struct {
 	VocabSize       int
 	EmbedDim        int
-	weights         [][]float32 // Real safetensors weights [vocab_size, embed_dim]
+	weights         [][]float32          // Real safetensors weights [vocab_size, embed_dim]
 	referenceTokens map[string]TokenData
-	embeddingBuffer []float32            // Pre-allocated for performance
+	bufferPool      sync.Pool            // Thread-safe pool for embedding buffers
 	tokenizer       *tokenizer.Tokenizer // BERT tokenizer for arbitrary text
 	objectPool      *ObjectPool          // Object pool for memory reuse
 }
@@ -49,22 +64,32 @@ type SimilarityResult struct {
 	Similarity float32
 }
 
+// findModelFile attempts to locate a model file across common paths
+func findModelFile(filename string) (string, error) {
+	paths := []string{
+		"model/" + filename,
+		"../../model/" + filename,
+		"./model/" + filename,
+	}
+	
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	
+	return "", fmt.Errorf("file not found: %s", filename)
+}
+
 // LoadModel loads the real static-retrieval-mrl-en-v1 embedding model
 func LoadModel() (*EmbeddingModel, error) {
 	fmt.Println("🔄 Loading real static-retrieval-mrl-en-v1 model...")
 	start := time.Now()
 
 	// Load real safetensors weights
-	safetensorsPath := "model/real_model.safetensors"
-	// Check alternative paths
-	if _, err := os.Stat(safetensorsPath); os.IsNotExist(err) {
-		safetensorsPath = "../../model/real_model.safetensors"
-		if _, err := os.Stat(safetensorsPath); os.IsNotExist(err) {
-			safetensorsPath = "./model/real_model.safetensors"
-		}
-	}
-	if _, err := os.Stat(safetensorsPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("real model file not found: %s", safetensorsPath)
+	safetensorsPath, err := findModelFile("real_model.safetensors")
+	if err != nil {
+		return nil, fmt.Errorf("real model file not found: %w", err)
 	}
 
 	weights, vocabSize, embedDim, err := loadRealSafetensors(safetensorsPath)
@@ -73,18 +98,12 @@ func LoadModel() (*EmbeddingModel, error) {
 	}
 
 	// Load tokenizer
-	tokenizerPath := "model/tokenizer.json"
-	if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
-		tokenizerPath = "../../model/tokenizer.json"
-		if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
-			tokenizerPath = "./model/tokenizer.json"
-		}
-	}
+	tokenizerPath, _ := findModelFile("tokenizer.json")
 	// Load the actual static-retrieval-mrl-en-v1 tokenizer
 	var tk *tokenizer.Tokenizer
 
-	// Try loading from JSON file
-	if _, statErr := os.Stat(tokenizerPath); statErr == nil {
+	// Try loading from JSON file if found
+	if tokenizerPath != "" {
 		var tokErr error
 		tk, tokErr = pretrained.FromFile(tokenizerPath)
 		if tokErr != nil {
@@ -99,17 +118,17 @@ func LoadModel() (*EmbeddingModel, error) {
 	}
 
 	// Load real reference tokens (for backward compatibility)
-	tokensPath := "model/real_reference_tokens.json"
-	if _, err := os.Stat(tokensPath); os.IsNotExist(err) {
-		tokensPath = "../../model/real_reference_tokens.json"
-		if _, err := os.Stat(tokensPath); os.IsNotExist(err) {
-			tokensPath = "./model/real_reference_tokens.json"
+	tokensPath, _ := findModelFile("real_reference_tokens.json")
+	var referenceTokens map[string]TokenData
+	
+	if tokensPath != "" {
+		referenceTokens, err = loadReferenceTokens(tokensPath)
+		if err != nil {
+			fmt.Printf("Warning: failed to load reference tokens: %v\n", err)
+			referenceTokens = make(map[string]TokenData)
 		}
-	}
-	referenceTokens, err := loadReferenceTokens(tokensPath)
-	if err != nil {
-		fmt.Printf("Warning: failed to load reference tokens: %v\n", err)
-		referenceTokens = make(map[string]TokenData) // Initialize empty map
+	} else {
+		referenceTokens = make(map[string]TokenData)
 	}
 
 	model := &EmbeddingModel{
@@ -117,9 +136,15 @@ func LoadModel() (*EmbeddingModel, error) {
 		EmbedDim:        embedDim,
 		weights:         weights,
 		referenceTokens: referenceTokens,
-		embeddingBuffer: make([]float32, embedDim),
 		tokenizer:       tk,
 		objectPool:      NewObjectPool(),
+	}
+	
+	// Initialize buffer pool for thread-safe embedding computation
+	model.bufferPool = sync.Pool{
+		New: func() interface{} {
+			return make([]float32, embedDim)
+		},
 	}
 
 	loadTime := time.Since(start)
@@ -201,9 +226,13 @@ func (m *EmbeddingModel) encodeWithTokenizer(text string) ([]float32, error) {
 
 // computeEmbedding performs the actual embedding computation with real weights
 func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
+	// Get a buffer from the pool for thread-safe computation
+	buffer := m.bufferPool.Get().([]float32)
+	defer m.bufferPool.Put(buffer)
+	
 	// Reset buffer
-	for i := range m.embeddingBuffer {
-		m.embeddingBuffer[i] = 0
+	for i := range buffer {
+		buffer[i] = 0
 	}
 
 	validTokens := 0
@@ -215,10 +244,10 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 			weightRow := m.weights[tokenID]
 			if weightRow != nil && len(weightRow) == m.EmbedDim {
 				// Safe addition with bounds checking
-				for i := 0; i < m.EmbedDim && i < len(weightRow) && i < len(m.embeddingBuffer); i++ {
+				for i := 0; i < m.EmbedDim && i < len(weightRow) && i < len(buffer); i++ {
 					// Check for NaN or Inf values in weights
 					if !math.IsNaN(float64(weightRow[i])) && !math.IsInf(float64(weightRow[i]), 0) {
-						m.embeddingBuffer[i] += weightRow[i]
+						buffer[i] += weightRow[i]
 					}
 				}
 				validTokens++
@@ -232,21 +261,20 @@ func (m *EmbeddingModel) computeEmbedding(tokenIDs []int) ([]float32, error) {
 
 		// Check for division by zero and ensure result is finite
 		if !math.IsNaN(float64(invValidTokens)) && !math.IsInf(float64(invValidTokens), 0) {
-			for i := 0; i < len(m.embeddingBuffer) && i < m.EmbedDim; i++ {
-				m.embeddingBuffer[i] *= invValidTokens
+			for i := 0; i < len(buffer) && i < m.EmbedDim; i++ {
+				buffer[i] *= invValidTokens
 
 				// Ensure final values are finite
-				if math.IsNaN(float64(m.embeddingBuffer[i])) || math.IsInf(float64(m.embeddingBuffer[i]), 0) {
-					m.embeddingBuffer[i] = 0
+				if math.IsNaN(float64(buffer[i])) || math.IsInf(float64(buffer[i]), 0) {
+					buffer[i] = 0
 				}
 			}
 		}
 	}
 
 	// StaticEmbedding does NOT normalize - return raw mean pooled values
-	// TODO: Use object pool here when API allows returning pooled objects
 	result := make([]float32, m.EmbedDim)
-	copy(result, m.embeddingBuffer)
+	copy(result, buffer)
 
 	// Final sanity check on result
 	for i, val := range result {
@@ -281,10 +309,17 @@ func (m *EmbeddingModel) FindMostSimilar(query string, candidates []string, limi
 	}
 
 	var results []SimilarityResult
+	var skippedCount int
+	
 	for _, candidate := range candidates {
 		candEmb, err := m.Encode(candidate)
 		if err != nil {
-			continue // Skip texts that can't be encoded
+			// Log error but continue processing
+			skippedCount++
+			if skippedCount <= 5 { // Only log first few errors to avoid spam
+				fmt.Printf("Warning: failed to encode candidate text: %v\n", err)
+			}
+			continue
 		}
 
 		sim := CosineSimilarity(queryEmb, candEmb)
@@ -293,6 +328,10 @@ func (m *EmbeddingModel) FindMostSimilar(query string, candidates []string, limi
 			Text2:      candidate,
 			Similarity: sim,
 		})
+	}
+	
+	if skippedCount > 5 {
+		fmt.Printf("Warning: skipped %d total texts that couldn't be encoded\n", skippedCount)
 	}
 
 	// Sort by similarity (descending)
@@ -366,7 +405,7 @@ func loadRealSafetensors(filePath string) ([][]float32, int, int, error) {
 	}
 
 	// Read tensor data
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -404,7 +443,7 @@ func loadRealSafetensors(filePath string) ([][]float32, int, int, error) {
 
 // loadReferenceTokens loads the tokenization data
 func loadReferenceTokens(filePath string) (map[string]TokenData, error) {
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -443,16 +482,13 @@ func normalizeText(text string) string {
 	text = result.String()
 
 	// Remove zero-width characters that can cause tokenization issues
-	zeroWidthChars := regexp.MustCompile("[\u200B\u200C\u200D\u2060\uFEFF]")
-	text = zeroWidthChars.ReplaceAllString(text, "")
+	text = zeroWidthCharsRegex.ReplaceAllString(text, "")
 
 	// Normalize multiple consecutive whitespace to single space
-	multiSpace := regexp.MustCompile(`\s+`)
-	text = multiSpace.ReplaceAllString(text, " ")
+	text = multiSpaceRegex.ReplaceAllString(text, " ")
 
 	// Handle bidirectional text override characters that might confuse tokenizers
-	bidiOverride := regexp.MustCompile("[\u202A-\u202E\u2066-\u2069]")
-	text = bidiOverride.ReplaceAllString(text, "")
+	text = bidiOverrideRegex.ReplaceAllString(text, "")
 
 	// Trim leading/trailing whitespace
 	text = strings.TrimSpace(text)
@@ -462,11 +498,10 @@ func normalizeText(text string) string {
 
 // truncateForError truncates text for error messages to avoid log spam
 func truncateForError(text string) string {
-	const maxLen = 50
-	if len(text) <= maxLen {
+	if len(text) <= MaxErrorTextLength {
 		return text
 	}
-	return text[:maxLen-3] + "..."
+	return text[:MaxErrorTextLength-3] + "..."
 }
 
 // isValidTokenID checks if a token ID is within valid bounds

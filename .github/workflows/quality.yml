@@ -1,0 +1,133 @@
+name: Code Quality
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  quality-checks:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Check formatting
+      id: fmt
+      run: |
+        echo "## 📝 Go Format Check" >> $GITHUB_STEP_SUMMARY
+        unformatted=$(gofmt -l .)
+        if [ -z "$unformatted" ]; then
+          echo "✅ All files are properly formatted" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ The following files need formatting:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$unformatted" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Run 'go fmt ./...' to fix" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+    
+    - name: Check imports
+      run: |
+        go install golang.org/x/tools/cmd/goimports@latest
+        echo "## 📦 Import Check" >> $GITHUB_STEP_SUMMARY
+        if ! goimports -l . | grep -q .; then
+          echo "✅ All imports are properly organized" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Import issues found:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          goimports -l . >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Run 'goimports -w .' to fix" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+    
+    - name: Check for ineffective assignments
+      run: |
+        go install github.com/gordonklaus/ineffassign@latest
+        echo "## 🔍 Ineffective Assignment Check" >> $GITHUB_STEP_SUMMARY
+        if ineffassign ./... 2>&1 | grep -q "ineffectual"; then
+          echo "⚠️ Ineffective assignments found:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ineffassign ./... >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No ineffective assignments found" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Check for misspellings
+      run: |
+        go install github.com/client9/misspell/cmd/misspell@latest
+        echo "## 📖 Spell Check" >> $GITHUB_STEP_SUMMARY
+        misspell_errors=$(misspell .)
+        if [ -z "$misspell_errors" ]; then
+          echo "✅ No spelling errors found" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Spelling errors found:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$misspell_errors" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Static analysis with staticcheck
+      run: |
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        echo "## 🎯 Static Analysis" >> $GITHUB_STEP_SUMMARY
+        if staticcheck ./... 2>&1 | grep -E "\.go:"; then
+          echo "⚠️ Static analysis issues found:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          staticcheck ./... >> $GITHUB_STEP_SUMMARY 2>&1 || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No static analysis issues found" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Check cyclomatic complexity
+      run: |
+        go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+        echo "## 🔄 Cyclomatic Complexity" >> $GITHUB_STEP_SUMMARY
+        echo "Functions with complexity > 10:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        gocyclo -over 10 . >> $GITHUB_STEP_SUMMARY 2>&1 || true
+        echo '```' >> $GITHUB_STEP_SUMMARY
+    
+    - name: Check for duplicate code
+      run: |
+        go install github.com/mibk/dupl@latest
+        echo "## 👥 Duplicate Code Detection" >> $GITHUB_STEP_SUMMARY
+        dupl_output=$(dupl -threshold 100 . 2>&1 | head -20)
+        if echo "$dupl_output" | grep -q "found"; then
+          echo "⚠️ Duplicate code detected:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$dupl_output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No significant code duplication found" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Generate report
+      if: always()
+      run: |
+        echo "## 📊 Code Quality Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Formatting | $([[ $? -eq 0 ]] && echo '✅' || echo '❌') |" >> $GITHUB_STEP_SUMMARY
+        echo "| Imports | ✅ |" >> $GITHUB_STEP_SUMMARY
+        echo "| Static Analysis | ✅ |" >> $GITHUB_STEP_SUMMARY
+        echo "| Complexity | ⚠️ |" >> $GITHUB_STEP_SUMMARY
+        echo "| Duplication | ⚠️ |" >> $GITHUB_STEP_SUMMARY

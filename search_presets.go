@@ -102,6 +102,6 @@ func NewSearchEngineWithPreset(model *EmbeddingModel, preset SearchPreset) (*Sea
 	}
 	// Create search engine with default configuration
 	se := NewSearchEngine(model)
-	se.config = config
+	se.config = *config
 	return se, nil
 }

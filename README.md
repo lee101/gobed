@@ -1,4 +1,12 @@
 # Gobed - Fast Go Embeddings with Vector Search
+
+![CI](https://github.com/lee101/gobed/workflows/CI/badge.svg)
+![Code Quality](https://github.com/lee101/gobed/workflows/Code%20Quality/badge.svg)
+![Benchmarks](https://github.com/lee101/gobed/workflows/Benchmarks/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/lee101/gobed)](https://goreportcard.com/report/github.com/lee101/gobed)
+[![GoDoc](https://pkg.go.dev/badge/github.com/lee101/gobed)](https://pkg.go.dev/github.com/lee101/gobed)
+[![License](https://img.shields.io/github/license/lee101/gobed)](LICENSE)
+
 <img width="450" height="633" alt="image" src="https://github.com/user-attachments/assets/45a072fc-1a17-4aca-9da7-5394d688153a" />
 
 A high-performance Go implementation of text embeddings with **blazing-fast vector search**. 
@@ -6,6 +14,16 @@ A high-performance Go implementation of text embeddings with **blazing-fast vect
 **71x faster** than Python GPU for embeddings | **Sub-millisecond** semantic search | **2,800 QPS** throughput
 
 Built with the `sentence-transformers/static-retrieval-mrl-en-v1` model and state-of-the-art ANN algorithms.
+
+## CI/CD Status
+
+This project uses comprehensive CI/CD automation:
+
+- **Continuous Integration**: Automatic testing on every push and PR
+- **Code Quality**: Automated linting, formatting, and security checks
+- **Performance Tracking**: Daily benchmarks with regression detection
+- **Dependency Management**: Automated updates via Dependabot
+- **Release Automation**: Multi-platform binaries and Docker images
 
 ## Features
 
@@ -26,6 +44,23 @@ Built with the `sentence-transformers/static-retrieval-mrl-en-v1` model and stat
 
 ```bash
 go get github.com/lee101/gobed
+```
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/lee101/gobed.git
+cd gobed
+
+# Build with make
+make build
+
+# Run tests
+make test
+
+# Run benchmarks
+make bench
 ```
 
 ## Quick Start
@@ -626,3 +661,67 @@ This will download LibTorch with CPU or CUDA support based on your system.
 ## License
 
 MIT
+
+
+## Development
+
+### Local Development
+
+```bash
+# Format code
+make fmt
+
+# Run linters
+make lint
+
+# Run all quality checks
+make quality
+
+# Run tests with coverage
+make test-coverage
+
+# Run benchmarks with profiling
+make bench-cpu  # CPU profiling
+make bench-mem  # Memory profiling
+```
+
+### CI/CD
+
+This project uses GitHub Actions for CI/CD:
+
+- **CI Pipeline**: Runs on every push and PR
+- **Code Quality**: Automated checks for formatting, linting, and security
+- **Benchmarks**: Daily performance tracking
+- **Releases**: Automated multi-platform builds
+
+### Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Run tests and quality checks (`make ci`)
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+### Running CI Locally
+
+```bash
+# Run full CI pipeline locally
+make ci-full
+
+# Individual checks
+make fmt         # Format code
+make lint        # Run linters
+make test-race   # Test with race detector
+make security    # Security scan
+```
+
+### GitHub Actions Workflows
+
+- **`.github/workflows/ci.yml`**: Main CI pipeline
+- **`.github/workflows/quality.yml`**: Code quality checks
+- **`.github/workflows/benchmark.yml`**: Performance benchmarks
+- **`.github/workflows/release.yml`**: Automated releases
+- **`.github/dependabot.yml`**: Dependency updates
+
+See [`.github/README.md`](.github/README.md) for detailed CI/CD documentation.

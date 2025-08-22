@@ -8,6 +8,12 @@ import (
 	"github.com/lee101/gobed/ann/simd"
 )
 
+// EmbedInt8Result represents an int8 quantized embedding
+type EmbedInt8Result struct {
+	Vector []int8
+	Scale  float32
+}
+
 // VectorIndex provides high-performance vector search capabilities
 type VectorIndex struct {
 	engine *search.Engine
@@ -236,12 +242,6 @@ type VectorIndexStats struct {
 	NLists      int
 	PQEnabled   bool
 	HNSWEnabled bool
-}
-
-// EmbedInt8Result represents an int8 quantized embedding
-type EmbedInt8Result struct {
-	Vector []int8
-	Scale  float32
 }
 
 // EmbedInt8 generates int8 quantized embeddings

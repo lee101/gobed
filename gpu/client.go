@@ -47,7 +47,14 @@ func (c *SearchClient) LoadDatabase(embeddings [][]int8) (*LoadResponse, error) 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("load failed: %s", body)
+		// Parse error response if possible
+		var errResp map[string]interface{}
+		if err := json.Unmarshal(body, &errResp); err == nil {
+			if errMsg, ok := errResp["error"].(string); ok {
+				return nil, fmt.Errorf("load failed: %s", errMsg)
+			}
+		}
+		return nil, fmt.Errorf("load failed with status %d", resp.StatusCode)
 	}
 
 	var result LoadResponse
@@ -74,7 +81,14 @@ func (c *SearchClient) Search(query []int8, k int) (*SearchResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("search failed: %s", body)
+		// Parse error response if possible
+		var errResp map[string]interface{}
+		if err := json.Unmarshal(body, &errResp); err == nil {
+			if errMsg, ok := errResp["error"].(string); ok {
+				return nil, fmt.Errorf("search failed: %s", errMsg)
+			}
+		}
+		return nil, fmt.Errorf("search failed with status %d", resp.StatusCode)
 	}
 
 	var result SearchResponse
@@ -101,7 +115,14 @@ func (c *SearchClient) BatchSearch(queries [][]int8, k int) (*BatchSearchRespons
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("batch search failed: %s", body)
+		// Parse error response if possible
+		var errResp map[string]interface{}
+		if err := json.Unmarshal(body, &errResp); err == nil {
+			if errMsg, ok := errResp["error"].(string); ok {
+				return nil, fmt.Errorf("batch search failed: %s", errMsg)
+			}
+		}
+		return nil, fmt.Errorf("batch search failed with status %d", resp.StatusCode)
 	}
 
 	var result BatchSearchResponse
@@ -128,7 +149,14 @@ func (c *SearchClient) EmbedTexts(texts []string) (*EmbedResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("embed failed: %s", body)
+		// Parse error response if possible
+		var errResp map[string]interface{}
+		if err := json.Unmarshal(body, &errResp); err == nil {
+			if errMsg, ok := errResp["error"].(string); ok {
+				return nil, fmt.Errorf("embed failed: %s", errMsg)
+			}
+		}
+		return nil, fmt.Errorf("embed failed with status %d", resp.StatusCode)
 	}
 
 	var result EmbedResponse

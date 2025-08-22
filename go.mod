@@ -15,6 +15,7 @@ require (
 	github.com/schollz/progressbar/v2 v2.15.0 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/sugarme/regexpset v0.0.0-20200920021344-4d4ec8eaf93c // indirect
+	github.com/yalue/onnxruntime_go v1.21.0 // indirect
 	golang.org/x/text v0.10.0 // indirect
 )
 

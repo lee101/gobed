@@ -1,0 +1,211 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Generate changelog from git history
+        echo "## What's Changed" > changelog.md
+        git log --pretty=format:"* %s (%h)" $(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD >> changelog.md
+        echo "" >> changelog.md
+        echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo 'initial')...${{ steps.get_version.outputs.version }}" >> changelog.md
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        release_name: Release ${{ steps.get_version.outputs.version }}
+        body_path: changelog.md
+        draft: false
+        prerelease: ${{ contains(steps.get_version.outputs.version, 'beta') || contains(steps.get_version.outputs.version, 'alpha') }}
+
+  build-binaries:
+    name: Build Binaries
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            suffix: windows-amd64.exe
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        # Build main CLI
+        go build -v -ldflags="-s -w -X main.Version=${{ needs.create-release.outputs.version }}" -o gobed-${{ matrix.suffix }} ./cmd/demo
+        
+        # Build other utilities
+        go build -v -ldflags="-s -w" -o gobed-benchmark-${{ matrix.suffix }} ./cmd/benchmark || true
+        go build -v -ldflags="-s -w" -o gobed-server-${{ matrix.suffix }} ./cmd/search_server || true
+    
+    - name: Compress binaries
+      if: matrix.goos != 'windows'
+      run: |
+        tar czf gobed-${{ needs.create-release.outputs.version }}-${{ matrix.suffix }}.tar.gz gobed-*
+    
+    - name: Compress binaries (Windows)
+      if: matrix.goos == 'windows'
+      shell: pwsh
+      run: |
+        Compress-Archive -Path gobed-* -DestinationPath gobed-${{ needs.create-release.outputs.version }}-${{ matrix.suffix }}.zip
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: gobed-${{ needs.create-release.outputs.version }}-${{ matrix.suffix }}.${{ matrix.goos == 'windows' && 'zip' || 'tar.gz' }}
+        asset_name: gobed-${{ needs.create-release.outputs.version }}-${{ matrix.suffix }}.${{ matrix.goos == 'windows' && 'zip' || 'tar.gz' }}
+        asset_content_type: ${{ matrix.goos == 'windows' && 'application/zip' || 'application/gzip' }}
+
+  docker-release:
+    name: Docker Release
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      if: secrets.DOCKER_USERNAME != ''
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository }}:${{ needs.create-release.outputs.version }}
+          ghcr.io/${{ github.repository }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  publish-go-module:
+    name: Publish Go Module
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Verify module
+      run: |
+        go mod tidy
+        go mod verify
+    
+    - name: Run tests
+      run: |
+        go test -v -short ./...
+    
+    - name: Publish to pkg.go.dev
+      run: |
+        # This will make the module available on pkg.go.dev
+        curl -X POST https://pkg.go.dev/fetch/github.com/lee101/gobed@${{ needs.create-release.outputs.version }}
+    
+    - name: Create module info
+      run: |
+        echo "## Go Module Published" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📦 Module: \`github.com/lee101/gobed\`" >> $GITHUB_STEP_SUMMARY
+        echo "🏷️ Version: \`${{ needs.create-release.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Installation" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo "go get github.com/lee101/gobed@${{ needs.create-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
