@@ -8,7 +8,7 @@ INCLUDES = -I$(LIBTORCH_ROOT)/include -I$(LIBTORCH_ROOT)/include/torch/csrc/api/
 LDFLAGS = -L$(LIBTORCH_ROOT)/lib -L/usr/local/cuda-12.0/targets/x86_64-linux/lib -ltorch -ltorch_cuda -ltorch_cpu -lc10_cuda -lcudart -shared
 
 WRAPPER_LIB = libtorch_cgo_wrapper.so
-WRAPPER_SRC = torch_performance_test.cpp
+WRAPPER_SRC = torch_gpu_forced.cpp
 
 .PHONY: all clean test build-cuda-ops check-deps
 

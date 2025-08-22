@@ -1,229 +1,243 @@
 package main
 
+/*
+#cgo CPPFLAGS: -I../../gpu -I../../libtorch/include -I../../libtorch/include/torch/csrc/api/include
+#cgo LDFLAGS: -L../../libtorch/lib -L../../gpu -L/usr/local/cuda-12.0/targets/x86_64-linux/lib -ltorch_cgo_wrapper -ltorch -ltorch_cuda -ltorch_cpu -lc10_cuda -lcudart -ldl
+#include "torch_cgo_wrapper.h"
+#include <stdlib.h>
+*/
+import "C"
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"runtime"
-	"strings"
-	"sync"
 	"time"
-
-	"github.com/lee101/gobed"
+	"unsafe"
 )
 
+type GPUBenchmarkConfig struct {
+	VectorDim    int
+	TrainingSize int
+	IndexSize    int
+	QueryCount   int
+	K            int
+	Name         string
+}
+
+type GPUBenchmarkResult struct {
+	Config         GPUBenchmarkConfig
+	TrainTime      time.Duration
+	IndexTime      time.Duration
+	SearchTime     time.Duration
+	IndexRate      float64 // vectors/sec
+	QueryRate      float64 // queries/sec
+	AvgSearchTime  float64 // ms per query
+	MemoryUsage    float64 // MB
+	TotalTime      time.Duration
+	UsingGPU       bool
+}
+
 func main() {
-	fmt.Println("🚀 GPU-Optimized Batch Embedding Benchmark")
-	fmt.Println("==========================================")
+	fmt.Println("🚀 GPU LibTorch Comprehensive Benchmark")
+	fmt.Println("=======================================")
 
-	// Load model
-	fmt.Print("Loading model... ")
-	start := time.Now()
-	model, err := gobed.LoadModel()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("✅ Done (%v)\n\n", time.Since(start))
+	// Check system info
+	version := C.GoString(C.torch_get_version())
+	cudaAvailable := C.torch_cuda_is_available() != 0
+	deviceCount := int(C.torch_cuda_device_count())
 
-	// Generate test data
-	texts := generateTestTexts(10000)
-	fmt.Printf("Generated %d test texts\n\n", len(texts))
+	fmt.Printf("📊 System Information:\n")
+	fmt.Printf("   LibTorch version: %s\n", version)
+	fmt.Printf("   CUDA available: %v\n", cudaAvailable)
+	fmt.Printf("   Device count: %d\n", deviceCount)
+	fmt.Printf("   Go version: %s\n", runtime.Version())
+	fmt.Printf("   CPU cores: %d\n", runtime.NumCPU())
 
-	// Test different batch configurations
-	batchConfigs := []struct {
-		name       string
-		batchSize  int
-		numBatches int
-		workers    int
-	}{
-		{"Small Batch", 32, 10, 4},
-		{"Medium Batch", 64, 20, 8},
-		{"Large Batch", 128, 25, 8},
-		{"Mega Batch", 256, 10, 12},
-		{"GPU-Style Batch", 512, 5, 16},
+	if !cudaAvailable {
+		log.Fatal("❌ CUDA not available - this benchmark requires GPU")
 	}
 
-	fmt.Printf("%-15s %-10s %-10s %-12s %-15s %-10s\n",
-		"Config", "Batch", "Workers", "Total", "Items/sec", "ms/item")
-	fmt.Println(strings.Repeat("-", 75))
+	// Focus on 512D and 1024D as requested
+	configs := []GPUBenchmarkConfig{
+		// 512D benchmarks - Production scale
+		{VectorDim: 512, TrainingSize: 5000, IndexSize: 50000, QueryCount: 1000, K: 10, Name: "512D-50K"},
+		{VectorDim: 512, TrainingSize: 5000, IndexSize: 100000, QueryCount: 1000, K: 10, Name: "512D-100K"},
+		
+		// 1024D benchmarks - Large scale  
+		{VectorDim: 1024, TrainingSize: 5000, IndexSize: 25000, QueryCount: 500, K: 10, Name: "1024D-25K"},
+		{VectorDim: 1024, TrainingSize: 5000, IndexSize: 50000, QueryCount: 500, K: 10, Name: "1024D-50K"},
+	}
 
-	for _, config := range batchConfigs {
-		totalItems := config.batchSize * config.numBatches
-		if totalItems > len(texts) {
-			totalItems = len(texts)
+	fmt.Printf("\n🚀 Running GPU Performance Benchmarks...\n")
+	fmt.Printf("\n%-12s %-8s %-8s %-8s %-12s %-10s %-10s %-8s %-6s\n",
+		"Config", "Dim", "Index", "Queries", "Index/sec", "Query/ms", "QPS", "Memory", "GPU")
+	fmt.Println("------------------------------------------------------------------------------------")
+
+	var results []GPUBenchmarkResult
+
+	for i, config := range configs {
+		fmt.Printf("\nRunning benchmark %d/%d: %s...\n", i+1, len(configs), config.Name)
+		
+		result := runGPUBenchmark(config)
+		results = append(results, result)
+
+		gpuStatus := "CPU"
+		if result.UsingGPU {
+			gpuStatus = "GPU"
 		}
 
-		result := benchmarkBatchProcessing(model, texts[:totalItems], config.batchSize, config.workers)
-
-		fmt.Printf("%-15s %-10d %-10d %-12d %-15.0f %-10.3f\n",
-			config.name,
-			config.batchSize,
-			config.workers,
-			totalItems,
-			result.itemsPerSec,
-			result.msPerItem)
+		fmt.Printf("%-12s %-8d %-8d %-8d %-12.0f %-10.2f %-10.0f %-8.1f %-6s\n",
+			config.Name,
+			config.VectorDim,
+			config.IndexSize,
+			config.QueryCount,
+			result.IndexRate,
+			result.AvgSearchTime,
+			result.QueryRate,
+			result.MemoryUsage,
+			gpuStatus)
 	}
 
-	// Test GPU-style parallel batching
-	fmt.Printf("\n🔥 GPU-Style Parallel Batch Processing\n")
-	fmt.Println(strings.Repeat("=", 50))
+	// Print detailed summary
+	fmt.Println("\n📈 Detailed Performance Analysis:")
+	fmt.Println("=================================")
 
-	gpuResults := testGPUStyleBatching(model, texts[:5000])
-	for size, result := range gpuResults {
-		fmt.Printf("Batch size %d: %.0f items/sec (%.3f ms/item)\n",
-			size, result.itemsPerSec, result.msPerItem)
+	for i, result := range results {
+		config := result.Config
+		fmt.Printf("\n%d. %s (%dD vectors, %d indexed):\n", i+1, config.Name, config.VectorDim, config.IndexSize)
+		fmt.Printf("   Training: %v (%d vectors)\n", result.TrainTime, config.TrainingSize)
+		fmt.Printf("   Indexing: %v (%.0f vectors/sec)\n", result.IndexTime, result.IndexRate)
+		fmt.Printf("   Search: %v (%d queries, %.2f ms/query, %.0f QPS)\n", 
+			result.SearchTime, config.QueryCount, result.AvgSearchTime, result.QueryRate)
+		fmt.Printf("   Memory: %.1f MB GPU\n", result.MemoryUsage)
+		fmt.Printf("   Total: %v\n", result.TotalTime)
 	}
 
-	// Estimate large scale performance
-	fmt.Printf("\n📊 Large Scale Performance Estimates\n")
-	fmt.Println(strings.Repeat("=", 50))
-
-	bestPerf := float64(0)
-	for _, result := range gpuResults {
-		if result.itemsPerSec > bestPerf {
-			bestPerf = result.itemsPerSec
-		}
-	}
-
-	scales := []int{50000, 500000, 5000000}
-	for _, scale := range scales {
-		timeSeconds := float64(scale) / bestPerf
-		fmt.Printf("%7d documents: ~%.1f seconds (~%.1f minutes)\n",
-			scale, timeSeconds, timeSeconds/60)
-	}
+	fmt.Println("\n✅ GPU Benchmark completed!")
 }
 
-type BenchResult struct {
-	itemsPerSec float64
-	msPerItem   float64
-	duration    time.Duration
-}
+func runGPUBenchmark(config GPUBenchmarkConfig) GPUBenchmarkResult {
+	totalStart := time.Now()
 
-func benchmarkBatchProcessing(model *gobed.EmbeddingModel, texts []string, batchSize, workers int) BenchResult {
-	runtime.GC()
-	start := time.Now()
-
-	// Create work batches
-	batches := make([][]string, 0)
-	for i := 0; i < len(texts); i += batchSize {
-		end := i + batchSize
-		if end > len(texts) {
-			end = len(texts)
-		}
-		batches = append(batches, texts[i:end])
+	// Create indexer with GPU enabled
+	cConfig := C.IndexConfig{
+		vector_dim:        C.int(config.VectorDim),
+		num_subquantizers: C.int(64),
+		codebook_size:     C.int(256),
+		ivf_clusters:      C.int(1024),
+		probe_lists:       C.int(32),
+		rerank_k:         C.int(200),
+		device_id:        C.int(0), // Force GPU usage
 	}
 
-	// Process batches in parallel
-	batchChan := make(chan []string, len(batches))
-	var wg sync.WaitGroup
+	handle := C.torch_indexer_create(cConfig)
+	if handle == nil {
+		log.Fatal("Failed to create indexer")
+	}
+	defer C.torch_indexer_destroy(handle)
 
-	// Start workers
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for batch := range batchChan {
-				processBatch(model, batch)
-			}
-		}()
+	// Generate training data
+	trainingData := generateVectors(config.TrainingSize, config.VectorDim)
+
+	// Training benchmark
+	trainStart := time.Now()
+	result := C.torch_indexer_train(
+		handle,
+		(*C.schar)(unsafe.Pointer(&trainingData[0])),
+		C.int(config.TrainingSize),
+		C.int(config.VectorDim),
+	)
+	trainTime := time.Since(trainStart)
+
+	if result == 0 {
+		log.Fatal("Training failed")
 	}
 
-	// Send work
-	for _, batch := range batches {
-		batchChan <- batch
+	// Generate index data
+	indexData := generateVectors(config.IndexSize, config.VectorDim)
+
+	// Indexing benchmark
+	indexStart := time.Now()
+	result = C.torch_indexer_add_vectors(
+		handle,
+		(*C.schar)(unsafe.Pointer(&indexData[0])),
+		C.int(config.IndexSize),
+		C.int(config.VectorDim),
+	)
+	indexTime := time.Since(indexStart)
+
+	if result == 0 {
+		log.Fatal("Indexing failed")
 	}
-	close(batchChan)
-	wg.Wait()
 
-	duration := time.Since(start)
-	itemsPerSec := float64(len(texts)) / duration.Seconds()
-	msPerItem := float64(duration.Nanoseconds()) / float64(len(texts)) / 1e6
+	indexRate := float64(config.IndexSize) / indexTime.Seconds()
 
-	return BenchResult{
-		itemsPerSec: itemsPerSec,
-		msPerItem:   msPerItem,
-		duration:    duration,
+	// Generate queries (use vectors from index for ground truth)
+	queries := make([][]int8, config.QueryCount)
+	for i := 0; i < config.QueryCount; i++ {
+		startIdx := rand.Intn(config.IndexSize) * config.VectorDim
+		endIdx := startIdx + config.VectorDim
+		queries[i] = make([]int8, config.VectorDim)
+		copy(queries[i], indexData[startIdx:endIdx])
 	}
-}
 
-func processBatch(model *gobed.EmbeddingModel, batch []string) {
-	// Process each text in the batch
-	for _, text := range batch {
-		_, err := model.Encode(text)
-		if err != nil {
-			// Skip errors for benchmark
+	// Search benchmark
+	searchStart := time.Now()
+	
+	for i := 0; i < config.QueryCount; i++ {
+		searchResult := C.torch_indexer_search(
+			handle,
+			(*C.schar)(unsafe.Pointer(&queries[i][0])),
+			C.int(config.VectorDim),
+			C.int(config.K),
+		)
+
+		if searchResult.count == 0 {
+			log.Printf("Query %d returned no results", i)
 			continue
 		}
+
+		// Free search results
+		C.torch_search_result_free(&searchResult)
+	}
+	
+	searchTime := time.Since(searchStart)
+	queryRate := float64(config.QueryCount) / searchTime.Seconds()
+	avgSearchTime := searchTime.Seconds() * 1000 / float64(config.QueryCount) // ms
+
+	// Get memory stats
+	stats := C.torch_indexer_get_stats(handle)
+	memoryUsage := float64(stats.gpu_memory_mb)
+	usingGPU := memoryUsage > 0
+
+	if memoryUsage == 0 {
+		// Estimate CPU memory usage
+		vectorSize := config.VectorDim * 1 // int8
+		totalVectors := config.IndexSize
+		memoryUsage = float64(totalVectors*vectorSize) / (1024 * 1024) // MB
+	}
+
+	totalTime := time.Since(totalStart)
+
+	return GPUBenchmarkResult{
+		Config:        config,
+		TrainTime:     trainTime,
+		IndexTime:     indexTime,
+		SearchTime:    searchTime,
+		IndexRate:     indexRate,
+		QueryRate:     queryRate,
+		AvgSearchTime: avgSearchTime,
+		MemoryUsage:   memoryUsage,
+		TotalTime:     totalTime,
+		UsingGPU:      usingGPU,
 	}
 }
 
-func testGPUStyleBatching(model *gobed.EmbeddingModel, texts []string) map[int]BenchResult {
-	batchSizes := []int{64, 128, 256, 512, 1024}
-	results := make(map[int]BenchResult)
-
-	for _, batchSize := range batchSizes {
-		// Use optimal workers for each batch size
-		workers := calculateOptimalWorkers(batchSize)
-
-		// Test with subset to keep benchmark reasonable
-		testSize := min(len(texts), batchSize*10)
-		result := benchmarkBatchProcessing(model, texts[:testSize], batchSize, workers)
-		results[batchSize] = result
+func generateVectors(count, dim int) []int8 {
+	data := make([]int8, count*dim)
+	for i := 0; i < len(data); i++ {
+		data[i] = int8(rand.Intn(256) - 128)
 	}
-
-	return results
-}
-
-func calculateOptimalWorkers(batchSize int) int {
-	numCPU := runtime.NumCPU()
-
-	// For smaller batches, use more workers
-	if batchSize <= 64 {
-		return min(numCPU, 16)
-	} else if batchSize <= 256 {
-		return min(numCPU, 12)
-	} else {
-		return min(numCPU, 8)
-	}
-}
-
-func generateTestTexts(count int) []string {
-	templates := []string{
-		"Analyzing performance metrics for %s optimization in distributed systems.",
-		"Research findings on %s implementation strategies and best practices.",
-		"Deep dive into %s architecture patterns for scalable applications.",
-		"Comprehensive guide to %s deployment in cloud environments.",
-		"Performance benchmarking of %s algorithms across different platforms.",
-		"Security considerations for %s integration in enterprise systems.",
-		"Comparative analysis of %s frameworks and their efficiency metrics.",
-		"Machine learning applications in %s for improved system performance.",
-		"Real-time processing capabilities of %s in high-throughput scenarios.",
-		"Cost optimization strategies for %s infrastructure at scale.",
-	}
-
-	topics := []string{
-		"neural networks", "distributed computing", "container orchestration",
-		"microservices", "data processing", "machine learning pipelines",
-		"real-time analytics", "cloud infrastructure", "edge computing",
-		"artificial intelligence", "big data", "stream processing",
-		"graph databases", "time series analysis", "natural language processing",
-		"computer vision", "recommendation systems", "fraud detection",
-		"predictive analytics", "deep learning", "reinforcement learning",
-		"federated learning", "transfer learning", "model optimization",
-	}
-
-	texts := make([]string, count)
-	for i := 0; i < count; i++ {
-		template := templates[i%len(templates)]
-		topic := topics[i%len(topics)]
-		texts[i] = fmt.Sprintf(template, topic)
-	}
-
-	return texts
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return data
 }
