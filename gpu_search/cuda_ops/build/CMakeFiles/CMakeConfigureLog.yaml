@@ -948,3 +948,181 @@ events:
         8.6 
       exitCode: 0
 ...
+
+---
+events:
+  -
+    kind: "try_run-v1"
+    backtrace:
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/cuda.cmake:103 (try_run)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Caffe2Config.cmake:86 (include)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Torch/TorchConfig.cmake:68 (find_package)"
+      - "CMakeLists.txt:12 (find_package)"
+    directories:
+      source: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+      binary: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+    cmakeVariables:
+      CMAKE_CUDA_ARCHITECTURES: "52"
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/lee/code/gobed/libtorch/share/cmake/Caffe2;/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/../Modules_CUDA_fix"
+    buildResult:
+      variable: "compile_result"
+      cached: true
+      stdout: |
+        Change Dir: '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+        Run Build Command(s): /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_cfae3/fast
+        gmake[1]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        /usr/bin/gmake  -f CMakeFiles/cmTC_cfae3.dir/build.make CMakeFiles/cmTC_cfae3.dir/build
+        gmake[2]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        Building CXX object CMakeFiles/cmTC_cfae3.dir/detect_cuda_version.cc.o
+        /usr/bin/c++  -I/usr/local/cuda-12.0/include  -o CMakeFiles/cmTC_cfae3.dir/detect_cuda_version.cc.o -c /home/lee/code/gobed/gpu_search/cuda_ops/build/detect_cuda_version.cc
+        Linking CXX executable cmTC_cfae3
+        /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E cmake_link_script CMakeFiles/cmTC_cfae3.dir/link.txt --verbose=1
+        /usr/bin/c++ CMakeFiles/cmTC_cfae3.dir/detect_cuda_version.cc.o -o cmTC_cfae3  -Wl,-rpath,/usr/local/cuda-12.0/lib64 /usr/local/cuda-12.0/lib64/libcudart.so 
+        gmake[2]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        gmake[1]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+      exitCode: 0
+    runResult:
+      variable: "run_result"
+      cached: true
+      stdout: |
+        12.0
+      exitCode: 0
+  -
+    kind: "try_run-v1"
+    backtrace:
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Modules_CUDA_fix/upstream/FindCUDA/select_compute_arch.cmake:113 (try_run)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Modules_CUDA_fix/upstream/FindCUDA/select_compute_arch.cmake:173 (CUDA_DETECT_INSTALLED_GPUS)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/utils.cmake:398 (cuda_select_nvcc_arch_flags)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/cuda.cmake:300 (torch_cuda_get_nvcc_gencode_flag)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Caffe2Config.cmake:86 (include)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Torch/TorchConfig.cmake:68 (find_package)"
+      - "CMakeLists.txt:12 (find_package)"
+    directories:
+      source: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+      binary: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+    cmakeVariables:
+      CMAKE_CUDA_ARCHITECTURES: "52"
+      CMAKE_CUDA_FLAGS: ""
+      CMAKE_CUDA_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/lee/code/gobed/libtorch/share/cmake/Caffe2;/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/../Modules_CUDA_fix"
+    buildResult:
+      variable: "compile_result"
+      cached: true
+      stdout: |
+        Change Dir: '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+        Run Build Command(s): /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_13878/fast
+        gmake[1]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        /usr/bin/gmake  -f CMakeFiles/cmTC_13878.dir/build.make CMakeFiles/cmTC_13878.dir/build
+        gmake[2]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        Building CUDA object CMakeFiles/cmTC_13878.dir/detect_cuda_compute_capabilities.cu.o
+        /usr/local/cuda-12.0/bin/nvcc -forward-unknown-to-host-compiler -ccbin=g++-12   "--generate-code=arch=compute_52,code=[compute_52,sm_52]" -MD -MT CMakeFiles/cmTC_13878.dir/detect_cuda_compute_capabilities.cu.o -MF CMakeFiles/cmTC_13878.dir/detect_cuda_compute_capabilities.cu.o.d -x cu -c /home/lee/code/gobed/gpu_search/cuda_ops/build/detect_cuda_compute_capabilities.cu -o CMakeFiles/cmTC_13878.dir/detect_cuda_compute_capabilities.cu.o
+        Linking CUDA executable cmTC_13878
+        /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E cmake_link_script CMakeFiles/cmTC_13878.dir/link.txt --verbose=1
+        /usr/bin/g++-12 @CMakeFiles/cmTC_13878.dir/objects1.rsp -o cmTC_13878 @CMakeFiles/cmTC_13878.dir/linkLibs.rsp -L"/usr/local/cuda-12.0/targets/x86_64-linux/lib/stubs" -L"/usr/local/cuda-12.0/targets/x86_64-linux/lib"
+        gmake[2]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        gmake[1]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+      exitCode: 0
+    runResult:
+      variable: "run_result"
+      cached: true
+      stdout: |
+        8.6 
+      exitCode: 0
+...
+
+---
+events:
+  -
+    kind: "try_run-v1"
+    backtrace:
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/cuda.cmake:103 (try_run)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Caffe2Config.cmake:86 (include)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Torch/TorchConfig.cmake:68 (find_package)"
+      - "CMakeLists.txt:12 (find_package)"
+    directories:
+      source: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+      binary: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+    cmakeVariables:
+      CMAKE_CUDA_ARCHITECTURES: "52"
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/lee/code/gobed/libtorch/share/cmake/Caffe2;/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/../Modules_CUDA_fix"
+    buildResult:
+      variable: "compile_result"
+      cached: true
+      stdout: |
+        Change Dir: '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+        Run Build Command(s): /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_5da91/fast
+        gmake[1]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        /usr/bin/gmake  -f CMakeFiles/cmTC_5da91.dir/build.make CMakeFiles/cmTC_5da91.dir/build
+        gmake[2]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        Building CXX object CMakeFiles/cmTC_5da91.dir/detect_cuda_version.cc.o
+        /usr/bin/c++  -I/usr/local/cuda-12.0/include  -o CMakeFiles/cmTC_5da91.dir/detect_cuda_version.cc.o -c /home/lee/code/gobed/gpu_search/cuda_ops/build/detect_cuda_version.cc
+        Linking CXX executable cmTC_5da91
+        /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E cmake_link_script CMakeFiles/cmTC_5da91.dir/link.txt --verbose=1
+        /usr/bin/c++ CMakeFiles/cmTC_5da91.dir/detect_cuda_version.cc.o -o cmTC_5da91  -Wl,-rpath,/usr/local/cuda-12.0/lib64 /usr/local/cuda-12.0/lib64/libcudart.so 
+        gmake[2]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        gmake[1]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+      exitCode: 0
+    runResult:
+      variable: "run_result"
+      cached: true
+      stdout: |
+        12.0
+      exitCode: 0
+  -
+    kind: "try_run-v1"
+    backtrace:
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Modules_CUDA_fix/upstream/FindCUDA/select_compute_arch.cmake:113 (try_run)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Modules_CUDA_fix/upstream/FindCUDA/select_compute_arch.cmake:173 (CUDA_DETECT_INSTALLED_GPUS)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/utils.cmake:398 (cuda_select_nvcc_arch_flags)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/cuda.cmake:300 (torch_cuda_get_nvcc_gencode_flag)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Caffe2/Caffe2Config.cmake:86 (include)"
+      - "/home/lee/code/gobed/libtorch/share/cmake/Torch/TorchConfig.cmake:68 (find_package)"
+      - "CMakeLists.txt:12 (find_package)"
+    directories:
+      source: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+      binary: "/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp"
+    cmakeVariables:
+      CMAKE_CUDA_ARCHITECTURES: "52"
+      CMAKE_CUDA_FLAGS: ""
+      CMAKE_CUDA_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/lee/code/gobed/libtorch/share/cmake/Caffe2;/home/lee/code/gobed/libtorch/share/cmake/Caffe2/public/../Modules_CUDA_fix"
+    buildResult:
+      variable: "compile_result"
+      cached: true
+      stdout: |
+        Change Dir: '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+        Run Build Command(s): /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_1c293/fast
+        gmake[1]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        /usr/bin/gmake  -f CMakeFiles/cmTC_1c293.dir/build.make CMakeFiles/cmTC_1c293.dir/build
+        gmake[2]: Entering directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        Building CUDA object CMakeFiles/cmTC_1c293.dir/detect_cuda_compute_capabilities.cu.o
+        /usr/local/cuda-12.0/bin/nvcc -forward-unknown-to-host-compiler -ccbin=g++-12   "--generate-code=arch=compute_52,code=[compute_52,sm_52]" -MD -MT CMakeFiles/cmTC_1c293.dir/detect_cuda_compute_capabilities.cu.o -MF CMakeFiles/cmTC_1c293.dir/detect_cuda_compute_capabilities.cu.o.d -x cu -c /home/lee/code/gobed/gpu_search/cuda_ops/build/detect_cuda_compute_capabilities.cu -o CMakeFiles/cmTC_1c293.dir/detect_cuda_compute_capabilities.cu.o
+        Linking CUDA executable cmTC_1c293
+        /home/lee/code/cmake-3.27.7-linux-x86_64/bin/cmake -E cmake_link_script CMakeFiles/cmTC_1c293.dir/link.txt --verbose=1
+        /usr/bin/g++-12 @CMakeFiles/cmTC_1c293.dir/objects1.rsp -o cmTC_1c293 @CMakeFiles/cmTC_1c293.dir/linkLibs.rsp -L"/usr/local/cuda-12.0/targets/x86_64-linux/lib/stubs" -L"/usr/local/cuda-12.0/targets/x86_64-linux/lib"
+        gmake[2]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        gmake[1]: Leaving directory '/home/lee/code/gobed/gpu_search/cuda_ops/build/CMakeFiles/CMakeTmp'
+        
+      exitCode: 0
+    runResult:
+      variable: "run_result"
+      cached: true
+      stdout: |
+        8.6 
+      exitCode: 0
+...
