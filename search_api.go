@@ -54,6 +54,11 @@ type SearchConfig struct {
 	EnableAsync    bool // Enable async indexing (default: false)
 	AsyncWorkers   int  // Number of async workers (default: 4)
 	AsyncQueueSize int  // Size of async queue (default: 1000)
+
+	// GPU acceleration configuration
+	EnableGPU      bool // Enable GPU acceleration for similarity search (default: false)
+	GPUDeviceID    int  // CUDA device ID to use (default: 0)
+	GPUBatchSize   int  // Batch size for GPU operations (default: 1000)
 }
 
 // IndexRequest represents an async indexing request
@@ -97,6 +102,21 @@ func AsyncSearchConfig() SearchConfig {
 	config.AsyncWorkers = 8      // More workers for async
 	config.AsyncQueueSize = 2000 // Larger queue
 	return config
+}
+
+// GPUSearchConfig returns configuration optimized for GPU acceleration
+func GPUSearchConfig() SearchConfig {
+	config := DefaultSearchConfig()
+	config.EnableGPU = true
+	config.GPUDeviceID = 0    // Use first GPU
+	config.GPUBatchSize = 1000 // Optimal batch size for GPU
+	config.MaxExactSearchSize = 100000 // GPU can handle larger exact searches
+	return config
+}
+
+// NewGPUSearchEngine creates a GPU-accelerated search engine
+func NewGPUSearchEngine(model *EmbeddingModel) *SearchEngine {
+	return NewSearchEngineWithConfig(model, GPUSearchConfig())
 }
 
 // NewSearchEngine creates a new search engine

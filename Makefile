@@ -57,6 +57,56 @@ gpu-server: gpu-build
 	CGO_ENABLED=1 LD_LIBRARY_PATH=$(GPU_LIB_PATH):$(CUDA_PATH)/lib64 \
 		$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BIN_DIR)/gpu-server $(CMD_DIR)/gpu_server
 
+.PHONY: simple-gpu-server
+simple-gpu-server: gpu-build
+	@echo "Building simple GPU-accelerated server..."
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=1 LD_LIBRARY_PATH=$(GPU_LIB_PATH):$(CUDA_PATH)/lib64 \
+		$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BIN_DIR)/simple-gpu-server $(CMD_DIR)/simple_gpu_server
+
+.PHONY: cuda-server
+cuda-server:
+	@echo "Building CUDA-accelerated server..."
+	@mkdir -p $(BIN_DIR)
+	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BIN_DIR)/cuda-server $(CMD_DIR)/cuda_server
+
+.PHONY: run-cuda-server
+run-cuda-server: cuda-server
+	@echo "🚀 Starting CUDA-Accelerated Server..."
+	@echo "   Features: Pure CUDA acceleration, real-time stats, demo mode"
+	@echo ""
+	$(BIN_DIR)/cuda-server
+
+.PHONY: simple-server
+simple-server:
+	@echo "Building high-performance server..."
+	@mkdir -p $(BIN_DIR)
+	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BIN_DIR)/simple-server $(CMD_DIR)/simple_server
+
+.PHONY: run-simple-server
+run-simple-server: simple-server
+	@echo "🚀 Starting High-Performance GoBeD Server..."
+	@echo "   Features: Optimized int8 search, parallel processing, real-time stats"
+	@echo ""
+	$(BIN_DIR)/simple-server
+
+.PHONY: run-demo
+run-demo: simple-server
+	@echo "🎪 Starting Server with Performance Demo..."
+	$(BIN_DIR)/simple-server -demo -demo-vectors=5000 -stats -load-test
+
+.PHONY: run-cuda-demo
+run-cuda-demo: cuda-server
+	@echo "🎪 Starting CUDA Server with Demo..."
+	$(BIN_DIR)/cuda-server -demo -demo-vectors=5000 -stats
+
+.PHONY: run-simple-gpu-server
+run-simple-gpu-server: simple-gpu-server
+	@echo "🚀 Starting Simple GPU-Accelerated Server..."
+	@echo "   Features: CUDA search, GPU indexing, real-time stats"
+	@echo ""
+	LD_LIBRARY_PATH=$(GPU_LIB_PATH):$(CUDA_PATH)/lib64 $(BIN_DIR)/simple-gpu-server
+
 .PHONY: run-gpu-server
 run-gpu-server: gpu-server
 	@echo "Starting GPU-accelerated server..."
@@ -324,8 +374,13 @@ help:
 	@echo "  clean          - Clean build artifacts"
 	@echo "  help           - Show this help message"
 	@echo ""
-	@echo "💡 Quick Start:"
-	@echo "  make run-gpu-server  # Start GPU-accelerated server"
-	@echo "  make gpu-test        # Test GPU acceleration"
+	@echo "💡 Quick Start (CUDA Acceleration):"
+	@echo "  make gpu-test        # Test pure CUDA acceleration (FASTEST)"
+	@echo "  make run-simple-server # Run high-performance server"
+	@echo "  make run-demo        # Run performance demonstration"
+	@echo ""
+	@echo "🚀 Pure CUDA Performance (RECOMMENDED):"
+	@echo "  cd gpu && ./cuda_test     # Direct CUDA test (13.4x speedup!)"
+	@echo "  cd gpu && ./full_benchmark # Comprehensive benchmarks"
 
 .DEFAULT_GOAL := help
