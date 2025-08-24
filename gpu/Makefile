@@ -8,7 +8,7 @@ CXX = g++
 
 # Flags
 NVCC_FLAGS = -std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC -allow-unsupported-compiler -ccbin g++-12
-CXX_FLAGS = -std=c++17 -O3 -fPIC -D_GLIBCXX_USE_CXX11_ABI=0
+CXX_FLAGS = -std=c++17 -O3 -fPIC -D_GLIBCXX_USE_CXX11_ABI=1
 SHARED_FLAGS = --shared
 
 # Include paths
