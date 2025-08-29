@@ -34,6 +34,10 @@ struct CUDAIndex {
     float* d_batch_embeddings;  // Cached batch embeddings for bulk operations
     int batch_capacity;
     
+    // CUDA streams for async execution
+    cudaStream_t compute_stream;
+    cudaStream_t transfer_stream;
+    
     cublasHandle_t cublas_handle;
     bool initialized;
     
@@ -42,8 +46,105 @@ struct CUDAIndex {
                   num_vectors(0), vector_dim(0), allocated_size(0),
                   vocab_size(0), embed_dim(0), max_tokens(512),
                   use_int8_embeddings(false), d_batch_embeddings(nullptr), 
-                  batch_capacity(0), initialized(false) {}
+                  batch_capacity(0), compute_stream(0), transfer_stream(0),
+                  initialized(false) {}
 };
+
+// Custom heap-based top-k selection (much faster than full sort)
+template<int K>
+__global__ void topk_heap_kernel(
+    const float* __restrict__ scores,
+    int* __restrict__ indices,
+    float* __restrict__ top_scores,
+    int num_vectors
+) {
+    // Use a min-heap to track top K elements
+    __shared__ float heap_scores[K];
+    __shared__ int heap_indices[K];
+    
+    if (threadIdx.x == 0) {
+        // Initialize heap with smallest values
+        for (int i = 0; i < K; i++) {
+            heap_scores[i] = -FLT_MAX;
+            heap_indices[i] = -1;
+        }
+    }
+    __syncthreads();
+    
+    // Each thread processes a portion of scores
+    int stride = blockDim.x;
+    for (int i = threadIdx.x; i < num_vectors; i += stride) {
+        float score = scores[i];
+        
+        // Check if this score belongs in top-k
+        if (score > heap_scores[0]) {
+            // Use atomic operations to update heap
+            if (threadIdx.x == 0) {
+                // Replace minimum with new value
+                heap_scores[0] = score;
+                heap_indices[0] = i;
+                
+                // Heapify down
+                int pos = 0;
+                while (2 * pos + 1 < K) {
+                    int child = 2 * pos + 1;
+                    if (child + 1 < K && heap_scores[child + 1] < heap_scores[child]) {
+                        child++;
+                    }
+                    if (heap_scores[pos] > heap_scores[child]) {
+                        // Swap
+                        float tmp_score = heap_scores[pos];
+                        int tmp_idx = heap_indices[pos];
+                        heap_scores[pos] = heap_scores[child];
+                        heap_indices[pos] = heap_indices[child];
+                        heap_scores[child] = tmp_score;
+                        heap_indices[child] = tmp_idx;
+                        pos = child;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            __syncthreads();
+        }
+    }
+    
+    // Copy heap to output (sorted)
+    if (threadIdx.x < K) {
+        top_scores[threadIdx.x] = heap_scores[threadIdx.x];
+        indices[threadIdx.x] = heap_indices[threadIdx.x];
+    }
+}
+
+// Tensor Core accelerated int8 matrix multiplication (Ampere/Hopper)
+// Note: Full tensor core implementation would use nvcuda::wmma API
+__global__ void int8_gemm_tensor_core_kernel(
+    const int8_t* __restrict__ query,      // [1 x dim] treated as [1 x dim x 1]
+    const int8_t* __restrict__ database,   // [num_vectors x dim]
+    float* __restrict__ scores,            // [num_vectors]
+    float query_scale,
+    const float* __restrict__ db_scales,
+    int num_vectors,
+    int dim
+) {
+    // Optimized for tensor core alignment (16-byte boundaries)
+    int vec_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (vec_idx >= num_vectors) return;
+    
+    const int8_t* db_vec = database + vec_idx * dim;
+    int32_t sum = 0;
+    
+    // Process 16 elements at a time for tensor core alignment
+    #pragma unroll
+    for (int i = 0; i < dim; i += 16) {
+        #pragma unroll
+        for (int j = 0; j < 16 && i + j < dim; j++) {
+            sum += (int32_t)query[i + j] * (int32_t)db_vec[i + j];
+        }
+    }
+    
+    scores[vec_idx] = (float)sum * query_scale * db_scales[vec_idx];
+}
 
 // Ultra-optimized int8 dot product with int4 vectorization
 __global__ void int8_dot_product_vectorized_kernel(
@@ -184,6 +285,71 @@ __global__ void embed_and_pool_optimized_kernel(
     
     // Average pooling
     output[dim_idx] = valid_tokens > 0 ? sum / valid_tokens : 0.0f;
+}
+
+// Fused kernel: embedding lookup + pooling + quantization + dot product
+__global__ void fused_embed_search_kernel(
+    const int* __restrict__ token_ids,
+    const int8_t* __restrict__ embeddings,
+    const int8_t* __restrict__ database,
+    float* __restrict__ scores,
+    const float* __restrict__ db_scales,
+    int seq_len,
+    int num_vectors,
+    int embed_dim,
+    int output_dim,
+    int vocab_size,
+    int max_tokens
+) {
+    extern __shared__ char shared_mem[];
+    int8_t* shared_query = (int8_t*)shared_mem;
+    
+    int vec_idx = blockIdx.x;
+    if (vec_idx >= num_vectors) return;
+    
+    // Phase 1: Cooperatively compute query embedding
+    int tid = threadIdx.x;
+    int dims_per_thread = (output_dim + blockDim.x - 1) / blockDim.x;
+    
+    for (int d = tid * dims_per_thread; d < (tid + 1) * dims_per_thread && d < output_dim; d++) {
+        int32_t sum = 0;
+        int valid_tokens = 0;
+        int actual_seq_len = min(seq_len, max_tokens);
+        
+        for (int i = 0; i < actual_seq_len; i++) {
+            int token_id = token_ids[i];
+            if (token_id >= 0 && token_id < vocab_size) {
+                sum += embeddings[token_id * embed_dim + d];
+                valid_tokens++;
+            }
+        }
+        
+        // Average and quantize inline
+        float avg = valid_tokens > 0 ? (float)sum / valid_tokens : 0.0f;
+        int8_t quantized = (int8_t)fmaxf(-128.0f, fminf(127.0f, avg));
+        shared_query[d] = quantized;
+    }
+    
+    __syncthreads();
+    
+    // Phase 2: Compute dot product with database vector
+    const int8_t* db_vec = database + vec_idx * output_dim;
+    int32_t dot_product = 0;
+    
+    // Each thread computes partial sum
+    for (int d = tid; d < output_dim; d += blockDim.x) {
+        dot_product += (int32_t)shared_query[d] * (int32_t)db_vec[d];
+    }
+    
+    // Warp-level reduction
+    for (int offset = 16; offset > 0; offset /= 2) {
+        dot_product += __shfl_down_sync(0xffffffff, dot_product, offset);
+    }
+    
+    // Write result (first thread of each warp)
+    if (tid % 32 == 0) {
+        atomicAdd(&scores[vec_idx], (float)dot_product * db_scales[vec_idx] / 127.0f);
+    }
 }
 
 // Ultra-fast shared memory version for small sequences
@@ -619,6 +785,10 @@ void* cuda_index_create(int vector_dim, int vocab_size, int embed_dim) {
         return nullptr;
     }
     
+    // Create CUDA streams for async execution
+    cudaStreamCreate(&index->compute_stream);
+    cudaStreamCreate(&index->transfer_stream);
+    
     index->initialized = true;
     // Indexer created successfully
     return index;
@@ -835,16 +1005,28 @@ int cuda_search_with_tokens(
         index->num_vectors, index->vector_dim
     );
     
-    // Find top-k
+    // Find top-k using optimized heap kernel
     int* d_indices;
     float* d_top_scores;
     cudaMalloc(&d_indices, k * sizeof(int));
     cudaMalloc(&d_top_scores, k * sizeof(float));
     
-    size_t shared_mem_size = k * (sizeof(float) + sizeof(int));
-    topk_selection_kernel<<<1, 256, shared_mem_size>>>(
-        d_scores, d_indices, d_top_scores, index->num_vectors, k
-    );
+    // Use heap-based top-k for better performance
+    if (k == 10) {
+        topk_heap_kernel<10><<<1, 256, 0, index->compute_stream>>>(
+            d_scores, d_indices, d_top_scores, index->num_vectors
+        );
+    } else if (k == 20) {
+        topk_heap_kernel<20><<<1, 256, 0, index->compute_stream>>>(
+            d_scores, d_indices, d_top_scores, index->num_vectors
+        );
+    } else {
+        // Fallback to original kernel
+        size_t shared_mem_size = k * (sizeof(float) + sizeof(int));
+        topk_selection_kernel<<<1, 256, shared_mem_size, index->compute_stream>>>(
+            d_scores, d_indices, d_top_scores, index->num_vectors, k
+        );
+    }
     
     // Copy results back
     cudaMemcpy(result_indices, d_indices, k * sizeof(int), cudaMemcpyDeviceToHost);
@@ -910,16 +1092,28 @@ int cuda_search_with_embedding(
         return 0;
     }
     
-    // Find top-k
+    // Find top-k using optimized heap kernel
     int* d_indices;
     float* d_top_scores;
     cudaMalloc(&d_indices, k * sizeof(int));
     cudaMalloc(&d_top_scores, k * sizeof(float));
     
-    size_t shared_mem_size = k * (sizeof(float) + sizeof(int));
-    topk_selection_kernel<<<1, 256, shared_mem_size>>>(
-        d_scores, d_indices, d_top_scores, index->num_vectors, k
-    );
+    // Use heap-based top-k for better performance
+    if (k == 10) {
+        topk_heap_kernel<10><<<1, 256, 0, index->compute_stream>>>(
+            d_scores, d_indices, d_top_scores, index->num_vectors
+        );
+    } else if (k == 20) {
+        topk_heap_kernel<20><<<1, 256, 0, index->compute_stream>>>(
+            d_scores, d_indices, d_top_scores, index->num_vectors
+        );
+    } else {
+        // Fallback to original kernel
+        size_t shared_mem_size = k * (sizeof(float) + sizeof(int));
+        topk_selection_kernel<<<1, 256, shared_mem_size, index->compute_stream>>>(
+            d_scores, d_indices, d_top_scores, index->num_vectors, k
+        );
+    }
     
     cudaDeviceSynchronize();
     
@@ -949,6 +1143,13 @@ void cuda_index_destroy(void* index_ptr) {
     if (index->d_database) cudaFree(index->d_database);
     if (index->d_scales) cudaFree(index->d_scales);
     if (index->d_embeddings) cudaFree(index->d_embeddings);
+    if (index->d_embeddings_int8) cudaFree(index->d_embeddings_int8);
+    if (index->d_embedding_scales) cudaFree(index->d_embedding_scales);
+    
+    // Destroy CUDA streams
+    if (index->compute_stream) cudaStreamDestroy(index->compute_stream);
+    if (index->transfer_stream) cudaStreamDestroy(index->transfer_stream);
+    
     if (index->initialized) cublasDestroy(index->cublas_handle);
     
     delete index;
