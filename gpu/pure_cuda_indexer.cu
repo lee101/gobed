@@ -45,55 +45,110 @@ struct CUDAIndex {
                   batch_capacity(0), initialized(false) {}
 };
 
-// Optimized vectorized int8 dot product kernel
-__global__ void int8_dot_product_kernel(
-    const int8_t* query,      // [1 x dim]
-    const int8_t* database,   // [num_vectors x dim]
-    float* scores,            // [num_vectors]
+// Ultra-optimized int8 dot product with int4 vectorization
+__global__ void int8_dot_product_vectorized_kernel(
+    const int8_t* __restrict__ query,
+    const int8_t* __restrict__ database,
+    float* __restrict__ scores,
     float query_scale,
-    const float* db_scales,   // [num_vectors]
+    const float* __restrict__ db_scales,
     int num_vectors,
     int dim
 ) {
     int vec_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (vec_idx >= num_vectors) return;
     
-    // Use vectorized loads when possible (4 int8 values at once)
-    int32_t sum = 0;
     const int8_t* db_vec = database + vec_idx * dim;
     
-    // Process 4 elements at a time using int32 loads
-    int vec_len = dim / 4;
-    const int32_t* query_vec = reinterpret_cast<const int32_t*>(query);
-    const int32_t* db_vec_int32 = reinterpret_cast<const int32_t*>(db_vec);
+    // Use int4 (128-bit) loads for maximum bandwidth
+    int32_t sum = 0;
+    const int4* query_int4 = reinterpret_cast<const int4*>(query);
+    const int4* db_int4 = reinterpret_cast<const int4*>(db_vec);
+    int num_int4 = dim / 16;  // Each int4 contains 16 int8 values
     
-    for (int i = 0; i < vec_len; i++) {
-        int32_t q_packed = query_vec[i];
-        int32_t d_packed = db_vec_int32[i];
+    #pragma unroll 4
+    for (int i = 0; i < num_int4; i++) {
+        int4 q = query_int4[i];
+        int4 d = db_int4[i];
         
-        // Extract individual int8 values and multiply
-        int8_t q0 = (int8_t)(q_packed & 0xFF);
-        int8_t q1 = (int8_t)((q_packed >> 8) & 0xFF);
-        int8_t q2 = (int8_t)((q_packed >> 16) & 0xFF);
-        int8_t q3 = (int8_t)((q_packed >> 24) & 0xFF);
+        // Process 16 int8 values at once
+        const int8_t* q_bytes = reinterpret_cast<const int8_t*>(&q);
+        const int8_t* d_bytes = reinterpret_cast<const int8_t*>(&d);
         
-        int8_t d0 = (int8_t)(d_packed & 0xFF);
-        int8_t d1 = (int8_t)((d_packed >> 8) & 0xFF);
-        int8_t d2 = (int8_t)((d_packed >> 16) & 0xFF);
-        int8_t d3 = (int8_t)((d_packed >> 24) & 0xFF);
-        
-        sum += (int32_t)q0 * (int32_t)d0;
-        sum += (int32_t)q1 * (int32_t)d1;
-        sum += (int32_t)q2 * (int32_t)d2;
-        sum += (int32_t)q3 * (int32_t)d3;
+        #pragma unroll
+        for (int j = 0; j < 16; j++) {
+            sum += (int32_t)q_bytes[j] * (int32_t)d_bytes[j];
+        }
     }
     
     // Handle remaining elements
-    for (int i = vec_len * 4; i < dim; i++) {
+    for (int i = num_int4 * 16; i < dim; i++) {
         sum += (int32_t)query[i] * (int32_t)db_vec[i];
     }
     
-    // Apply scaling and store
+    scores[vec_idx] = (float)sum * query_scale * db_scales[vec_idx];
+}
+
+// Warp-cooperative dot product for better cache utilization
+__global__ void int8_dot_product_warp_kernel(
+    const int8_t* __restrict__ query,
+    const int8_t* __restrict__ database,
+    float* __restrict__ scores,
+    float query_scale,
+    const float* __restrict__ db_scales,
+    int num_vectors,
+    int dim
+) {
+    cg::thread_block block = cg::this_thread_block();
+    cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+    
+    int warp_id = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
+    int lane_id = threadIdx.x % 32;
+    
+    if (warp_id >= num_vectors) return;
+    
+    const int8_t* db_vec = database + warp_id * dim;
+    int32_t partial_sum = 0;
+    
+    // Each thread processes a portion of the vector
+    for (int i = lane_id; i < dim; i += 32) {
+        partial_sum += (int32_t)query[i] * (int32_t)db_vec[i];
+    }
+    
+    // Warp reduction
+    #pragma unroll
+    for (int offset = 16; offset > 0; offset /= 2) {
+        partial_sum += warp.shfl_down(partial_sum, offset);
+    }
+    
+    // Lane 0 writes the result
+    if (lane_id == 0) {
+        scores[warp_id] = (float)partial_sum * query_scale * db_scales[warp_id];
+    }
+}
+
+// Original kernel for compatibility
+__global__ void int8_dot_product_kernel(
+    const int8_t* query,
+    const int8_t* database,
+    float* scores,
+    float query_scale,
+    const float* db_scales,
+    int num_vectors,
+    int dim
+) {
+    int vec_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (vec_idx >= num_vectors) return;
+    
+    int32_t sum = 0;
+    const int8_t* db_vec = database + vec_idx * dim;
+    
+    // Simple unrolled loop
+    #pragma unroll 8
+    for (int i = 0; i < dim; i++) {
+        sum += (int32_t)query[i] * (int32_t)db_vec[i];
+    }
+    
     scores[vec_idx] = (float)sum * query_scale * db_scales[vec_idx];
 }
 
@@ -129,6 +184,106 @@ __global__ void embed_and_pool_optimized_kernel(
     
     // Average pooling
     output[dim_idx] = valid_tokens > 0 ? sum / valid_tokens : 0.0f;
+}
+
+// Ultra-fast shared memory version for small sequences
+__global__ void embed_and_pool_int8_shared_kernel(
+    const int* __restrict__ token_ids,
+    const int8_t* __restrict__ embeddings,
+    int8_t* __restrict__ output,
+    float* output_scale,
+    int seq_len,
+    int embed_dim,
+    int output_dim,
+    int vocab_size,
+    int max_tokens = 512
+) {
+    extern __shared__ int32_t shared_sums[];
+    
+    int dim_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid = threadIdx.x;
+    
+    // Initialize shared memory
+    if (dim_idx < output_dim) {
+        shared_sums[tid] = 0;
+    }
+    __syncthreads();
+    
+    if (dim_idx >= output_dim) return;
+    
+    int32_t local_sum = 0;
+    int actual_seq_len = min(seq_len, max_tokens);
+    
+    // Unrolled loop for better performance
+    #pragma unroll 8
+    for (int i = 0; i < actual_seq_len; i++) {
+        int token_id = token_ids[i];
+        if (token_id >= 0 && token_id < vocab_size) {
+            local_sum += (int32_t)embeddings[token_id * embed_dim + dim_idx];
+        }
+    }
+    
+    // Store to shared memory
+    shared_sums[tid] = local_sum;
+    __syncthreads();
+    
+    // Final averaging and quantization
+    if (dim_idx < output_dim) {
+        int32_t avg = shared_sums[tid] / actual_seq_len;
+        avg = min(127, max(-128, avg));
+        output[dim_idx] = (int8_t)avg;
+    }
+    
+    if (tid == 0) {
+        *output_scale = 1.0f / 127.0f;
+    }
+}
+
+// Warp-optimized version using warp shuffle instructions
+__global__ void embed_and_pool_int8_warp_kernel(
+    const int* __restrict__ token_ids,
+    const int8_t* __restrict__ embeddings,
+    int8_t* __restrict__ output,
+    float* output_scale,
+    int seq_len,
+    int embed_dim,
+    int output_dim,
+    int vocab_size,
+    int max_tokens = 512
+) {
+    cg::thread_block block = cg::this_thread_block();
+    cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+    
+    int dim_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (dim_idx >= output_dim) return;
+    
+    int32_t sum = 0;
+    int actual_seq_len = min(seq_len, max_tokens);
+    
+    // Process tokens with warp-level coordination
+    for (int i = warp.thread_rank(); i < actual_seq_len; i += warp.size()) {
+        int token_id = token_ids[i];
+        if (token_id >= 0 && token_id < vocab_size) {
+            sum += (int32_t)embeddings[token_id * embed_dim + dim_idx];
+        }
+    }
+    
+    // Warp-level reduction using shuffle
+    #pragma unroll
+    for (int offset = warp.size() / 2; offset > 0; offset /= 2) {
+        sum += warp.shfl_down(sum, offset);
+    }
+    
+    // Thread 0 of each warp writes result
+    if (warp.thread_rank() == 0) {
+        int32_t avg = sum / actual_seq_len;
+        avg = min(127, max(-128, avg));
+        output[dim_idx] = (int8_t)avg;
+    }
+    
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        *output_scale = 1.0f / 127.0f;
+    }
 }
 
 // Ultra-optimized int8 quantized embedding lookup and pooling
@@ -465,8 +620,7 @@ void* cuda_index_create(int vector_dim, int vocab_size, int embed_dim) {
     }
     
     index->initialized = true;
-    std::cout << "✅ Pure CUDA indexer created (dim=" << vector_dim 
-              << ", vocab=" << vocab_size << ", embed=" << embed_dim << ")" << std::endl;
+    // Indexer created successfully
     return index;
 }
 
@@ -497,8 +651,7 @@ int cuda_load_embeddings(void* index_ptr, const float* embeddings) {
     }
     
     index->use_int8_embeddings = false;
-    std::cout << "✅ Loaded embedding table to GPU (" 
-              << (embed_size / (1024.0 * 1024.0)) << " MB)" << std::endl;
+    // Embedding table loaded to GPU
     return 1;
 }
 
@@ -551,9 +704,7 @@ int cuda_load_embeddings_int8(void* index_ptr, const int8_t* embeddings, const f
     }
     
     index->use_int8_embeddings = true;
-    std::cout << "✅ Loaded int8 embedding table to GPU (" 
-              << (embed_size / (1024.0 * 1024.0)) << " MB + " 
-              << (scale_size / 1024.0) << " KB scales)" << std::endl;
+    // Int8 embedding table loaded to GPU with 75% memory savings
     return 1;
 }
 
@@ -606,9 +757,7 @@ int cuda_index_add(void* index_ptr, const int8_t* vectors, const float* scales, 
     cudaMemGetInfo(&free_mem, &total_mem);
     size_t used_mem = total_mem - free_mem;
     
-    std::cout << "✅ Added " << num_vectors << " vectors to GPU index. "
-              << "Total: " << index->num_vectors << " vectors, "
-              << "GPU memory: " << (used_mem / (1024.0 * 1024.0)) << " MB" << std::endl;
+    // Vectors added to GPU index
     
     return 1;
 }
@@ -648,11 +797,12 @@ int cuda_search_with_tokens(
     int output_dim = index->vector_dim;  // Only compute 512 dimensions
     
     if (index->use_int8_embeddings && index->d_embeddings_int8) {
-        // Use int8 vectorized kernel for better performance
+        // Use int8 shared memory kernel for better performance
         int grid_size = (output_dim / 4 + block_size - 1) / block_size;
-        embed_and_pool_int8_vectorized_kernel<<<grid_size, block_size>>>(
-            d_tokens, index->d_embeddings_int8, d_query,
-            d_query_scale, seq_len, index->embed_dim, output_dim, 
+        embed_and_pool_int8_shared_kernel<<<grid_size, block_size, 
+            block_size * index->embed_dim * sizeof(int8_t)>>>(
+            d_tokens, index->d_embeddings_int8, 
+            d_query, d_query_scale, seq_len, index->embed_dim, output_dim, 
             index->vocab_size, index->max_tokens
         );
         // No need for separate quantization step - already int8!
@@ -671,14 +821,15 @@ int cuda_search_with_tokens(
         );
     }
     
-    // Compute similarities
+    // Compute similarities using optimized vectorized kernel
     int grid_size = (index->num_vectors + block_size - 1) / block_size;
     
     // Get query scale from device
     float query_scale;
     cudaMemcpy(&query_scale, d_query_scale, sizeof(float), cudaMemcpyDeviceToHost);
     
-    int8_dot_product_kernel<<<grid_size, block_size>>>(
+    // Use vectorized kernel for better performance
+    int8_dot_product_vectorized_kernel<<<grid_size, block_size>>>(
         d_query, index->d_database, d_scores,
         query_scale, index->d_scales,
         index->num_vectors, index->vector_dim
@@ -711,7 +862,7 @@ int cuda_search_with_tokens(
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     
-    std::cout << "🚀 GPU search completed in " << duration.count() << " μs" << std::endl;
+    // GPU search completed
     
     return k;
 }
@@ -739,11 +890,12 @@ int cuda_search_with_embedding(
     // Copy query to GPU
     cudaMemcpy(d_query, query, index->vector_dim * sizeof(int8_t), cudaMemcpyHostToDevice);
     
-    // Compute similarities
+    // Compute similarities using optimized vectorized kernel
     int block_size = 256;
     int grid_size = (index->num_vectors + block_size - 1) / block_size;
     
-    int8_dot_product_kernel<<<grid_size, block_size>>>(
+    // Use vectorized kernel for better performance
+    int8_dot_product_vectorized_kernel<<<grid_size, block_size>>>(
         d_query, index->d_database, d_scores,
         query_scale, index->d_scales,
         index->num_vectors, index->vector_dim
@@ -784,8 +936,7 @@ int cuda_search_with_embedding(
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     
-    std::cout << "⚡ GPU search completed in " << duration.count() << " μs ("
-              << index->num_vectors << " vectors searched)" << std::endl;
+    // GPU search with embeddings completed
     
     return k;
 }
@@ -801,7 +952,7 @@ void cuda_index_destroy(void* index_ptr) {
     if (index->initialized) cublasDestroy(index->cublas_handle);
     
     delete index;
-    std::cout << "🧹 CUDA index destroyed" << std::endl;
+    // CUDA index destroyed
 }
 
 // Get GPU memory usage
@@ -924,9 +1075,7 @@ int cuda_bulk_index_tokens(
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     
-    std::cout << "⚡ Bulk indexed " << batch_size << " sequences on GPU in " 
-              << duration.count() << " ms. Total vectors: " << index->num_vectors 
-              << ", GPU memory: " << (cuda_get_memory_usage() / (1024.0 * 1024.0)) << " MB" << std::endl;
+    // Bulk indexing completed
     
     return batch_size;
 }
@@ -936,7 +1085,7 @@ void cuda_set_max_tokens(void* index_ptr, int max_tokens) {
     CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
     if (index) {
         index->max_tokens = max_tokens;
-        std::cout << "📏 Max tokens set to " << max_tokens << std::endl;
+        // Max tokens updated
     }
 }
 
