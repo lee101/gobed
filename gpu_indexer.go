@@ -127,6 +127,39 @@ func (g *GPUIndexer) LoadEmbeddings(embeddings []float32) error {
 	return nil
 }
 
+// LoadEmbeddingsInt8 loads quantized int8 embeddings to GPU for faster processing
+// This reduces memory usage by 75% and improves performance through:
+// - 4x less memory bandwidth usage
+// - Better cache utilization
+// - Vectorized int8 operations
+func (g *GPUIndexer) LoadEmbeddingsInt8(embeddings []int8, scales []float32) error {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	if len(embeddings) != g.vocabSize*g.embedDim {
+		return fmt.Errorf("int8 embeddings size mismatch: expected %d, got %d",
+			g.vocabSize*g.embedDim, len(embeddings))
+	}
+
+	if len(scales) != g.vocabSize {
+		return fmt.Errorf("scales size mismatch: expected %d, got %d",
+			g.vocabSize, len(scales))
+	}
+
+	result := C.cuda_load_embeddings_int8(
+		g.handle,
+		(*C.schar)(unsafe.Pointer(&embeddings[0])),
+		(*C.float)(unsafe.Pointer(&scales[0])),
+	)
+
+	if result == 0 {
+		return fmt.Errorf("failed to load int8 embeddings to GPU")
+	}
+
+	fmt.Printf("✅ Loaded %d int8 embeddings to GPU (75%% memory savings)\n", g.vocabSize)
+	return nil
+}
+
 // AddVectors adds int8 quantized vectors to the index
 func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	g.mutex.Lock()
@@ -316,6 +349,71 @@ func (g *GPUIndexer) destroy() {
 		g.handle = nil
 		fmt.Println("🧹 Pure CUDA indexer destroyed")
 	}
+}
+
+// BatchSearch performs k-nearest neighbor search for multiple queries
+func (g *GPUIndexer) BatchSearch(queries [][]int8, k int) ([][]SearchResult, error) {
+	if len(queries) == 0 {
+		return nil, fmt.Errorf("no queries provided")
+	}
+
+	// Validate all queries have correct dimension
+	for i, query := range queries {
+		if len(query) != g.vectorDim {
+			return nil, fmt.Errorf("query %d dimension mismatch: expected %d, got %d",
+				i, g.vectorDim, len(query))
+		}
+	}
+
+	// Check if index is empty
+	g.mutex.RLock()
+	if g.numVectors == 0 {
+		g.mutex.RUnlock()
+		return nil, fmt.Errorf("index is empty")
+	}
+	g.mutex.RUnlock()
+
+	// Process queries in parallel for better GPU utilization
+	results := make([][]SearchResult, len(queries))
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(queries))
+
+	// Process each query
+	for i, query := range queries {
+		wg.Add(1)
+		go func(idx int, q []int8) {
+			defer wg.Done()
+
+			// Perform search with default scale of 1.0
+			indices, scores, err := g.SearchWithEmbedding(q, 1.0, k)
+			if err != nil {
+				errChan <- fmt.Errorf("query %d failed: %w", idx, err)
+				return
+			}
+
+			// Convert to SearchResult format
+			queryResults := make([]SearchResult, len(indices))
+			for j := range indices {
+				queryResults[j] = SearchResult{
+					ID:         int(indices[j]),
+					Similarity: scores[j],
+				}
+			}
+			results[idx] = queryResults
+		}(i, query)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for errors
+	for err := range errChan {
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
 }
 
 // Close explicitly releases GPU resources

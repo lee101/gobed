@@ -6,9 +6,12 @@
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
 #include <vector>
-#include <iostream>
 #include <chrono>
 #include <cstring>
+#include <cooperative_groups.h>
+#include <cuda_fp16.h>
+
+namespace cg = cooperative_groups;
 
 // Structure to hold GPU index data
 struct CUDAIndex {
@@ -20,9 +23,12 @@ struct CUDAIndex {
     
     // Embedding table for token lookups
     float* d_embeddings;    // Token embeddings [vocab_size x embed_dim]
+    int8_t* d_embeddings_int8;  // Quantized int8 embeddings [vocab_size x embed_dim]
+    float* d_embedding_scales;   // Scale factors for each embedding [vocab_size]
     int vocab_size;
     int embed_dim;
     int max_tokens;         // Max tokens to process (default 512)
+    bool use_int8_embeddings;  // Whether to use int8 embeddings
     
     // Bulk indexing cache
     float* d_batch_embeddings;  // Cached batch embeddings for bulk operations
@@ -32,9 +38,11 @@ struct CUDAIndex {
     bool initialized;
     
     CUDAIndex() : d_database(nullptr), d_scales(nullptr), d_embeddings(nullptr), 
+                  d_embeddings_int8(nullptr), d_embedding_scales(nullptr),
                   num_vectors(0), vector_dim(0), allocated_size(0),
                   vocab_size(0), embed_dim(0), max_tokens(512),
-                  d_batch_embeddings(nullptr), batch_capacity(0), initialized(false) {}
+                  use_int8_embeddings(false), d_batch_embeddings(nullptr), 
+                  batch_capacity(0), initialized(false) {}
 };
 
 // Optimized vectorized int8 dot product kernel
@@ -121,6 +129,126 @@ __global__ void embed_and_pool_optimized_kernel(
     
     // Average pooling
     output[dim_idx] = valid_tokens > 0 ? sum / valid_tokens : 0.0f;
+}
+
+// Ultra-optimized int8 quantized embedding lookup and pooling
+// Uses int8 embeddings and performs accumulation in int32 for speed
+__global__ void embed_and_pool_int8_kernel(
+    const int* token_ids,       // [seq_len]
+    const int8_t* embeddings,   // [vocab_size x embed_dim] - quantized embeddings
+    int8_t* output,             // [output_dim] - quantized output
+    float* output_scale,        // Output scale factor
+    const float* embed_scales,  // [vocab_size] - scale for each embedding
+    int seq_len,
+    int embed_dim,              // Full embedding dimension (1024)
+    int output_dim,             // Output dimension (512)
+    int vocab_size,
+    int max_tokens = 512        // Truncate to first 512 tokens
+) {
+    int dim_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (dim_idx >= output_dim) return;
+    
+    // Use int32 for accumulation to avoid overflow
+    int32_t sum = 0;
+    int valid_tokens = 0;
+    float scale_sum = 0.0f;
+    
+    // Truncate to max_tokens
+    int actual_seq_len = min(seq_len, max_tokens);
+    
+    // Accumulate int8 values
+    for (int i = 0; i < actual_seq_len; i++) {
+        int token_id = token_ids[i];
+        if (token_id >= 0 && token_id < vocab_size) {
+            // Load int8 embedding value
+            int8_t embed_val = embeddings[token_id * embed_dim + dim_idx];
+            sum += (int32_t)embed_val;
+            scale_sum += embed_scales[token_id];
+            valid_tokens++;
+        }
+    }
+    
+    if (valid_tokens > 0) {
+        // Average the accumulated int32 value
+        float avg = (float)sum / (float)valid_tokens;
+        float avg_scale = scale_sum / valid_tokens;
+        
+        // Quantize the average back to int8
+        // Note: This is a simplified quantization, you might want more sophisticated approach
+        int32_t quantized = __float2int_rn(avg);
+        quantized = min(127, max(-128, quantized));
+        output[dim_idx] = (int8_t)quantized;
+        
+        // Store scale factor (only first thread)
+        if (dim_idx == 0) {
+            *output_scale = avg_scale;
+        }
+    } else {
+        output[dim_idx] = 0;
+        if (dim_idx == 0) {
+            *output_scale = 1.0f;
+        }
+    }
+}
+
+// Vectorized int8 embedding lookup with warp-level optimizations
+__global__ void embed_and_pool_int8_vectorized_kernel(
+    const int* token_ids,       // [seq_len]
+    const int8_t* embeddings,   // [vocab_size x embed_dim] - quantized embeddings
+    int8_t* output,             // [output_dim] - quantized output
+    float* output_scale,        // Output scale factor
+    int seq_len,
+    int embed_dim,              // Full embedding dimension (1024)
+    int output_dim,             // Output dimension (512)
+    int vocab_size,
+    int max_tokens = 512        // Truncate to first 512 tokens
+) {
+    // Process 4 dimensions per thread for better memory coalescing
+    int thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int dim_base = thread_idx * 4;
+    
+    if (dim_base >= output_dim) return;
+    
+    // Use int32 for accumulation of 4 values
+    int32_t sum[4] = {0, 0, 0, 0};
+    int valid_tokens = 0;
+    
+    // Truncate to max_tokens
+    int actual_seq_len = min(seq_len, max_tokens);
+    
+    // Process tokens
+    for (int i = 0; i < actual_seq_len; i++) {
+        int token_id = token_ids[i];
+        if (token_id >= 0 && token_id < vocab_size) {
+            // Load 4 int8 values at once (vectorized load)
+            const int8_t* embed_ptr = embeddings + token_id * embed_dim + dim_base;
+            
+            // Process up to 4 dimensions
+            #pragma unroll
+            for (int j = 0; j < 4 && (dim_base + j) < output_dim; j++) {
+                sum[j] += (int32_t)embed_ptr[j];
+            }
+            valid_tokens++;
+        }
+    }
+    
+    // Write results
+    if (valid_tokens > 0) {
+        int8_t* output_ptr = output + dim_base;
+        
+        #pragma unroll
+        for (int j = 0; j < 4 && (dim_base + j) < output_dim; j++) {
+            // Average and quantize
+            int32_t avg = sum[j] / valid_tokens;
+            avg = min(127, max(-128, avg));
+            output_ptr[j] = (int8_t)avg;
+        }
+        
+        // Simple scale (first thread only)
+        if (thread_idx == 0) {
+            *output_scale = 1.0f / 127.0f;  // Simple fixed scale
+        }
+    }
 }
 
 // Legacy kernel for backward compatibility
@@ -368,8 +496,64 @@ int cuda_load_embeddings(void* index_ptr, const float* embeddings) {
         return 0;
     }
     
+    index->use_int8_embeddings = false;
     std::cout << "✅ Loaded embedding table to GPU (" 
               << (embed_size / (1024.0 * 1024.0)) << " MB)" << std::endl;
+    return 1;
+}
+
+// Load quantized int8 embeddings to GPU for faster processing
+int cuda_load_embeddings_int8(void* index_ptr, const int8_t* embeddings, const float* scales) {
+    CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
+    if (!index || !index->initialized) return 0;
+    
+    size_t embed_size = index->vocab_size * index->embed_dim * sizeof(int8_t);
+    size_t scale_size = index->vocab_size * sizeof(float);
+    
+    // Free old embeddings if any
+    if (index->d_embeddings_int8) {
+        cudaFree(index->d_embeddings_int8);
+    }
+    if (index->d_embedding_scales) {
+        cudaFree(index->d_embedding_scales);
+    }
+    
+    // Allocate GPU memory
+    cudaError_t err = cudaMalloc(&index->d_embeddings_int8, embed_size);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to allocate GPU memory for int8 embeddings: " 
+                  << cudaGetErrorString(err) << std::endl;
+        return 0;
+    }
+    
+    err = cudaMalloc(&index->d_embedding_scales, scale_size);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to allocate GPU memory for embedding scales: " 
+                  << cudaGetErrorString(err) << std::endl;
+        cudaFree(index->d_embeddings_int8);
+        index->d_embeddings_int8 = nullptr;
+        return 0;
+    }
+    
+    // Copy to GPU
+    err = cudaMemcpy(index->d_embeddings_int8, embeddings, embed_size, cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to copy int8 embeddings to GPU: " 
+                  << cudaGetErrorString(err) << std::endl;
+        return 0;
+    }
+    
+    err = cudaMemcpy(index->d_embedding_scales, scales, scale_size, cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to copy embedding scales to GPU: " 
+                  << cudaGetErrorString(err) << std::endl;
+        return 0;
+    }
+    
+    index->use_int8_embeddings = true;
+    std::cout << "✅ Loaded int8 embedding table to GPU (" 
+              << (embed_size / (1024.0 * 1024.0)) << " MB + " 
+              << (scale_size / 1024.0) << " KB scales)" << std::endl;
     return 1;
 }
 
@@ -462,19 +646,33 @@ int cuda_search_with_tokens(
     // Generate embedding from tokens - only compute first 512 dimensions
     int block_size = 256;
     int output_dim = index->vector_dim;  // Only compute 512 dimensions
-    int grid_size = (output_dim + block_size - 1) / block_size;
-    embed_and_pool_optimized_kernel<<<grid_size, block_size>>>(
-        d_tokens, index->d_embeddings, d_embedding,
-        seq_len, index->embed_dim, output_dim, index->vocab_size, index->max_tokens
-    );
     
-    // Quantize embedding to int8
-    quantize_to_int8_kernel<<<grid_size, block_size>>>(
-        d_embedding, d_query, d_query_scale, index->vector_dim
-    );
+    if (index->use_int8_embeddings && index->d_embeddings_int8) {
+        // Use int8 vectorized kernel for better performance
+        int grid_size = (output_dim / 4 + block_size - 1) / block_size;
+        embed_and_pool_int8_vectorized_kernel<<<grid_size, block_size>>>(
+            d_tokens, index->d_embeddings_int8, d_query,
+            d_query_scale, seq_len, index->embed_dim, output_dim, 
+            index->vocab_size, index->max_tokens
+        );
+        // No need for separate quantization step - already int8!
+        cudaDeviceSynchronize();
+    } else {
+        // Use float embeddings
+        int grid_size = (output_dim + block_size - 1) / block_size;
+        embed_and_pool_optimized_kernel<<<grid_size, block_size>>>(
+            d_tokens, index->d_embeddings, d_embedding,
+            seq_len, index->embed_dim, output_dim, index->vocab_size, index->max_tokens
+        );
+        
+        // Quantize embedding to int8
+        quantize_to_int8_kernel<<<grid_size, block_size>>>(
+            d_embedding, d_query, d_query_scale, index->vector_dim
+        );
+    }
     
     // Compute similarities
-    grid_size = (index->num_vectors + block_size - 1) / block_size;
+    int grid_size = (index->num_vectors + block_size - 1) / block_size;
     
     // Get query scale from device
     float query_scale;

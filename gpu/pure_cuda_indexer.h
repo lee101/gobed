@@ -12,6 +12,9 @@ void cuda_index_destroy(void* index);
 // Load embedding table (for token to embedding mapping)
 int cuda_load_embeddings(void* index, const float* embeddings);
 
+// Load quantized int8 embeddings to GPU for faster processing
+int cuda_load_embeddings_int8(void* index, const signed char* embeddings, const float* scales);
+
 // Add int8 vectors to index
 int cuda_index_add(void* index, const signed char* vectors, const float* scales, int num_vectors);
 

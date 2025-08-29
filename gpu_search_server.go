@@ -267,13 +267,14 @@ func (s *GPUSearchServer) handleGPUSearch(w http.ResponseWriter, r *http.Request
 
 	// Try GPU search first with optimized memory usage
 	if s.useGPU && s.gpuIndexer != nil {
-		indices, scores, err := OptimizedGPUSearch(s.gpuIndexer, embedding, req.K)
+		// Use the adapter method for GPU search
+		indices, scores, err := s.gpuIndexerSearch(embedding, req.K)
 		if err == nil {
 			// Convert to SearchResult format
 			results = make([]SearchResult, len(indices))
 			for i := range indices {
 				results[i] = SearchResult{
-					ID:         int(indices[i]),
+					ID:         indices[i],
 					Similarity: scores[i],
 				}
 			}
@@ -378,17 +379,16 @@ func (s *GPUSearchServer) handleGPUBatchSearch(w http.ResponseWriter, r *http.Re
 	var searchErr error
 	usedGPU := false
 
-	// GPU batch search not yet implemented in pure CUDA version
-	// TODO: Implement batch search in pure CUDA
-	// if s.useGPU && s.gpuIndexer != nil {
-	//     results, searchErr = s.gpuIndexer.BatchSearch(embeddings, req.K)
-	//     if searchErr == nil {
-	//         atomic.AddUint64(&s.totalGPURequests, 1)
-	//         usedGPU = true
-	//     } else {
-	//         log.Printf("⚠️  GPU batch search failed: %v", searchErr)
-	//     }
-	// }
+	// Try GPU batch search first
+	if s.useGPU && s.gpuIndexer != nil {
+		results, searchErr = s.gpuIndexer.BatchSearch(embeddings, req.K)
+		if searchErr == nil {
+			atomic.AddUint64(&s.totalGPURequests, 1)
+			usedGPU = true
+		} else {
+			log.Printf("⚠️  GPU batch search failed: %v", searchErr)
+		}
+	}
 
 	// CPU fallback for batch search
 	if !usedGPU && s.config.EnableGPUFallback && s.cpuIndexer != nil {
@@ -550,14 +550,25 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 			}
 		}
 		
-		if err := OptimizedBatchIndex(s.gpuIndexer, embedResults); err != nil {
-			log.Printf("⚠️  GPU indexing failed: %v", err)
+		// Batch index all vectors at once for maximum GPU efficiency
+		vectors := make([][]int8, len(embedResults))
+		scales := make([]float32, len(embedResults))
+		for i, embedResult := range embedResults {
+			vectors[i] = embedResult.Vector
+			scales[i] = embedResult.Scale
+		}
+		
+		// Add all vectors to GPU index in a single batch operation
+		if err := s.gpuIndexerAddVectors(vectors, scales); err != nil {
+			log.Printf("⚠️  GPU batch indexing failed: %v", err)
 			// Try CPU fallback
 			if s.config.EnableGPUFallback && s.cpuIndexer != nil {
 				return s.indexBatchCPU(validEmbeddings)
 			}
 			return 0, err
 		}
+		
+		log.Printf("✅ Successfully batch indexed %d vectors on GPU", len(vectors))
 		return indexed, nil
 	}
 
