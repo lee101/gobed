@@ -98,8 +98,7 @@ func NewGPUIndexer(config IndexConfig) (*GPUIndexer, error) {
 	// Set finalizer to ensure cleanup
 	runtime.SetFinalizer(indexer, (*GPUIndexer).destroy)
 
-	fmt.Printf("🚀 Pure CUDA Indexer created (Device: %d, VectorDim: %d, VocabSize: %d)\n",
-		config.DeviceID, config.VectorDim, config.VocabSize)
+	// Indexer created successfully
 	return indexer, nil
 }
 
@@ -123,7 +122,7 @@ func (g *GPUIndexer) LoadEmbeddings(embeddings []float32) error {
 	}
 
 	g.embeddings = embeddings
-	fmt.Printf("✅ Loaded %d embeddings to GPU\n", g.vocabSize)
+	// Embeddings loaded to GPU
 	return nil
 }
 
@@ -156,7 +155,7 @@ func (g *GPUIndexer) LoadEmbeddingsInt8(embeddings []int8, scales []float32) err
 		return fmt.Errorf("failed to load int8 embeddings to GPU")
 	}
 
-	fmt.Printf("✅ Loaded %d int8 embeddings to GPU (75%% memory savings)\n", g.vocabSize)
+	// Int8 embeddings loaded to GPU
 	return nil
 }
 
@@ -197,7 +196,7 @@ func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	}
 
 	g.numVectors += numVectors
-	fmt.Printf("✅ Added %d vectors to GPU index (total: %d)\n", numVectors, g.numVectors)
+	// Vectors added to GPU index
 	return nil
 }
 
@@ -284,7 +283,7 @@ func (g *GPUIndexer) SetMaxTokens(maxTokens int) {
 	defer g.mutex.Unlock()
 	
 	C.cuda_set_max_tokens(g.handle, C.int(maxTokens))
-	fmt.Printf("📏 GPU indexer max tokens set to %d\n", maxTokens)
+	// Max tokens updated
 }
 
 // BulkIndexTokens indexes multiple token sequences in batch on GPU
@@ -347,7 +346,7 @@ func (g *GPUIndexer) destroy() {
 	if g.handle != nil {
 		C.cuda_index_destroy(g.handle)
 		g.handle = nil
-		fmt.Println("🧹 Pure CUDA indexer destroyed")
+		// CUDA indexer destroyed
 	}
 }
 

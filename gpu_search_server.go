@@ -123,11 +123,11 @@ func NewGPUSearchServer(model *EmbeddingModel, config GPUServerConfig) (*GPUSear
 		var err error
 		server.gpuIndexer, err = NewGPUIndexer(gpuConfig)
 		if err != nil {
-			log.Printf("⚠️  Failed to create GPU indexer: %v", err)
+			log.Printf("Failed to create GPU indexer: %v", err)
 			server.gpuAvailable = false
 			server.useGPU = false
 		} else {
-			log.Printf("🚀 GPU indexer initialized on device %d", config.GPUDeviceID)
+			// GPU indexer initialized
 		}
 	}
 
@@ -148,7 +148,7 @@ func NewGPUSearchServer(model *EmbeddingModel, config GPUServerConfig) (*GPUSear
 			cancel()
 			return nil, fmt.Errorf("failed to create CPU fallback index: %w", err)
 		}
-		log.Printf("💾 CPU fallback indexer initialized")
+		// CPU fallback indexer initialized
 	}
 
 	// Setup HTTP routes with GPU-optimized handlers
@@ -195,13 +195,12 @@ func (s *GPUSearchServer) setupRoutes() {
 
 // Start starts the GPU-accelerated search server
 func (s *GPUSearchServer) Start() error {
-	log.Printf("🚀 Starting GPU-accelerated search server on port %d", s.port)
+	log.Printf("Starting GPU-accelerated search server on port %d", s.port)
 	log.Printf("   GPU Available: %v (Device: %d)", s.gpuAvailable, s.config.GPUDeviceID)
 	log.Printf("   Fallback Enabled: %v", s.config.EnableGPUFallback)
 	
 	if s.gpuAvailable {
-		log.Printf("   CUDA Available: Yes")
-		log.Printf("   Using Pure CUDA Implementation")
+		// Using CUDA implementation
 	}
 
 	// Optimize for GPU workloads
@@ -214,7 +213,7 @@ func (s *GPUSearchServer) Start() error {
 	go func() {
 		defer s.wg.Done()
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("❌ Server error: %v", err)
+			log.Printf("Server error: %v", err)
 		}
 	}()
 
@@ -224,7 +223,7 @@ func (s *GPUSearchServer) Start() error {
 		go s.gpuMetricsCollector()
 	}
 
-	log.Printf("✅ GPU-accelerated search server started successfully")
+	log.Printf("GPU search server started on port %d", s.port)
 	return nil
 }
 
@@ -281,7 +280,7 @@ func (s *GPUSearchServer) handleGPUSearch(w http.ResponseWriter, r *http.Request
 			atomic.AddUint64(&s.totalGPURequests, 1)
 			usedGPU = true
 		} else {
-			log.Printf("⚠️  GPU search failed: %v", err)
+			// GPU search failed, falling back to CPU
 			searchErr = err
 		}
 	}
@@ -366,7 +365,7 @@ func (s *GPUSearchServer) handleGPUBatchSearch(w http.ResponseWriter, r *http.Re
 			for j := startIdx; j < endIdx; j++ {
 				embedding, err := s.model.EmbedInt8(req.Queries[j])
 				if err != nil {
-					log.Printf("⚠️  Embedding error for query %d: %v", j, err)
+					// Embedding error, skipping query
 					continue
 				}
 				embeddings[j] = embedding.Vector
@@ -386,7 +385,7 @@ func (s *GPUSearchServer) handleGPUBatchSearch(w http.ResponseWriter, r *http.Re
 			atomic.AddUint64(&s.totalGPURequests, 1)
 			usedGPU = true
 		} else {
-			log.Printf("⚠️  GPU batch search failed: %v", searchErr)
+			// GPU batch search failed, falling back to CPU
 		}
 	}
 
@@ -469,7 +468,7 @@ func (s *GPUSearchServer) handleGPUIndex(w http.ResponseWriter, r *http.Request)
 		batch := req.Documents[i:end]
 		batchIndexed, err := s.indexDocumentBatch(batch)
 		if err != nil {
-			log.Printf("⚠️  Failed to index batch %d-%d: %v", i, end, err)
+			// Failed to index batch, continuing
 			continue
 		}
 		indexed += batchIndexed
@@ -526,7 +525,7 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 
 	for i, emb := range embeddings {
 		if errors[i] != nil {
-			log.Printf("⚠️  Failed to embed document %d: %v", documents[i].ID, errors[i])
+			// Failed to embed document, skipping
 			continue
 		}
 
@@ -560,7 +559,7 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 		
 		// Add all vectors to GPU index in a single batch operation
 		if err := s.gpuIndexerAddVectors(vectors, scales); err != nil {
-			log.Printf("⚠️  GPU batch indexing failed: %v", err)
+			log.Printf("GPU batch indexing failed: %v", err)
 			// Try CPU fallback
 			if s.config.EnableGPUFallback && s.cpuIndexer != nil {
 				return s.indexBatchCPU(validEmbeddings)
@@ -568,7 +567,7 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 			return 0, err
 		}
 		
-		log.Printf("✅ Successfully batch indexed %d vectors on GPU", len(vectors))
+		// Batch indexed vectors on GPU
 		return indexed, nil
 	}
 
@@ -588,7 +587,7 @@ func (s *GPUSearchServer) indexBatchCPU(embeddings [][]int8) (int, error) {
 		copy(vec[:], emb)
 		
 		if err := s.cpuIndexer.AddVector(&vec, 1.0, indexed); err != nil {
-			log.Printf("⚠️  CPU indexing failed: %v", err)
+			// CPU indexing failed, skipping
 			continue
 		}
 		indexed++
@@ -700,7 +699,7 @@ func (s *GPUSearchServer) gpuMetricsCollector() {
 				avgLatency := atomic.LoadUint64(&s.totalLatency) / totalReqs / 1000
 				gpuRatio := float64(gpuReqs) / float64(totalReqs) * 100
 
-				log.Printf("🚀 GPU Metrics: total=%d, gpu=%d(%.1f%%), cpu=%d, avg_latency=%dµs",
+				log.Printf("Metrics: total=%d, gpu=%d(%.1f%%), cpu=%d, avg_latency=%dµs",
 					totalReqs, gpuReqs, gpuRatio, cpuReqs, avgLatency)
 
 				if s.gpuIndexer != nil {
@@ -718,7 +717,7 @@ func (s *GPUSearchServer) gpuMetricsCollector() {
 
 // Stop gracefully stops the GPU search server
 func (s *GPUSearchServer) Stop() error {
-	log.Println("🛑 Stopping GPU search server...")
+	log.Println("Stopping GPU search server...")
 
 	s.cancel()
 
@@ -726,7 +725,7 @@ func (s *GPUSearchServer) Stop() error {
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
-		log.Printf("❌ Server shutdown error: %v", err)
+		log.Printf("Server shutdown error: %v", err)
 	}
 
 	s.wg.Wait()
@@ -734,15 +733,15 @@ func (s *GPUSearchServer) Stop() error {
 	// Close indexers
 	if s.gpuIndexer != nil {
 		s.gpuIndexer.Close()
-		log.Printf("✅ GPU indexer closed")
+		// GPU indexer closed
 	}
 
 	if s.cpuIndexer != nil {
 		if err := s.cpuIndexer.Close(); err != nil {
-			log.Printf("⚠️  CPU indexer close error: %v", err)
+			log.Printf("CPU indexer close error: %v", err)
 		}
 	}
 
-	log.Println("✅ GPU search server stopped")
+	log.Println("GPU search server stopped")
 	return nil
 }

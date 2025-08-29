@@ -188,7 +188,7 @@ func (idx *VectorIndex) Train(texts []string) error {
 		return nil
 	}
 
-	fmt.Printf("Training index on %d samples...\n", len(texts))
+	fmt.Printf("Indexing %d samples...\n", len(texts))
 	start := time.Now()
 
 	// Generate embeddings for training

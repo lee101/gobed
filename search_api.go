@@ -575,12 +575,6 @@ type SearchEngineStats struct {
 // Private methods
 
 func (se *SearchEngine) indexWithID(id int, text string) error {
-	// Generate embedding
-	embedding, err := se.model.EmbedInt8(text)
-	if err != nil {
-		return fmt.Errorf("failed to embed text: %v", err)
-	}
-
 	// Store document
 	se.documents[id] = text
 
@@ -592,10 +586,42 @@ func (se *SearchEngine) indexWithID(id int, text string) error {
 		}
 	}
 
-	// Add to index
-	var vec simd.Vec512
-	copy(vec[:], embedding.Vector)
-	return se.index.Add(vec, embedding.Scale, id)
+	// Generate embedding - use int8 or float32 based on config
+	if se.config.UseInt8 {
+		// Use int8 quantization for 75% memory savings
+		embedding, err := se.model.EmbedInt8(text)
+		if err != nil {
+			return fmt.Errorf("failed to embed text: %v", err)
+		}
+
+		// Add to index with int8 data
+		var vec simd.Vec512
+		copy(vec[:], embedding.Vector)
+		return se.index.Add(vec, embedding.Scale, id)
+	} else {
+		// Use float32 embeddings
+		embedding, err := se.model.Encode(text)
+		if err != nil {
+			return fmt.Errorf("failed to embed text: %v", err)
+		}
+
+		// Convert float32 to int8 for index (with scale=1.0)
+		var vec simd.Vec512
+		for i, val := range embedding {
+			if i >= 512 {
+				break
+			}
+			// Simple quantization: clamp to int8 range
+			if val > 127 {
+				vec[i] = 127
+			} else if val < -128 {
+				vec[i] = -128
+			} else {
+				vec[i] = int8(val)
+			}
+		}
+		return se.index.Add(vec, 1.0, id)
+	}
 }
 
 func (se *SearchEngine) initializeIndex(estimatedSize int) error {

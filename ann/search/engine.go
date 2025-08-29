@@ -119,7 +119,7 @@ func (e *Engine) Train(vectors []simd.Vec512, scales []float32) error {
 		return nil
 	}
 
-	fmt.Printf("Training index on %d vectors...\n", n)
+	fmt.Printf("Indexing %d vectors...\n", n)
 	start := time.Now()
 
 	// Initialize IVF
