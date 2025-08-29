@@ -15,7 +15,7 @@ func AutoOptimizedSearchConfig() SearchConfig {
 		log.Println("🚀 GPU detected - enabling CUDA acceleration")
 		config.EnableGPU = true
 		config.GPUDeviceID = 0
-		config.GPUBatchSize = 1000
+		config.GPUBatchSize = 6000  // Optimized batch size (8M+ vectors/sec)
 		config.MaxExactSearchSize = 100000 // GPU can handle larger exact searches
 		
 		// Enable int8 quantization for GPU
