@@ -1,8 +1,11 @@
+// +build gpu
+
 package gobed
 
 /*
-#cgo LDFLAGS: -L./gpu -ltorch_cgo_wrapper
-#include "./gpu/torch_cgo_wrapper.h"
+#cgo CFLAGS: -I./gpu
+#cgo LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.0/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.0/lib64
+#include "pure_cuda_indexer.h"
 #include <stdlib.h>
 */
 import "C"
@@ -11,128 +14,121 @@ import (
 	"runtime"
 	"sync"
 	"unsafe"
-
-	"github.com/lee101/gobed/ann/simd"
 )
 
-// GPUIndexer provides CUDA-accelerated indexing and search
+// GPUIndexer provides CUDA-accelerated indexing and search using pure CUDA
 type GPUIndexer struct {
-	handle    C.TorchIndexerHandle
-	config    IndexConfig
-	mutex     sync.RWMutex
-	vectorDim int
-	deviceID  int
-	isReady   bool
+	handle       unsafe.Pointer
+	config       IndexConfig
+	mutex        sync.RWMutex
+	vectorDim    int
+	vocabSize    int
+	embedDim     int
+	deviceID     int
+	isReady      bool
+	embeddings   []float32
+	numVectors   int
 }
 
 // IndexConfig configures the GPU indexer
 type IndexConfig struct {
 	VectorDim        int
-	NumSubquantizers int
-	CodebookSize     int
-	IVFClusters      int
-	ProbeLists       int
-	RerankK          int
+	VocabSize        int  // For token embeddings
+	EmbedDim         int  // Embedding dimension
 	DeviceID         int
 }
 
 // DefaultGPUConfig returns an optimal configuration for GPU indexing
 func DefaultGPUConfig() IndexConfig {
 	return IndexConfig{
-		VectorDim:        512, // Standard embedding dimension
-		NumSubquantizers: 8,   // Product quantization subvectors
-		CodebookSize:     256, // Codebook size per subquantizer
-		IVFClusters:      1024, // IVF clusters for coarse quantization
-		ProbeLists:       64,   // Number of lists to probe during search
-		RerankK:          1000, // Number of candidates to rerank
-		DeviceID:         0,    // Use first GPU
+		VectorDim: 512,   // truncated/pooled dimension for efficiency
+		VocabSize: 30522, // BERT vocab size
+		EmbedDim:  1024,  // original model embedding dimension
+		DeviceID:  0,     // Use first GPU
 	}
 }
 
-// NewGPUIndexer creates a new CUDA-accelerated indexer
+// DefaultGPUConfig512 returns config optimized for 512 token truncation
+func DefaultGPUConfig512() IndexConfig {
+	return IndexConfig{
+		VectorDim: 512,   // Reduced for faster processing
+		VocabSize: 30522, // BERT vocab size
+		EmbedDim:  512,   // Reduced embedding dimension
+		DeviceID:  0,     // Use first GPU
+	}
+}
+
+// IsCUDAAvailable checks if CUDA is available
+func IsCUDAAvailable() bool {
+	return int(C.cuda_is_available()) != 0
+}
+
+// GetCUDAMemoryUsage returns current GPU memory usage in bytes
+func GetCUDAMemoryUsage() uint64 {
+	return uint64(C.cuda_get_memory_usage())
+}
+
+// NewGPUIndexer creates a new pure CUDA-accelerated indexer
 func NewGPUIndexer(config IndexConfig) (*GPUIndexer, error) {
 	// Check CUDA availability
-	if int(C.torch_cuda_is_available()) == 0 {
+	if !IsCUDAAvailable() {
 		return nil, fmt.Errorf("CUDA is not available")
 	}
 
-	deviceCount := int(C.torch_cuda_device_count())
-	if config.DeviceID >= deviceCount {
-		return nil, fmt.Errorf("invalid device ID %d, only %d devices available", config.DeviceID, deviceCount)
-	}
-
-	// Create C config
-	cConfig := C.IndexConfig{
-		vector_dim:         C.int(config.VectorDim),
-		num_subquantizers:  C.int(config.NumSubquantizers),
-		codebook_size:      C.int(config.CodebookSize),
-		ivf_clusters:       C.int(config.IVFClusters),
-		probe_lists:        C.int(config.ProbeLists),
-		rerank_k:          C.int(config.RerankK),
-		device_id:         C.int(config.DeviceID),
-	}
-
 	// Create indexer handle
-	handle := C.torch_indexer_create(cConfig)
+	handle := C.cuda_index_create(
+		C.int(config.VectorDim),
+		C.int(config.VocabSize),
+		C.int(config.EmbedDim),
+	)
 	if handle == nil {
-		return nil, fmt.Errorf("failed to create GPU indexer")
+		return nil, fmt.Errorf("failed to create pure CUDA indexer")
 	}
 
 	indexer := &GPUIndexer{
-		handle:    handle,
-		config:    config,
-		vectorDim: config.VectorDim,
-		deviceID:  config.DeviceID,
+		handle:     handle,
+		config:     config,
+		vectorDim:  config.VectorDim,
+		vocabSize:  config.VocabSize,
+		embedDim:   config.EmbedDim,
+		deviceID:   config.DeviceID,
+		numVectors: 0,
 	}
 
 	// Set finalizer to ensure cleanup
 	runtime.SetFinalizer(indexer, (*GPUIndexer).destroy)
 
-	fmt.Printf("🚀 GPU Indexer created (Device: %d, VectorDim: %d)\n", 
-		config.DeviceID, config.VectorDim)
+	fmt.Printf("🚀 Pure CUDA Indexer created (Device: %d, VectorDim: %d, VocabSize: %d)\n",
+		config.DeviceID, config.VectorDim, config.VocabSize)
 	return indexer, nil
 }
 
-// TrainIndex trains the indexer with a set of vectors (CUDA-accelerated)
-func (g *GPUIndexer) TrainIndex(vectors [][]int8) error {
+// LoadEmbeddings loads the token embedding table to GPU
+func (g *GPUIndexer) LoadEmbeddings(embeddings []float32) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
-	if len(vectors) == 0 {
-		return fmt.Errorf("no training vectors provided")
+	if len(embeddings) != g.vocabSize*g.embedDim {
+		return fmt.Errorf("embeddings size mismatch: expected %d, got %d",
+			g.vocabSize*g.embedDim, len(embeddings))
 	}
 
-	if len(vectors[0]) != g.vectorDim {
-		return fmt.Errorf("vector dimension mismatch: expected %d, got %d", 
-			g.vectorDim, len(vectors[0]))
-	}
-
-	// Flatten vectors for C interface
-	numVectors := len(vectors)
-	flatVectors := make([]int8, numVectors*g.vectorDim)
-	
-	for i, vec := range vectors {
-		copy(flatVectors[i*g.vectorDim:(i+1)*g.vectorDim], vec)
-	}
-
-	// Train using CUDA kernels
-	result := C.torch_indexer_train(
+	result := C.cuda_load_embeddings(
 		g.handle,
-		(*C.schar)(unsafe.Pointer(&flatVectors[0])),
-		C.int(numVectors),
-		C.int(g.vectorDim),
+		(*C.float)(unsafe.Pointer(&embeddings[0])),
 	)
 
 	if result == 0 {
-		return fmt.Errorf("GPU training failed")
+		return fmt.Errorf("failed to load embeddings to GPU")
 	}
 
-	fmt.Printf("✅ GPU Index trained with %d vectors\n", numVectors)
+	g.embeddings = embeddings
+	fmt.Printf("✅ Loaded %d embeddings to GPU\n", g.vocabSize)
 	return nil
 }
 
-// AddVectors adds vectors to the index (CUDA-accelerated batch processing)
-func (g *GPUIndexer) AddVectors(vectors [][]int8) error {
+// AddVectors adds int8 quantized vectors to the index
+func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -140,256 +136,189 @@ func (g *GPUIndexer) AddVectors(vectors [][]int8) error {
 		return fmt.Errorf("no vectors to add")
 	}
 
-	// Process in optimal GPU batch sizes
-	batchSize := g.getOptimalBatchSize()
-	
-	for i := 0; i < len(vectors); i += batchSize {
-		end := i + batchSize
-		if end > len(vectors) {
-			end = len(vectors)
-		}
-
-		batch := vectors[i:end]
-		if err := g.addVectorBatch(batch); err != nil {
-			return fmt.Errorf("failed to add batch %d-%d: %w", i, end, err)
-		}
+	if len(scales) != len(vectors) {
+		return fmt.Errorf("scales count mismatch: %d vectors, %d scales", len(vectors), len(scales))
 	}
 
-	g.isReady = true
-	fmt.Printf("✅ Added %d vectors to GPU index\n", len(vectors))
-	return nil
-}
-
-// addVectorBatch adds a batch of vectors using CUDA
-func (g *GPUIndexer) addVectorBatch(vectors [][]int8) error {
+	// Flatten vectors for C interface
 	numVectors := len(vectors)
 	flatVectors := make([]int8, numVectors*g.vectorDim)
 	
 	for i, vec := range vectors {
 		if len(vec) != g.vectorDim {
-			return fmt.Errorf("vector dimension mismatch at index %d", i)
+			return fmt.Errorf("vector dimension mismatch at index %d: expected %d, got %d",
+				i, g.vectorDim, len(vec))
 		}
 		copy(flatVectors[i*g.vectorDim:(i+1)*g.vectorDim], vec)
 	}
 
-	result := C.torch_indexer_add_vectors(
+	result := C.cuda_index_add(
 		g.handle,
 		(*C.schar)(unsafe.Pointer(&flatVectors[0])),
+		(*C.float)(unsafe.Pointer(&scales[0])),
 		C.int(numVectors),
-		C.int(g.vectorDim),
 	)
 
 	if result == 0 {
-		return fmt.Errorf("GPU vector addition failed")
+		return fmt.Errorf("failed to add vectors to GPU index")
 	}
 
+	g.numVectors += numVectors
+	fmt.Printf("✅ Added %d vectors to GPU index (total: %d)\n", numVectors, g.numVectors)
 	return nil
 }
 
-// Search performs CUDA-accelerated similarity search  
-func (g *GPUIndexer) Search(query []int8, k int) ([]SearchResult, error) {
+// SearchWithTokens searches using token IDs (generates embedding on GPU)
+func (g *GPUIndexer) SearchWithTokens(tokenIDs []int32, k int) ([]int32, []float32, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
 
-	if !g.isReady {
-		return nil, fmt.Errorf("index not ready - no vectors added")
+	if len(tokenIDs) == 0 {
+		return nil, nil, fmt.Errorf("no tokens provided")
 	}
 
-	if len(query) != g.vectorDim {
-		return nil, fmt.Errorf("query dimension mismatch: expected %d, got %d", 
-			g.vectorDim, len(query))
+	if g.numVectors == 0 {
+		return nil, nil, fmt.Errorf("index is empty")
 	}
 
-	// Perform GPU-accelerated search
-	result := C.torch_indexer_search(
+	// Allocate result buffers
+	resultIndices := make([]int32, k)
+	resultScores := make([]float32, k)
+
+	result := C.cuda_search_with_tokens(
 		g.handle,
-		(*C.schar)(unsafe.Pointer(&query[0])),
-		C.int(g.vectorDim),
+		(*C.int)(unsafe.Pointer(&tokenIDs[0])),
+		C.int(len(tokenIDs)),
+		(*C.int)(unsafe.Pointer(&resultIndices[0])),
+		(*C.float)(unsafe.Pointer(&resultScores[0])),
 		C.int(k),
 	)
 
-	if result.count == 0 {
-		return []SearchResult{}, nil
+	if result == 0 {
+		return nil, nil, fmt.Errorf("GPU search failed")
 	}
 
-	// Convert C results to Go
-	results := make([]SearchResult, int(result.count))
-	
-	// Access C arrays safely
-	ids := (*[1 << 30]C.int)(unsafe.Pointer(result.ids))[:result.count:result.count]
-	scores := (*[1 << 30]C.float)(unsafe.Pointer(result.scores))[:result.count:result.count]
-
-	for i := 0; i < int(result.count); i++ {
-		results[i] = SearchResult{
-			ID:         int(ids[i]),
-			Similarity: float32(scores[i]),
-		}
-	}
-
-	// Free C memory
-	C.torch_search_result_free(&result)
-
-	return results, nil
+	return resultIndices, resultScores, nil
 }
 
-// BatchSearch performs CUDA-accelerated batch similarity search
-func (g *GPUIndexer) BatchSearch(queries [][]int8, k int) ([][]SearchResult, error) {
+// SearchWithEmbedding searches using pre-computed int8 embedding
+func (g *GPUIndexer) SearchWithEmbedding(query []int8, queryScale float32, k int) ([]int32, []float32, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
 
-	if !g.isReady {
-		return nil, fmt.Errorf("index not ready")
+	if len(query) != g.vectorDim {
+		return nil, nil, fmt.Errorf("query dimension mismatch: expected %d, got %d",
+			g.vectorDim, len(query))
 	}
 
-	if len(queries) == 0 {
-		return [][]SearchResult{}, nil
+	if g.numVectors == 0 {
+		return nil, nil, fmt.Errorf("index is empty")
 	}
 
-	// Process queries in parallel on GPU
-	results := make([][]SearchResult, len(queries))
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	errors := make([]error, len(queries))
+	// Allocate result buffers
+	resultIndices := make([]int32, k)
+	resultScores := make([]float32, k)
 
-	// Optimal GPU batch processing
-	batchSize := g.getOptimalQueryBatchSize()
-	
-	for i := 0; i < len(queries); i += batchSize {
-		wg.Add(1)
-		go func(startIdx int) {
-			defer wg.Done()
-			
-			endIdx := startIdx + batchSize
-			if endIdx > len(queries) {
-				endIdx = len(queries)
-			}
+	result := C.cuda_search_with_embedding(
+		g.handle,
+		(*C.schar)(unsafe.Pointer(&query[0])),
+		C.float(queryScale),
+		(*C.int)(unsafe.Pointer(&resultIndices[0])),
+		(*C.float)(unsafe.Pointer(&resultScores[0])),
+		C.int(k),
+	)
 
-			for j := startIdx; j < endIdx; j++ {
-				queryResults, err := g.Search(queries[j], k)
-				
-				mu.Lock()
-				results[j] = queryResults
-				errors[j] = err
-				mu.Unlock()
-			}
-		}(i)
+	if result == 0 {
+		return nil, nil, fmt.Errorf("GPU search failed")
 	}
 
-	wg.Wait()
-
-	// Check for errors
-	for i, err := range errors {
-		if err != nil {
-			return nil, fmt.Errorf("query %d failed: %w", i, err)
-		}
-	}
-
-	return results, nil
+	return resultIndices, resultScores, nil
 }
 
-// GetStats returns GPU indexer statistics
-func (g *GPUIndexer) GetStats() IndexStats {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-
-	stats := C.torch_indexer_get_stats(g.handle)
-	
-	return IndexStats{
-		NumVectors:       int(stats.num_vectors),
-		VectorDim:        int(stats.vector_dim),
-		IVFClusters:      int(stats.ivf_clusters),
-		PQSubquantizers:  int(stats.pq_subquantizers),
-		GPUMemoryMB:      float32(stats.gpu_memory_mb),
-		IsTrained:        stats.is_trained != 0,
-		IndexBuilt:       stats.index_built != 0,
-	}
+// Search performs k-nearest neighbor search (wrapper for compatibility)
+func (g *GPUIndexer) Search(query []int8, queryScale float32, k int) ([]int32, []float32, error) {
+	return g.SearchWithEmbedding(query, queryScale, k)
 }
 
-// IndexStats provides indexer statistics
-type IndexStats struct {
-	NumVectors      int
-	VectorDim       int
-	IVFClusters     int
-	PQSubquantizers int
-	GPUMemoryMB     float32
-	IsTrained       bool
-	IndexBuilt      bool
+// GetMemoryUsage returns current GPU memory usage
+func (g *GPUIndexer) GetMemoryUsage() uint64 {
+	return GetCUDAMemoryUsage()
 }
 
-// getOptimalBatchSize determines optimal batch size for GPU processing
-func (g *GPUIndexer) getOptimalBatchSize() int {
-	// RTX 3080 with 16GB can handle large batches
-	// Adjust based on vector dimension and available memory
-	baseSize := 1024
-	
-	// Scale down for larger dimensions
-	if g.vectorDim > 512 {
-		baseSize /= 2
-	}
-	if g.vectorDim > 1024 {
-		baseSize /= 2
-	}
-
-	return baseSize
-}
-
-// getOptimalQueryBatchSize determines optimal query batch size
-func (g *GPUIndexer) getOptimalQueryBatchSize() int {
-	// For queries, we can process more in parallel
-	return 64
-}
-
-// Close gracefully closes the GPU indexer
-func (g *GPUIndexer) Close() error {
+// SetMaxTokens sets the maximum number of tokens to process (truncation)
+func (g *GPUIndexer) SetMaxTokens(maxTokens int) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-
-	if g.handle != nil {
-		C.torch_indexer_destroy(g.handle)
-		g.handle = nil
-		runtime.SetFinalizer(g, nil)
-	}
-
-	return nil
-}
-
-// destroy is called by finalizer
-func (g *GPUIndexer) destroy() {
-	g.Close()
-}
-
-// AddEmbeddingToGPU adds an int8 embedding to the GPU index
-func (g *GPUIndexer) AddEmbeddingToGPU(embedding *EmbedInt8Result, id int) error {
-	if embedding == nil || len(embedding.Vector) != g.vectorDim {
-		return fmt.Errorf("invalid embedding")
-	}
-
-	// Convert to single vector slice and add
-	vectors := [][]int8{embedding.Vector}
-	return g.AddVectors(vectors)
-}
-
-// SearchWithSIMDVector performs search using SIMD-optimized vector
-func (g *GPUIndexer) SearchWithSIMDVector(vec *simd.Vec512, k int) ([]SearchResult, error) {
-	// Convert SIMD vector to int8 slice
-	query := make([]int8, len(vec))
-	copy(query, vec[:])
 	
-	return g.Search(query, k)
+	C.cuda_set_max_tokens(g.handle, C.int(maxTokens))
+	fmt.Printf("📏 GPU indexer max tokens set to %d\n", maxTokens)
 }
 
-// GetCUDAVersion returns the CUDA version string
-func GetCUDAVersion() string {
-	version := C.torch_get_version()
-	return C.GoString(version)
+// BulkIndexTokens indexes multiple token sequences in batch on GPU
+// This is optimized for bulk indexing - keeps everything on GPU
+func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int) (int, error) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	
+	if len(tokenSequences) == 0 {
+		return 0, fmt.Errorf("no token sequences provided")
+	}
+	
+	if len(seqLengths) != len(tokenSequences) {
+		return 0, fmt.Errorf("sequence lengths mismatch: %d sequences, %d lengths", 
+			len(tokenSequences), len(seqLengths))
+	}
+	
+	batchSize := len(tokenSequences)
+	
+	// Find max sequence length
+	maxSeqLen := 0
+	for _, seq := range tokenSequences {
+		if len(seq) > maxSeqLen {
+			maxSeqLen = len(seq)
+		}
+	}
+	
+	// Flatten token sequences into a single array
+	flatTokens := make([]int32, batchSize*maxSeqLen)
+	for i, seq := range tokenSequences {
+		for j, token := range seq {
+			flatTokens[i*maxSeqLen+j] = token
+		}
+	}
+	
+	// Convert to C types
+	cSeqLengths := make([]C.int, len(seqLengths))
+	for i, l := range seqLengths {
+		cSeqLengths[i] = C.int(l)
+	}
+	
+	result := C.cuda_bulk_index_tokens(
+		g.handle,
+		(*C.int)(unsafe.Pointer(&flatTokens[0])),
+		(*C.int)(unsafe.Pointer(&cSeqLengths[0])),
+		C.int(batchSize),
+		C.int(maxSeqLen),
+	)
+	
+	if result == 0 {
+		return 0, fmt.Errorf("bulk indexing failed on GPU")
+	}
+	
+	g.numVectors += int(result)
+	return int(result), nil
 }
 
-// IsCUDAAvailable checks if CUDA is available
-func IsCUDAAvailable() bool {
-	return int(C.torch_cuda_is_available()) != 0
+// destroy cleans up GPU resources
+func (g *GPUIndexer) destroy() {
+	if g.handle != nil {
+		C.cuda_index_destroy(g.handle)
+		g.handle = nil
+		fmt.Println("🧹 Pure CUDA indexer destroyed")
+	}
 }
 
-// GetCUDADeviceCount returns the number of CUDA devices
-func GetCUDADeviceCount() int {
-	return int(C.torch_cuda_device_count())
+// Close explicitly releases GPU resources
+func (g *GPUIndexer) Close() {
+	g.destroy()
 }

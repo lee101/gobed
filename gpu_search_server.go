@@ -117,15 +117,8 @@ func NewGPUSearchServer(model *EmbeddingModel, config GPUServerConfig) (*GPUSear
 
 	// Initialize GPU indexer if available
 	if server.gpuAvailable {
-		gpuConfig := IndexConfig{
-			VectorDim:        512, // Assume 512-dim embeddings
-			NumSubquantizers: 8,
-			CodebookSize:     256,
-			IVFClusters:      2048, // More clusters for large datasets
-			ProbeLists:       128,
-			RerankK:          2000,
-			DeviceID:         config.GPUDeviceID,
-		}
+		// Use adapter to create appropriate config based on build tags
+		gpuConfig := createGPUIndexConfig(config.GPUDeviceID)
 
 		var err error
 		server.gpuIndexer, err = NewGPUIndexer(gpuConfig)
@@ -207,8 +200,8 @@ func (s *GPUSearchServer) Start() error {
 	log.Printf("   Fallback Enabled: %v", s.config.EnableGPUFallback)
 	
 	if s.gpuAvailable {
-		log.Printf("   CUDA Version: %s", GetCUDAVersion())
-		log.Printf("   GPU Devices: %d", GetCUDADeviceCount())
+		log.Printf("   CUDA Available: Yes")
+		log.Printf("   Using Pure CUDA Implementation")
 	}
 
 	// Optimize for GPU workloads
@@ -272,14 +265,23 @@ func (s *GPUSearchServer) handleGPUSearch(w http.ResponseWriter, r *http.Request
 	var searchErr error
 	usedGPU := false
 
-	// Try GPU search first
+	// Try GPU search first with optimized memory usage
 	if s.useGPU && s.gpuIndexer != nil {
-		results, searchErr = s.gpuIndexer.Search(embedding.Vector, req.K)
-		if searchErr == nil {
+		indices, scores, err := OptimizedGPUSearch(s.gpuIndexer, embedding, req.K)
+		if err == nil {
+			// Convert to SearchResult format
+			results = make([]SearchResult, len(indices))
+			for i := range indices {
+				results[i] = SearchResult{
+					ID:         int(indices[i]),
+					Similarity: scores[i],
+				}
+			}
 			atomic.AddUint64(&s.totalGPURequests, 1)
 			usedGPU = true
 		} else {
-			log.Printf("⚠️  GPU search failed: %v", searchErr)
+			log.Printf("⚠️  GPU search failed: %v", err)
+			searchErr = err
 		}
 	}
 
@@ -376,16 +378,17 @@ func (s *GPUSearchServer) handleGPUBatchSearch(w http.ResponseWriter, r *http.Re
 	var searchErr error
 	usedGPU := false
 
-	// Try GPU batch search
-	if s.useGPU && s.gpuIndexer != nil {
-		results, searchErr = s.gpuIndexer.BatchSearch(embeddings, req.K)
-		if searchErr == nil {
-			atomic.AddUint64(&s.totalGPURequests, 1)
-			usedGPU = true
-		} else {
-			log.Printf("⚠️  GPU batch search failed: %v", searchErr)
-		}
-	}
+	// GPU batch search not yet implemented in pure CUDA version
+	// TODO: Implement batch search in pure CUDA
+	// if s.useGPU && s.gpuIndexer != nil {
+	//     results, searchErr = s.gpuIndexer.BatchSearch(embeddings, req.K)
+	//     if searchErr == nil {
+	//         atomic.AddUint64(&s.totalGPURequests, 1)
+	//         usedGPU = true
+	//     } else {
+	//         log.Printf("⚠️  GPU batch search failed: %v", searchErr)
+	//     }
+	// }
 
 	// CPU fallback for batch search
 	if !usedGPU && s.config.EnableGPUFallback && s.cpuIndexer != nil {
@@ -487,7 +490,11 @@ func (s *GPUSearchServer) handleGPUIndex(w http.ResponseWriter, r *http.Request)
 // indexDocumentBatch indexes a batch of documents using GPU acceleration
 func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, error) {
 	// Generate embeddings in parallel
-	embeddings := make([][]int8, len(documents))
+	type embedResult struct {
+		vector []int8
+		scale  float32
+	}
+	embeddings := make([]embedResult, len(documents))
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	errors := make([]error, len(documents))
@@ -502,7 +509,10 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 			if err != nil {
 				errors[idx] = err
 			} else {
-				embeddings[idx] = embedding.Vector
+				embeddings[idx] = embedResult{
+					vector: embedding.Vector,
+					scale:  embedding.Scale,
+				}
 			}
 			mu.Unlock()
 		}(i, doc)
@@ -511,6 +521,7 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 
 	// Filter successful embeddings
 	var validEmbeddings [][]int8
+	var validScales []float32
 	indexed := 0
 
 	for i, emb := range embeddings {
@@ -519,7 +530,8 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 			continue
 		}
 
-		validEmbeddings = append(validEmbeddings, emb)
+		validEmbeddings = append(validEmbeddings, emb.vector)
+		validScales = append(validScales, emb.scale)
 		indexed++
 	}
 
@@ -527,9 +539,18 @@ func (s *GPUSearchServer) indexDocumentBatch(documents []ServerDocument) (int, e
 		return 0, fmt.Errorf("no valid embeddings generated")
 	}
 
-	// Add to GPU index
+	// Add to GPU index with optimized memory usage
 	if s.useGPU && s.gpuIndexer != nil {
-		if err := s.gpuIndexer.AddVectors(validEmbeddings); err != nil {
+		// Convert to EmbedInt8Result format for optimized indexing
+		embedResults := make([]*EmbedInt8Result, len(validEmbeddings))
+		for i, emb := range validEmbeddings {
+			embedResults[i] = &EmbedInt8Result{
+				Vector: emb,
+				Scale:  validScales[i],
+			}
+		}
+		
+		if err := OptimizedBatchIndex(s.gpuIndexer, embedResults); err != nil {
 			log.Printf("⚠️  GPU indexing failed: %v", err)
 			// Try CPU fallback
 			if s.config.EnableGPUFallback && s.cpuIndexer != nil {
@@ -571,13 +592,15 @@ func (s *GPUSearchServer) handleGPUStats(w http.ResponseWriter, r *http.Request)
 	stats := map[string]interface{}{
 		"gpu_available": s.gpuAvailable,
 		"using_gpu":     s.useGPU,
-		"cuda_version":  GetCUDAVersion(),
-		"gpu_devices":   GetCUDADeviceCount(),
+		// "cuda_version":  GetCUDAVersion(),
+		// "gpu_devices":   GetCUDADeviceCount(),
 	}
 
 	if s.gpuIndexer != nil {
-		gpuStats := s.gpuIndexer.GetStats()
-		stats["gpu_stats"] = gpuStats
+		// GetStats not yet implemented in pure CUDA version
+		// gpuStats := s.gpuIndexer.GetStats()
+		// stats["gpu_stats"] = gpuStats
+		stats["gpu_memory_usage"] = s.gpuIndexer.GetMemoryUsage()
 	}
 
 	if s.cpuIndexer != nil {
@@ -605,9 +628,11 @@ func (s *GPUSearchServer) handleGPUHealth(w http.ResponseWriter, r *http.Request
 	}
 
 	if s.gpuIndexer != nil {
-		stats := s.gpuIndexer.GetStats()
-		health["gpu_vectors"] = stats.NumVectors
-		health["gpu_memory_mb"] = stats.GPUMemoryMB
+		// GetStats not yet implemented in pure CUDA version
+		// stats := s.gpuIndexer.GetStats()
+		// health["gpu_vectors"] = stats.NumVectors
+		// health["gpu_memory_mb"] = stats.GPUMemoryMB
+		health["gpu_memory_bytes"] = s.gpuIndexer.GetMemoryUsage()
 	}
 
 	if s.cpuIndexer != nil {
@@ -668,9 +693,9 @@ func (s *GPUSearchServer) gpuMetricsCollector() {
 					totalReqs, gpuReqs, gpuRatio, cpuReqs, avgLatency)
 
 				if s.gpuIndexer != nil {
-					stats := s.gpuIndexer.GetStats()
-					log.Printf("   GPU Index: vectors=%d, memory=%.1fMB, trained=%v",
-						stats.NumVectors, stats.GPUMemoryMB, stats.IsTrained)
+					// GetStats not yet implemented in pure CUDA version
+					memUsage := s.gpuIndexer.GetMemoryUsage()
+					log.Printf("   GPU Index: memory=%d bytes", memUsage)
 				}
 			}
 
@@ -697,9 +722,8 @@ func (s *GPUSearchServer) Stop() error {
 
 	// Close indexers
 	if s.gpuIndexer != nil {
-		if err := s.gpuIndexer.Close(); err != nil {
-			log.Printf("⚠️  GPU indexer close error: %v", err)
-		}
+		s.gpuIndexer.Close()
+		log.Printf("✅ GPU indexer closed")
 	}
 
 	if s.cpuIndexer != nil {

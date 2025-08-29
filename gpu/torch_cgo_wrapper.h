@@ -62,6 +62,7 @@ void torch_batch_results_free(SearchResult* results, int count);
 const char* torch_get_version();
 int torch_cuda_is_available();
 int torch_cuda_device_count();
+int torch_cuda_runtime_version();
 
 #ifdef __cplusplus
 }

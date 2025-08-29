@@ -12,6 +12,8 @@ func Dot512(a, b *Vec512) int32 {
 	switch {
 	case cpu.X86.HasAVX512VNNI || (cpu.X86.HasAVX512F && cpu.X86.HasAVX512BW):
 		return dot512_i8_vnni(a, b)
+	case cpu.X86.HasAVX2:
+		return dot512_i8_avx2(a, b)
 	case cpu.ARM64.HasASIMDDP: // ARM Dot Product
 		return dot512_i8_sdot(a, b)
 	default:

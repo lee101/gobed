@@ -542,4 +542,10 @@ int torch_cuda_device_count() {
     return (error == cudaSuccess) ? deviceCount : 0;
 }
 
+int torch_cuda_runtime_version() {
+    int version = 0;
+    cudaRuntimeGetVersion(&version);
+    return version;
+}
+
 } // extern "C"

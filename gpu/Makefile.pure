@@ -1,0 +1,59 @@
+# Makefile for Pure CUDA implementation (no LibTorch)
+CUDA_PATH = /usr/local/cuda-12.0
+NVCC = $(CUDA_PATH)/bin/nvcc
+CXX = /usr/bin/g++-11
+
+# CUDA flags - using gcc-11 for compatibility
+NVCC_FLAGS = -std=c++14 -O3 -arch=sm_86 --compiler-options -fPIC -Xcompiler -Wall -ccbin /usr/bin/g++-11
+CUDA_LIBS = -L$(CUDA_PATH)/lib64 -lcudart -lcublas
+
+# Output library
+TARGET = libpure_cuda_indexer.so
+
+# Source files
+CUDA_SRC = pure_cuda_indexer.cu
+
+.PHONY: all clean test
+
+all: $(TARGET)
+
+$(TARGET): $(CUDA_SRC) pure_cuda_indexer.h
+	@echo "🚀 Building pure CUDA indexer (no LibTorch)..."
+	$(NVCC) $(NVCC_FLAGS) --shared -o $@ $(CUDA_SRC) $(CUDA_LIBS)
+	@echo "✅ Built $(TARGET) - Pure CUDA acceleration ready!"
+	@echo ""
+	@echo "📊 Library details:"
+	@ls -lh $(TARGET)
+	@echo ""
+	@echo "🎯 Features:"
+	@echo "  ✓ Token to embedding lookup on GPU"
+	@echo "  ✓ Average pooling on GPU"
+	@echo "  ✓ Int8 quantization on GPU"
+	@echo "  ✓ Similarity search on GPU"
+	@echo "  ✓ Top-k selection on GPU"
+	@echo "  ✓ No LibTorch dependency!"
+
+clean:
+	rm -f $(TARGET)
+	@echo "🧹 Cleaned pure CUDA build"
+
+test: $(TARGET)
+	@echo "🧪 Testing pure CUDA implementation..."
+	@echo "#include <iostream>" > test_pure.cpp
+	@echo "#include \"pure_cuda_indexer.h\"" >> test_pure.cpp
+	@echo "int main() {" >> test_pure.cpp
+	@echo "    if (cuda_is_available()) {" >> test_pure.cpp
+	@echo "        std::cout << \"✅ CUDA is available!\" << std::endl;" >> test_pure.cpp
+	@echo "        void* index = cuda_index_create(1024, 30522, 1024);" >> test_pure.cpp
+	@echo "        if (index) {" >> test_pure.cpp
+	@echo "            std::cout << \"✅ Index created successfully\" << std::endl;" >> test_pure.cpp
+	@echo "            cuda_index_destroy(index);" >> test_pure.cpp
+	@echo "        }" >> test_pure.cpp
+	@echo "    } else {" >> test_pure.cpp
+	@echo "        std::cout << \"❌ CUDA not available\" << std::endl;" >> test_pure.cpp
+	@echo "    }" >> test_pure.cpp
+	@echo "    return 0;" >> test_pure.cpp
+	@echo "}" >> test_pure.cpp
+	$(CXX) -std=c++14 -o test_pure test_pure.cpp -L. -lpure_cuda_indexer $(CUDA_LIBS) -Wl,-rpath,.
+	./test_pure
+	rm -f test_pure test_pure.cpp
