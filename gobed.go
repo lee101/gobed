@@ -356,28 +356,6 @@ func (m *EmbeddingModel) GetAvailableTexts() []string {
 	return texts
 }
 
-// CosineSimilarity calculates cosine similarity between two vectors
-func CosineSimilarity(a, b []float32) float32 {
-	if len(a) != len(b) {
-		return 0.0
-	}
-
-	var dotProduct, normA, normB float32
-	for i := 0; i < len(a); i++ {
-		dotProduct += a[i] * b[i]
-		normA += a[i] * a[i]
-		normB += b[i] * b[i]
-	}
-
-	normA = float32(math.Sqrt(float64(normA)))
-	normB = float32(math.Sqrt(float64(normB)))
-
-	if normA == 0.0 || normB == 0.0 {
-		return 0.0
-	}
-
-	return dotProduct / (normA * normB)
-}
 
 // loadRealSafetensors loads the actual model weights
 func loadRealSafetensors(filePath string) ([][]float32, int, int, error) {

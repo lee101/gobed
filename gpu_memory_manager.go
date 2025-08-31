@@ -10,9 +10,9 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I/usr/local/cuda-11.4/include
-#cgo LDFLAGS: -L./gpu -ltorch_cgo_wrapper -L/usr/local/cuda-11.4/lib64 -lcudart
-#include "./gpu/torch_cgo_wrapper.h"
+#cgo CFLAGS: -I/usr/local/cuda/include -I/usr/local/cuda/targets/x86_64-linux/include -I./gpu
+#cgo LDFLAGS: -L./gpu -ltorch_cgo_wrapper -L/usr/local/cuda/lib64 -lcudart
+#include "torch_cgo_wrapper.h"
 #include <cuda_runtime_api.h>
 #include <stdlib.h>
 

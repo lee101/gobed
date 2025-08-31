@@ -1,0 +1,13 @@
+# github.com/lee101/gobed [github.com/lee101/gobed.test]
+./parallel_indexing_test.go:300:50: stats.IndexSize undefined (type SearchEngineStats has no field or method IndexSize)
+./parallel_indexing_test.go:317:12: index.bulkIndexer undefined (type *VectorIndex has no field or method bulkIndexer)
+./parallel_indexing_test.go:319:19: index.bulkIndexer undefined (type *VectorIndex has no field or method bulkIndexer)
+./parallel_indexing_test.go:334:12: index.bulkIndexer undefined (type *VectorIndex has no field or method bulkIndexer)
+./parallel_indexing_test.go:356:18: index.bulkIndexer undefined (type *VectorIndex has no field or method bulkIndexer)
+./parallel_indexing_test.go:368:12: index.bulkIndexer undefined (type *VectorIndex has no field or method bulkIndexer)
+./parallel_indexing_test.go:387:20: undefined: EnhancedIndexProgress
+./parallel_indexing_test.go:392:14: progress.Percentage undefined (type interface{} has no field or method Percentage)
+./parallel_indexing_test.go:393:14: progress.CurrentBatch undefined (type interface{} has no field or method CurrentBatch)
+./parallel_indexing_test.go:393:37: progress.TotalBatches undefined (type interface{} has no field or method TotalBatches)
+./parallel_indexing_test.go:393:37: too many errors
+FAIL	github.com/lee101/gobed [build failed]

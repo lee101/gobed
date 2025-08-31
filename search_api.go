@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"sync"
 	"time"
 
@@ -318,28 +319,92 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 	vectors := make([]simd.Vec512, len(texts))
 	scales := make([]float32, len(texts))
 
-	// Generate embeddings with caching and optimization
-	for i, text := range texts {
-		var embedding *EmbedInt8Result
-		var err error
-
-		// Check cache first
-		if cached, found := se.embeddingCache.Get(text); found {
-			embedding = cached
-		} else {
-			// Generate new embedding
-			embedding, err = se.model.EmbedInt8(text)
-			if err != nil {
-				return fmt.Errorf("failed to embed text %d: %v", i, err)
+	// OPTIMIZATION: Process embeddings in parallel batches for GPU acceleration
+	// Process in batches for efficient GPU/CPU utilization
+	numWorkers := runtime.NumCPU()
+	// For GPU mode, limit workers to avoid contention
+	if numWorkers > 8 {
+		numWorkers = 8
+	}
+	
+	type embeddingJob struct {
+		index int
+		text  string
+	}
+	
+	type embeddingResult struct {
+		index     int
+		embedding *EmbedInt8Result
+		err       error
+	}
+	
+	jobChan := make(chan embeddingJob, len(texts))
+	resultChan := make(chan embeddingResult, len(texts))
+	
+	// Start worker pool
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobChan {
+				// Check cache first
+				if cached, found := se.embeddingCache.Get(job.text); found {
+					resultChan <- embeddingResult{
+						index:     job.index,
+						embedding: cached,
+					}
+					continue
+				}
+				
+				// Generate new embedding
+				embedding, err := se.model.EmbedInt8(job.text)
+				if err != nil {
+					resultChan <- embeddingResult{
+						index: job.index,
+						err:   err,
+					}
+					continue
+				}
+				
+				// Cache the result
+				se.embeddingCache.Put(job.text, embedding)
+				
+				resultChan <- embeddingResult{
+					index:     job.index,
+					embedding: embedding,
+				}
 			}
-
-			// Cache the result for future use
-			se.embeddingCache.Put(text, embedding)
+		}()
+	}
+	
+	// Send all jobs
+	for i, text := range texts {
+		jobChan <- embeddingJob{index: i, text: text}
+	}
+	close(jobChan)
+	
+	// Wait for workers to finish
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+	
+	// Collect results
+	results := make(map[int]*EmbedInt8Result)
+	for result := range resultChan {
+		if result.err != nil {
+			return fmt.Errorf("failed to embed text %d: %v", result.index, result.err)
 		}
-
+		results[result.index] = result.embedding
+	}
+	
+	// Copy results in order
+	for i := range texts {
+		embedding := results[i]
 		copy(vectors[i][:], embedding.Vector)
 		scales[i] = embedding.Scale
-		se.documents[ids[i]] = text
+		se.documents[ids[i]] = texts[i]
 	}
 
 	// Initialize index if needed
