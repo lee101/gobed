@@ -38,7 +38,8 @@ type GPUBuffer struct {
 // NewGPUBatchProcessor creates a GPU-optimized batch processor
 func NewGPUBatchProcessor(model *EmbeddingModel, cache *TokenPatternCache) *GPUBatchProcessor {
 	numCPU := runtime.NumCPU()
-	batchSize := 2048 // Much larger batch for better GPU utilization
+	// Use dynamic batch sizing based on available memory
+	batchSize := GetOptimalGPUBatchSize()
 	
 	processor := &GPUBatchProcessor{
 		cache:         cache,
@@ -116,9 +117,10 @@ func (p *GPUBatchProcessor) ProcessBatch(texts []string) ([]*EmbedInt8Result, er
 					continue
 				}
 				
-				tokens := make([]int, len(encoding.Ids))
-				for k, id := range encoding.Ids {
-					tokens[k] = int(id)
+				// Use buffer pool
+				tokens := GetTokenBuffer()
+				for _, id := range encoding.Ids {
+					tokens = append(tokens, int(id))
 				}
 				
 				// Apply stopword filtering if needed

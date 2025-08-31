@@ -27,14 +27,14 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 	switch preset {
 	case FastPreset:
 		// Optimized for speed - minimal indexing overhead
-		if estimatedSize <= 5000 {
+		if estimatedSize <= 1500 {
 			return search.Config{
-				MaxFlatSize: 10000, // Use exact search for tiny datasets
+				MaxFlatSize: 2000, // Small exact search for tiny datasets
 				UseParallel: true,
 			}
 		}
 		return search.Config{
-			MaxFlatSize: 1000,
+			MaxFlatSize: 1500,
 			NList:       min(256, estimatedSize/50), // Few clusters
 			NProbe:      4,                          // Minimal probes
 			HNSWEnabled: false,                      // Skip graph for simplicity
@@ -46,14 +46,14 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 		// Balance between speed and accuracy
 		if estimatedSize <= 10000 {
 			return search.Config{
-				MaxFlatSize: 2000,
+				MaxFlatSize: 1500,
 				NList:       estimatedSize / 100,
 				NProbe:      8,
 				UseParallel: true,
 			}
 		}
 		return search.Config{
-			MaxFlatSize: 1000,
+			MaxFlatSize: 1500,
 			NList:       min(2048, estimatedSize/100),
 			NProbe:      10,
 			M:           32,
@@ -68,7 +68,7 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 	case AccuratePreset:
 		// Prioritize accuracy over speed
 		return search.Config{
-			MaxFlatSize: 2000,
+			MaxFlatSize: 3000,
 			NList:       min(4096, estimatedSize/50), // More clusters
 			NProbe:      20,                          // More probes
 			M:           64,

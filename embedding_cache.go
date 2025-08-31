@@ -316,7 +316,14 @@ func (c *TokenPatternCache) ComputeEmbeddingWithCache(tokens []int, computeFn fu
 // computeWithPartialCache combines cached n-grams with computed embeddings
 func (c *TokenPatternCache) computeWithPartialCache(tokens []int, computeFn func([]int) ([]float32, error)) ([]float32, error) {
 	const embDim = 1024
-	result := make([]float32, embDim)
+	// Use buffer pool for result
+	result := GetEmbedBuffer()
+	if len(result) < embDim {
+		result = make([]float32, embDim)
+	} else {
+		result = result[:embDim]
+	}
+	defer PutEmbedBuffer(result)
 	covered := make([]bool, len(tokens))
 	partialCount := 0
 
@@ -508,9 +515,11 @@ func (m *EmbeddingModel) OptimizedEmbedding(text string, cache *TokenPatternCach
 		return nil, err
 	}
 
-	tokens := make([]int, len(encoding.Ids))
-	for i, id := range encoding.Ids {
-		tokens[i] = int(id)
+	// Use buffer pool for tokens to reduce allocations
+	tokens := GetTokenBuffer()
+	defer PutTokenBuffer(tokens)
+	for _, id := range encoding.Ids {
+		tokens = append(tokens, int(id))
 	}
 
 	// Filter stopwords if needed

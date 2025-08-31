@@ -142,8 +142,12 @@ func NewSearchEngine(model *EmbeddingModel) *SearchEngine {
 
 // NewSearchEngineWithConfig creates a search engine with custom configuration
 func NewSearchEngineWithConfig(model *EmbeddingModel, config SearchConfig) *SearchEngine {
+	// Map public config to internal ann config
+	annConfig := mapSearchConfigToAnnConfig(config)
+	
 	se := &SearchEngine{
 		model:          model,
+		index:          search.NewEngine(annConfig), // Initialize the internal index
 		documents:      make(map[int]string),
 		config:         config,
 		objectPool:     NewObjectPool(),
@@ -787,5 +791,6 @@ func (se *SearchEngine) Optimize() error {
 
 	return nil
 }
+
 
 // min function removed - using the one from parallel_indexing.go

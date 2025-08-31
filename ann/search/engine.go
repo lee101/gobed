@@ -59,7 +59,7 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		MaxFlatSize: 5000, // Use approximate search much earlier for speed
+		MaxFlatSize: 1500, // Optimized based on benchmarks - best balance
 		NList:       4096,
 		NProbe:      8,
 		M:           64,
@@ -76,7 +76,7 @@ func DefaultConfig() Config {
 func NewEngine(config Config) *Engine {
 	// Validate and set defaults
 	if config.MaxFlatSize <= 0 {
-		config.MaxFlatSize = 50000
+		config.MaxFlatSize = 1500 // Optimized default
 	}
 	if config.NList <= 0 {
 		config.NList = 4096

@@ -15,14 +15,14 @@ func TestParallelIndexing(t *testing.T) {
 	}
 
 	t.Run("BasicParallelIndexing", func(t *testing.T) {
-		config := DefaultSearchConfig()
+		// config := DefaultSearchConfig()
 		engine := NewSearchEngine(model)
 
 		parallelConfig := DefaultParallelIndexConfig()
 		parallelIndexer := NewParallelIndexer(engine, parallelConfig)
 
 		// Test documents
-		docs := generateTestDocuments(100)
+		docs := generateTestDocumentsParallel(100)
 
 		ids, err := parallelIndexer.IndexDocumentsParallel(docs)
 		if err != nil {
@@ -45,7 +45,7 @@ func TestParallelIndexing(t *testing.T) {
 
 	t.Run("WorkerScaling", func(t *testing.T) {
 		engine := NewSearchEngine(model)
-		docs := generateTestDocuments(500)
+		docs := generateTestDocumentsParallel(500)
 
 		workerCounts := []int{1, 2, 4, 8, runtime.NumCPU()}
 		results := make(map[int]time.Duration)
@@ -86,7 +86,7 @@ func TestParallelIndexing(t *testing.T) {
 
 	t.Run("BatchSizeOptimization", func(t *testing.T) {
 		engine := NewSearchEngine(model)
-		docs := generateTestDocuments(1000)
+		docs := generateTestDocumentsParallel(1000)
 
 		batchSizes := []int{10, 50, 100, 200, 500}
 		bestBatch := 0
@@ -121,7 +121,7 @@ func TestParallelIndexing(t *testing.T) {
 		config := DefaultParallelIndexConfig()
 		indexer := NewParallelIndexer(engine, config)
 
-		docs := generateTestDocuments(200)
+		docs := generateTestDocumentsParallel(200)
 
 		progressChan, err := indexer.IndexWithProgress(docs)
 		if err != nil {
@@ -202,7 +202,7 @@ func TestParallelIndexing(t *testing.T) {
 		config := DefaultParallelIndexConfig()
 		indexer := NewParallelIndexer(engine, config)
 
-		testDocs := generateTestDocuments(500)
+		testDocs := generateTestDocumentsParallel(500)
 
 		optimalWorkers, err := indexer.OptimizeWorkers(testDocs)
 		if err != nil {
@@ -227,7 +227,7 @@ func TestParallelSearchEngine(t *testing.T) {
 		config := AsyncSearchConfig()
 		engine := NewParallelSearchEngine(model, config)
 
-		docs := generateTestDocuments(1000)
+		docs := generateTestDocumentsParallel(1000)
 
 		comparison, err := engine.IndexBatchWithComparison(docs)
 		if err != nil {
@@ -251,7 +251,7 @@ func TestParallelSearchEngine(t *testing.T) {
 		engine := NewParallelSearchEngine(model, config)
 
 		// Index some initial documents
-		initialDocs := generateTestDocuments(500)
+		initialDocs := generateTestDocumentsParallel(500)
 		_, err := engine.IndexBatchParallel(initialDocs)
 		if err != nil {
 			t.Fatalf("Initial indexing failed: %v", err)
@@ -266,7 +266,7 @@ func TestParallelSearchEngine(t *testing.T) {
 			go func(workerID int) {
 				defer wg.Done()
 
-				docs := generateTestDocuments(100)
+				docs := generateTestDocumentsParallel(100)
 				_, err := engine.IndexBatchParallel(docs)
 				if err != nil {
 					t.Errorf("Worker %d indexing failed: %v", workerID, err)
@@ -457,7 +457,7 @@ func BenchmarkParallelIndexing(b *testing.B) {
 	model, _ := LoadModel()
 	engine := NewSearchEngine(model)
 
-	docs := generateTestDocuments(100)
+	docs := generateTestDocumentsParallel(100)
 
 	b.Run("Sequential", func(b *testing.B) {
 		b.ResetTimer()
@@ -488,7 +488,7 @@ func BenchmarkParallelIndexing(b *testing.B) {
 }
 
 // Helper function to generate test documents
-func generateTestDocuments(n int) []string {
+func generateTestDocumentsParallel(n int) []string {
 	docs := make([]string, n)
 	templates := []string{
 		"Advanced machine learning techniques for %d",
