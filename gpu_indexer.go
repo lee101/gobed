@@ -4,7 +4,7 @@ package gobed
 
 /*
 #cgo CFLAGS: -I./gpu
-#cgo LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.0/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.0/lib64
+#cgo LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.8/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.8/lib64
 #include "pure_cuda_indexer.h"
 #include <stdlib.h>
 */

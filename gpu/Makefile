@@ -1,13 +1,13 @@
 # Makefile for Real GPU LibTorch integration with CUDA kernels
 LIBTORCH_ROOT = /home/lee/code/gobed/libtorch
-CUDA_PATH = /usr/local/cuda-12.0
+CUDA_PATH = /usr/local/cuda-12.8
 
 # Compilers
-NVCC = /usr/local/cuda-12.0/bin/nvcc
+NVCC = /usr/local/cuda-12.8/bin/nvcc
 CXX = g++
 
 # Flags
-NVCC_FLAGS = -std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC -allow-unsupported-compiler -ccbin g++-12
+NVCC_FLAGS = -std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC -allow-unsupported-compiler
 CXX_FLAGS = -std=c++17 -O3 -fPIC -D_GLIBCXX_USE_CXX11_ABI=1
 SHARED_FLAGS = --shared
 
@@ -17,22 +17,28 @@ INCLUDES = -I$(LIBTORCH_ROOT)/include \
            -I$(CUDA_PATH)/include
 
 # Library paths and libraries
-CUDA_LIBS = -L$(CUDA_PATH)/lib64 -lcudart -lcublas
-TORCH_LIBS = -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cuda -ltorch_cpu -lc10_cuda -lc10
-RPATH_FLAGS = -Xlinker -rpath -Xlinker $(LIBTORCH_ROOT)/lib -Xlinker -rpath -Xlinker $(CUDA_PATH)/lib64
+CUDA_LIBS = -L$(CUDA_PATH)/targets/x86_64-linux/lib -lcudart -lcublas
+TORCH_LIBS = -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cpu -lc10
+RPATH_FLAGS = -Xlinker -rpath -Xlinker $(LIBTORCH_ROOT)/lib -Xlinker -rpath -Xlinker $(CUDA_PATH)/targets/x86_64-linux/lib
 
 # Output files
 WRAPPER_LIB = libtorch_cgo_wrapper.so
 CUDA_KERNEL_OBJ = cuda_kernels.o
 WRAPPER_OBJ = torch_gpu_forced.o
+GPU_MEMORY_LIB = libgpu_memory.so
+GPU_IVF_LIB = libgpu_ivf_bulk.so
+GPU_SEARCH_LIB = libgpu_fast_search.so
 
 # Source files
 CUDA_KERNEL_SRC = cuda_kernels.cu
 WRAPPER_SRC = torch_gpu_forced.cpp
+GPU_MEMORY_SRC = gpu_memory.cu
+GPU_IVF_SRC = gpu_ivf_bulk.cu
+GPU_SEARCH_SRC = gpu_fast_search.cu
 
 .PHONY: all clean test diagnose
 
-all: $(WRAPPER_LIB)
+all: $(WRAPPER_LIB) $(GPU_MEMORY_LIB) $(GPU_IVF_LIB) $(GPU_SEARCH_LIB)
 
 # Compile CUDA kernels
 $(CUDA_KERNEL_OBJ): $(CUDA_KERNEL_SRC)
@@ -51,14 +57,33 @@ $(WRAPPER_LIB): $(CUDA_KERNEL_OBJ) $(WRAPPER_OBJ)
 	@echo "🔗 Linking GPU-accelerated library..."
 	$(NVCC) $(SHARED_FLAGS) -o $@ $^ $(CUDA_LIBS) $(TORCH_LIBS) $(RPATH_FLAGS)
 	@echo "✅ Built $(WRAPPER_LIB) with Real GPU acceleration!"
+
+# Build GPU memory library
+$(GPU_MEMORY_LIB): $(GPU_MEMORY_SRC)
+	@echo "🔧 Building GPU memory library..."
+	$(NVCC) $(NVCC_FLAGS) $(SHARED_FLAGS) -o $@ $< $(CUDA_LIBS)
+	@echo "✅ Built $(GPU_MEMORY_LIB)"
+
+# Build GPU IVF bulk library
+$(GPU_IVF_LIB): $(GPU_IVF_SRC)
+	@echo "🔧 Building GPU IVF bulk library..."
+	$(NVCC) $(NVCC_FLAGS) $(SHARED_FLAGS) -o $@ $< $(CUDA_LIBS)
+	@echo "✅ Built $(GPU_IVF_LIB)"
+
+# Build GPU fast search library
+$(GPU_SEARCH_LIB): $(GPU_SEARCH_SRC)
+	@echo "🔧 Building GPU fast search library..."
+	$(NVCC) $(NVCC_FLAGS) $(SHARED_FLAGS) -o $@ $< $(CUDA_LIBS)
+	@echo "✅ Built $(GPU_SEARCH_LIB)"
 	@echo ""
-	@echo "🚀 GPU-accelerated library is ready!"
+	@echo "🚀 All GPU libraries ready!"
 	@echo "   CUDA kernels: ✅"
-	@echo "   LibTorch integration: ✅"
-	@echo "   Shared library: $(WRAPPER_LIB)"
+	@echo "   Memory pool: ✅"
+	@echo "   IVF bulk indexing: ✅"
+	@echo "   Fast search: ✅"
 
 clean:
-	rm -f $(WRAPPER_LIB) $(CUDA_KERNEL_OBJ) $(WRAPPER_OBJ)
+	rm -f $(WRAPPER_LIB) $(CUDA_KERNEL_OBJ) $(WRAPPER_OBJ) $(GPU_MEMORY_LIB) $(GPU_IVF_LIB) $(GPU_SEARCH_LIB)
 	@echo "🧹 Cleaned build artifacts"
 
 test: $(WRAPPER_LIB)

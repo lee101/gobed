@@ -41,9 +41,9 @@ type GPUMemoryManager struct {
 	totalMemory uint64
 	
 	// Memory pools for different object types
-	vectorPool     *GPUMemoryPool
-	queryPool      *GPUMemoryPool
-	resultPool     *GPUMemoryPool
+	vectorPool     *GPUBlockPool
+	queryPool      *GPUBlockPool
+	resultPool     *GPUBlockPool
 	
 	// Memory tracking
 	allocatedBytes uint64
@@ -58,8 +58,8 @@ type GPUMemoryManager struct {
 	mutex sync.RWMutex
 }
 
-// GPUMemoryPool manages a pool of GPU memory blocks
-type GPUMemoryPool struct {
+// GPUBlockPool manages a pool of GPU memory blocks
+type GPUBlockPool struct {
 	blockSize    uint64
 	maxBlocks    int
 	freeBlocks   []unsafe.Pointer
@@ -123,18 +123,18 @@ func NewGPUMemoryManager(config GPUMemoryConfig) (*GPUMemoryManager, error) {
 	// Initialize memory pools
 	var err error
 	
-	manager.vectorPool, err = newGPUMemoryPool(config.VectorPoolBlockSize, config.MaxVectorBlocks)
+	manager.vectorPool, err = newGPUBlockPool(config.VectorPoolBlockSize, config.MaxVectorBlocks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vector pool: %w", err)
 	}
 
-	manager.queryPool, err = newGPUMemoryPool(config.QueryPoolBlockSize, config.MaxQueryBlocks)
+	manager.queryPool, err = newGPUBlockPool(config.QueryPoolBlockSize, config.MaxQueryBlocks)
 	if err != nil {
 		manager.vectorPool.destroy()
 		return nil, fmt.Errorf("failed to create query pool: %w", err)
 	}
 
-	manager.resultPool, err = newGPUMemoryPool(config.ResultPoolBlockSize, config.MaxResultBlocks)
+	manager.resultPool, err = newGPUBlockPool(config.ResultPoolBlockSize, config.MaxResultBlocks)
 	if err != nil {
 		manager.vectorPool.destroy()
 		manager.queryPool.destroy()
@@ -153,9 +153,9 @@ func NewGPUMemoryManager(config GPUMemoryConfig) (*GPUMemoryManager, error) {
 	return manager, nil
 }
 
-// newGPUMemoryPool creates a new GPU memory pool
-func newGPUMemoryPool(blockSize uint64, maxBlocks int) (*GPUMemoryPool, error) {
-	pool := &GPUMemoryPool{
+// newGPUBlockPool creates a new GPU memory pool
+func newGPUBlockPool(blockSize uint64, maxBlocks int) (*GPUBlockPool, error) {
+	pool := &GPUBlockPool{
 		blockSize:   blockSize,
 		maxBlocks:   maxBlocks,
 		freeBlocks:  make([]unsafe.Pointer, 0, maxBlocks),
@@ -181,7 +181,7 @@ func newGPUMemoryPool(blockSize uint64, maxBlocks int) (*GPUMemoryPool, error) {
 }
 
 // allocateBlock allocates a single GPU memory block
-func (pool *GPUMemoryPool) allocateBlock() (unsafe.Pointer, error) {
+func (pool *GPUBlockPool) allocateBlock() (unsafe.Pointer, error) {
 	var ptr unsafe.Pointer
 	
 	// Allocate GPU memory using CUDA runtime
@@ -197,7 +197,7 @@ func (pool *GPUMemoryPool) allocateBlock() (unsafe.Pointer, error) {
 }
 
 // GetBlock gets a memory block from the pool
-func (pool *GPUMemoryPool) GetBlock() (unsafe.Pointer, error) {
+func (pool *GPUBlockPool) GetBlock() (unsafe.Pointer, error) {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
@@ -223,7 +223,7 @@ func (pool *GPUMemoryPool) GetBlock() (unsafe.Pointer, error) {
 }
 
 // ReturnBlock returns a memory block to the pool
-func (pool *GPUMemoryPool) ReturnBlock(block unsafe.Pointer) {
+func (pool *GPUBlockPool) ReturnBlock(block unsafe.Pointer) {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
@@ -237,7 +237,7 @@ func (pool *GPUMemoryPool) ReturnBlock(block unsafe.Pointer) {
 }
 
 // destroy cleans up the memory pool
-func (pool *GPUMemoryPool) destroy() {
+func (pool *GPUBlockPool) destroy() {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
@@ -423,7 +423,7 @@ type PoolStats struct {
 }
 
 // getPoolStats returns statistics for a memory pool
-func (m *GPUMemoryManager) getPoolStats(pool *GPUMemoryPool, name string) PoolStats {
+func (m *GPUMemoryManager) getPoolStats(pool *GPUBlockPool, name string) PoolStats {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 

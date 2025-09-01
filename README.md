@@ -35,6 +35,24 @@ Built with the `sentence-transformers/static-retrieval-mrl-en-v1` model, state-o
 go get github.com/lee101/gobed
 ```
 
+### GPU Support (CUDA 12.8)
+
+For GPU acceleration, build with CUDA support:
+
+```bash
+# Prerequisites: CUDA 12.8 toolkit installed
+# Build GPU libraries
+cd gpu
+make clean && make all
+
+# Build your application with GPU tags
+go build -tags="gpu cuda" your_app.go
+
+# Run with library paths
+export LD_LIBRARY_PATH="/home/lee/code/gobed/gpu:/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH"
+./your_app
+```
+
 
 ## Quick Start
 
