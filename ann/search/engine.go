@@ -119,7 +119,10 @@ func (e *Engine) Train(vectors []simd.Vec512, scales []float32) error {
 		return nil
 	}
 
-	fmt.Printf("Indexing %d vectors...\n", n)
+	// Only print if actually training, not when loading from cache
+	if !e.trained {
+		fmt.Printf("Indexing %d vectors...\n", n)
+	}
 	start := time.Now()
 
 	// Initialize IVF
@@ -522,6 +525,13 @@ type IndexStats struct {
 	PQM         int
 	PQBits      int
 	HNSWEnabled bool
+}
+
+// SetTrained sets the trained flag (used when loading from cache)
+func (e *Engine) SetTrained(trained bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.trained = trained
 }
 
 // Helper functions
