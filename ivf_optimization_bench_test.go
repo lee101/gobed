@@ -10,8 +10,8 @@ import (
 	"github.com/lee101/gobed/ann/simd"
 )
 
-// generateRandomVectors generates random int8 vectors for testing
-func generateRandomVectors(n int) ([]simd.Vec512, []float32, []int) {
+// generateRandomVectorsForIVFOpt generates random int8 vectors for testing
+func generateRandomVectorsForIVFOpt(n int) ([]simd.Vec512, []float32, []int) {
 	vectors := make([]simd.Vec512, n)
 	scales := make([]float32, n)
 	ids := make([]int, n)
@@ -41,7 +41,7 @@ func BenchmarkIVFComparison(b *testing.B) {
 	}
 
 	for _, tc := range testCases {
-		vectors, scales, ids := generateRandomVectors(tc.dataSize)
+		vectors, scales, ids := generateRandomVectorsForIVFOpt(tc.dataSize)
 		trainVecs := vectors[:tc.trainSize]
 		trainScales := scales[:tc.trainSize]
 
@@ -125,7 +125,7 @@ func BenchmarkKMeansComparison(b *testing.B) {
 	}
 
 	for _, tc := range testCases {
-		vectors, scales, _ := generateRandomVectors(tc.trainSize)
+		vectors, scales, _ := generateRandomVectorsForIVFOpt(tc.trainSize)
 
 		b.Run(tc.name+"_Original", func(b *testing.B) {
 			var memStats1, memStats2 runtime.MemStats
@@ -175,7 +175,7 @@ func BenchmarkSearchComparison(b *testing.B) {
 	nprobe := 8
 	k := 10
 
-	vectors, scales, ids := generateRandomVectors(dataSize)
+	vectors, scales, ids := generateRandomVectorsForIVFOpt(dataSize)
 	trainVecs := vectors[:trainSize]
 	trainScales := scales[:trainSize]
 
@@ -220,7 +220,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	trainSize := 2000
 	nlist := 128
 	
-	vectors, scales, ids := generateRandomVectors(dataSize)
+	vectors, scales, ids := generateRandomVectorsForIVFOpt(dataSize)
 	trainVecs := vectors[:trainSize]
 	trainScales := scales[:trainSize]
 
@@ -287,7 +287,7 @@ func TestAccuracyPreservation(t *testing.T) {
 	nprobe := 4
 	k := 10
 
-	vectors, scales, ids := generateRandomVectors(dataSize)
+	vectors, scales, ids := generateRandomVectorsForIVFOpt(dataSize)
 	trainVecs := vectors[:trainSize]
 	trainScales := scales[:trainSize]
 
