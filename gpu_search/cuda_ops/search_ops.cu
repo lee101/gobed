@@ -6,15 +6,24 @@
 #include <vector>
 
 // INT8 dot product using __dp4a intrinsic for 4x speedup
+// __dp4a requires compute capability 6.1+
 template<int D>
 __device__ __forceinline__ int dot_dp4a(const int8_t* __restrict__ a,
                                         const int8_t* __restrict__ b) {
     int acc = 0;
     #pragma unroll
     for (int i = 0; i < D; i += 4) {
+        #if __CUDA_ARCH__ >= 610
+        // Use fast __dp4a instruction for compute capability 6.1+
         int pa = *reinterpret_cast<const int*>(a + i);
         int pb = *reinterpret_cast<const int*>(b + i);
         acc = __dp4a(pa, pb, acc);
+        #else
+        // Fallback for older GPUs
+        for (int j = 0; j < 4; j++) {
+            acc += static_cast<int>(a[i + j]) * static_cast<int>(b[i + j]);
+        }
+        #endif
     }
     return acc;
 }
@@ -54,9 +63,17 @@ __global__ void build_pq_lut_kernel(
         
         int dot_product = 0;
         for (int i = 0; i < subvec_dim; i += 4) {
+            #if __CUDA_ARCH__ >= 610
+            // Use fast __dp4a instruction for compute capability 6.1+
             int qa = *reinterpret_cast<const int*>(query_sub + i);
             int ca = *reinterpret_cast<const int*>(codeword + i);
             dot_product = __dp4a(qa, ca, dot_product);
+            #else
+            // Fallback for older GPUs
+            for (int j = 0; j < 4; j++) {
+                dot_product += static_cast<int>(query_sub[i + j]) * static_cast<int>(codeword[i + j]);
+            }
+            #endif
         }
         
         lut[m * K + k] = static_cast<float>(dot_product);

@@ -1,1 +1,0 @@
--isystem /home/lee/code/gobed/libtorch/include -isystem /home/lee/code/gobed/libtorch/include/torch/csrc/api/include -isystem "/usr/local/cuda-12.0/include"

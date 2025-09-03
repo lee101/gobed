@@ -23,3 +23,8 @@ __pycache__/
 
 bulk_benchmark
 gosec.sarif
+
+# CUDA/GPU build artifacts
+gpu_search/cuda_ops/build/
+gpu_search/*.so
+*.so
