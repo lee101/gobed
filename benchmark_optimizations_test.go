@@ -238,17 +238,25 @@ func BenchmarkParallelProcessing(b *testing.B) {
 
 // TestMemoryPoolEffectiveness verifies buffer pool reduces allocations
 func TestMemoryPoolEffectiveness(t *testing.T) {
+	// Warm up the pool first
+	for i := 0; i < 10; i++ {
+		buf := GetTokenBuffer()
+		PutTokenBuffer(buf)
+	}
+	
 	// Measure allocations without pool
 	var m1 runtime.MemStats
 	runtime.ReadMemStats(&m1)
 	
+	buffers := make([][]int, 1000)
 	for i := 0; i < 1000; i++ {
-		_ = make([]int, 512)
+		buffers[i] = make([]int, 0, 512)
 	}
 	
 	var m2 runtime.MemStats
 	runtime.ReadMemStats(&m2)
 	allocsWithoutPool := m2.Mallocs - m1.Mallocs
+	_ = buffers // prevent optimization
 	
 	// Measure allocations with pool
 	runtime.ReadMemStats(&m1)
@@ -261,12 +269,24 @@ func TestMemoryPoolEffectiveness(t *testing.T) {
 	runtime.ReadMemStats(&m2)
 	allocsWithPool := m2.Mallocs - m1.Mallocs
 	
-	reduction := float64(allocsWithoutPool-allocsWithPool) / float64(allocsWithoutPool) * 100
-	t.Logf("Memory pool reduced allocations by %.1f%% (%d -> %d)", 
-		reduction, allocsWithoutPool, allocsWithPool)
+	// Calculate reduction, handling edge cases
+	var reduction float64
+	if allocsWithoutPool > 0 {
+		reduction = float64(allocsWithoutPool-allocsWithPool) / float64(allocsWithoutPool) * 100
+	}
 	
+	t.Logf("Memory pool allocations: without pool=%d, with pool=%d (%.1f%% reduction)", 
+		allocsWithoutPool, allocsWithPool, reduction)
+	
+	// The pool should reduce allocations
+	// Even a small reduction shows the pool is working
 	if allocsWithPool >= allocsWithoutPool {
-		t.Error("Buffer pool did not reduce allocations")
+		t.Error("Buffer pool did not reduce allocations at all")
+	}
+	
+	// Pool is working if we see any reduction
+	if reduction > 0 {
+		t.Logf("✓ Buffer pool is working effectively")
 	}
 }
 

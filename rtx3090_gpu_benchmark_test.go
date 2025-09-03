@@ -58,9 +58,8 @@ func BenchmarkRTX3090GPUIndexing(b *testing.B) {
 					config := ParallelIndexConfig{
 						NumWorkers:    workers,
 						BatchSize:     batchSize,
-						EnableCache:   true,
-						QueueSize:     batchSize * 2, // Double buffer
-						MaxConcurrent: workers * 2,    // Allow 2x concurrency
+						EnableCache: true,
+						QueueSize:   batchSize * 2, // Double buffer
 					}
 
 					indexer := NewParallelIndexer(engine, config)
@@ -105,8 +104,9 @@ func BenchmarkRTX3090GPUIndexing(b *testing.B) {
 
 					// Get indexer stats
 					stats := indexer.Stats()
+					avgLatency := stats.TotalTime / time.Duration(stats.TotalIndexed)
 					b.Logf("✓ Batch=%d, Workers=%d: %.0f docs/sec, Avg latency: %.2fms",
-						batchSize, workers, docsPerSec, float64(stats.AvgLatency)/1000000)
+						batchSize, workers, docsPerSec, float64(avgLatency)/1000000)
 				})
 			}
 		}
@@ -159,9 +159,8 @@ func BenchmarkRTX3090ParallelScaling(b *testing.B) {
 			config := ParallelIndexConfig{
 				NumWorkers:    workers,
 				BatchSize:     1000, // Optimized for GPU
-				EnableCache:   true,
-				QueueSize:     2000,
-				MaxConcurrent: workers * 2,
+				EnableCache: true,
+				QueueSize:   2000,
 			}
 
 			indexer := NewParallelIndexer(engine, config)
@@ -226,9 +225,8 @@ func BenchmarkRTX3090ProgressMonitoring(b *testing.B) {
 	config := ParallelIndexConfig{
 		NumWorkers:    runtime.NumCPU(),
 		BatchSize:     2000, // Large batch for GPU
-		EnableCache:   true,
-		QueueSize:     4000,
-		MaxConcurrent: runtime.NumCPU() * 2,
+		EnableCache: true,
+		QueueSize:   4000,
 	}
 
 	docCounts := []int{10000, 25000, 50000}

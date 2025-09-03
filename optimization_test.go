@@ -14,9 +14,11 @@ func TestMemoryPooling(t *testing.T) {
 	runtime.ReadMemStats(&m1)
 	
 	// Allocate without pool
+	buffers := make([][]int, 1000)
 	for i := 0; i < 1000; i++ {
-		_ = make([]int, 512)
+		buffers[i] = make([]int, 0, 512)
 	}
+	_ = buffers // prevent optimization
 	
 	runtime.ReadMemStats(&m2)
 	allocsWithoutPool := m2.Mallocs - m1.Mallocs
@@ -37,9 +39,12 @@ func TestMemoryPooling(t *testing.T) {
 	runtime.ReadMemStats(&m2)
 	allocsWithPool := m2.Mallocs - m1.Mallocs
 	
-	reduction := float64(allocsWithoutPool-allocsWithPool) / float64(allocsWithoutPool) * 100
-	t.Logf("Memory pool reduced allocations by %.1f%% (%d -> %d)", 
-		reduction, allocsWithoutPool, allocsWithPool)
+	var reduction float64
+	if allocsWithoutPool > 0 {
+		reduction = float64(allocsWithoutPool-allocsWithPool) / float64(allocsWithoutPool) * 100
+	}
+	t.Logf("Memory pool allocations: without=%d, with=%d (%.1f%% reduction)", 
+		allocsWithoutPool, allocsWithPool, reduction)
 	
 	// Pool should reduce allocations significantly
 	if allocsWithPool >= allocsWithoutPool {

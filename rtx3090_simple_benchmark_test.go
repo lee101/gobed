@@ -53,7 +53,7 @@ func BenchmarkRTX3090SimpleIndexing(b *testing.B) {
 					
 					// Generate embeddings for batch
 					for _, text := range batch {
-						_, err := model.Embed(text)
+						_, err := model.Encode(text)
 						if err != nil {
 							b.Fatalf("Failed to generate embedding: %v", err)
 						}
@@ -114,7 +114,7 @@ func BenchmarkRTX3090ConcurrentEmbedding(b *testing.B) {
 						}
 						
 						for j := startIdx; j < endIdx; j++ {
-							_, err := model.Embed(texts[j])
+							_, err := model.Encode(texts[j])
 							if err != nil {
 								b.Errorf("Worker %d failed: %v", workerID, err)
 							}
@@ -170,7 +170,7 @@ func BenchmarkRTX3090BatchProcessing(b *testing.B) {
 					// Simulate batch processing
 					embeddings := make([][]float32, len(batch))
 					for idx, text := range batch {
-						emb, err := model.Embed(text)
+						emb, err := model.Encode(text)
 						if err != nil {
 							b.Fatalf("Failed to embed: %v", err)
 						}
