@@ -175,7 +175,7 @@ similarity, err := model.Similarity("text1", "text2")
 - Go 1.21+
 - 119MB for model weights
 - Optional: CUDA 12.8 for GPU support
-- Optional: AVX-512 CPU for INT8 mode (required for INT8, will crash without it)
+- Optional: AVX-512 CPU for INT8 mode
 
 ### Model
 Using `sentence-transformers/static-retrieval-mrl-en-v1`:
