@@ -7,9 +7,7 @@ endif()
 
 project(gobed_ann_ops LANGUAGES CXX CUDA)
 
-# Find LibTorch
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../libtorch")
-find_package(Torch REQUIRED)
+# LibTorch-free build - no dependencies
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -86,25 +84,19 @@ extern \"C\" {
 ")
 endif()
 
-# Create shared library
+# Create shared library - LibTorch-free version
 set(CUDA_SOURCES
-    i8_dot512.cu 
-    pq_ops.cu
-    search_ops.cu
-    version_check.cu
+    i8_dot512_standalone.cu
+    pq_ops_standalone.cu
+    search_ops_standalone.cu
+    cuda_memory.cu
 )
 
-set(CPP_SOURCES
-    ops_cuda.cpp
-)
+add_library(gobed_ann_ops SHARED ${CUDA_SOURCES})
 
-add_library(gobed_ann_ops SHARED ${CPP_SOURCES} ${CUDA_SOURCES})
-
-# Include directories
-target_include_directories(gobed_ann_ops PRIVATE ${TORCH_INCLUDE_DIRS})
-
-# Link libraries
-target_link_libraries(gobed_ann_ops "${TORCH_LIBRARIES}")
+# No external dependencies - pure CUDA
+message(STATUS "Building LibTorch-free CUDA library")
+target_include_directories(gobed_ann_ops PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Set target properties
 set_target_properties(gobed_ann_ops PROPERTIES
@@ -120,9 +112,10 @@ install(TARGETS gobed_ann_ops DESTINATION lib)
 # Print summary
 message(STATUS "")
 message(STATUS "Build Configuration Summary:")
-message(STATUS "  Library: gobed_ann_ops")
+message(STATUS "  Library: gobed_ann_ops (LibTorch-free)")
 message(STATUS "  Type: SHARED")
 message(STATUS "  C++ Standard: 17")
 message(STATUS "  CUDA Standard: 17")
 message(STATUS "  Optimization: Release")
+message(STATUS "  Dependencies: CUDA Runtime only")
 message(STATUS "")

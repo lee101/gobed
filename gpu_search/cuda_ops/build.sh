@@ -35,12 +35,15 @@ fi
 # Get GCC version for CXX
 CXX_COMPILER=${GCC_COMPILER/gcc/g++}
 
+# Verify CXX compiler is available
+if ! command -v $CXX_COMPILER &> /dev/null; then
+    echo "WARNING: $CXX_COMPILER not found, trying default g++"
+    CXX_COMPILER=g++
+fi
+
 echo "✓ Using C++ compiler: $CXX_COMPILER"
 
-# Source LibTorch environment if available
-if [ -f ~/.secretbashrc ]; then
-    source ~/.secretbashrc 2>/dev/null || true
-fi
+# LibTorch-free build - no need for LibTorch environment
 
 # Set up environment
 export CUDA_HOME="$CUDA_PATH"
@@ -80,7 +83,6 @@ cd build
 echo "Configuring with CMake..."
 cmake_args=(
     ".."
-    "-DCMAKE_PREFIX_PATH=${LIBTORCH:-/usr/local/libtorch}"
     "-DCMAKE_BUILD_TYPE=Release"
     "-DCMAKE_C_COMPILER=$GCC_COMPILER"
     "-DCMAKE_CXX_COMPILER=$CXX_COMPILER"
@@ -101,7 +103,7 @@ echo "Building library..."
 cmake --build . -j$(nproc) --verbose
 
 echo ""
-echo "✅ Successfully built libgobed_ann_ops.so"
+echo "✅ Successfully built libgobed_ann_ops.so (LibTorch-free)"
 echo "Library location: $(pwd)/libgobed_ann_ops.so"
 
 # Copy to a standard location
