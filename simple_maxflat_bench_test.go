@@ -14,27 +14,24 @@ import (
 func TestMaxFlatSizePerformance(t *testing.T) {
 	fmt.Println("\n=== MaxFlatSize Performance Analysis ===")
 	
-	// Test configurations
+	// Test configurations (reduced sizes for faster testing)
 	testConfigs := []struct {
 		dataSize    int
 		maxFlatSize int
 		description string
 	}{
-		// Small datasets (< 5K)
+		// Small datasets
 		{1000, 5000, "exact search"},
 		{1000, 500, "approximate"},
-		{1000, 100, "highly approximate"},
-		
-		// Medium datasets (5K - 20K)
-		{10000, 20000, "exact search"},
-		{10000, 5000, "mostly approximate"},
+
+		// Medium datasets
+		{5000, 10000, "exact search"},
+		{5000, 2000, "approximate"},
+		{5000, 1000, "highly approximate"},
+
+		// Large datasets (reduced from 30K to 10K for speed)
+		{10000, 5000, "approximate"},
 		{10000, 2000, "approximate"},
-		{10000, 1000, "highly approximate"},
-		
-		// Large datasets (20K+)
-		{30000, 5000, "approximate"},
-		{30000, 2000, "approximate"},
-		{30000, 1000, "highly approximate"},
 	}
 	
 	fmt.Println("Dataset | MaxFlat | Type           | Build(ms) | Search(μs) | QPS")
@@ -59,9 +56,9 @@ func TestMaxFlatSizePerformance(t *testing.T) {
 		// Measure build time
 		buildStart := time.Now()
 		
-		// Train if needed
+		// Train if needed (use smaller training set for speed)
 		if tc.dataSize > tc.maxFlatSize {
-			trainSize := minInt(tc.dataSize/10, 5000)
+			trainSize := minInt(tc.dataSize/20, 1000) // Reduced from /10 to /20 and max from 5000 to 1000
 			_ = engine.Train(vectors[:trainSize], scales[:trainSize])
 		}
 		

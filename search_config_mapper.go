@@ -7,10 +7,12 @@ import (
 // mapSearchConfigToAnnConfig converts the public SearchConfig to internal ann/search.Config
 func mapSearchConfigToAnnConfig(sc SearchConfig) search.Config {
 	cfg := search.DefaultConfig()
-	
+
 	// Map MaxExactSearchSize to MaxFlatSize
 	if sc.MaxExactSearchSize > 0 {
 		cfg.MaxFlatSize = sc.MaxExactSearchSize
+		// Debug output (temporarily for testing)
+		// fmt.Printf("DEBUG: Mapped MaxExactSearchSize %d to MaxFlatSize %d\n", sc.MaxExactSearchSize, cfg.MaxFlatSize)
 	}
 	
 	// Map other fields

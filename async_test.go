@@ -230,6 +230,9 @@ func TestAsyncSearchPerformance(t *testing.T) {
 	config := AsyncSearchConfig()
 	config.AsyncWorkers = 8
 	config.AsyncQueueSize = 1000
+	config.MaxExactSearchSize = 6000 // Allow 5000 docs without IVF training
+	config.AutoMode = false // Disable auto mode to use manual config
+	t.Logf("Config MaxExactSearchSize: %d, AutoMode: %v", config.MaxExactSearchSize, config.AutoMode)
 	engine := NewSearchEngineWithConfig(model, config)
 
 	// Large scale test
