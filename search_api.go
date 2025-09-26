@@ -3,6 +3,7 @@ package gobed
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -315,6 +316,20 @@ func (se *SearchEngine) indexWorker() {
 
 // indexBatchInternal performs the actual batch indexing (must be called with lock held)
 func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
+	// Store documents first (needed for training data)
+	for i, text := range texts {
+		se.documents[ids[i]] = text
+	}
+
+	// Initialize index if needed (after storing documents for training)
+	if !se.initialized {
+		finalSize := len(se.documents)
+		err := se.initializeIndex(finalSize)
+		if err != nil {
+			return fmt.Errorf("failed to initialize index: %v", err)
+		}
+	}
+
 	// Pre-allocate with exact capacity to avoid slice growing
 	vectors := make([]simd.Vec512, len(texts))
 	scales := make([]float32, len(texts))
@@ -404,16 +419,6 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 		embedding := results[i]
 		copy(vectors[i][:], embedding.Vector)
 		scales[i] = embedding.Scale
-		se.documents[ids[i]] = texts[i]
-	}
-
-	// Initialize index if needed
-	if !se.initialized {
-		finalSize := len(se.documents) + len(texts)
-		err := se.initializeIndex(finalSize)
-		if err != nil {
-			return fmt.Errorf("failed to initialize index: %v", err)
-		}
 	}
 
 	// Add to index
@@ -700,10 +705,12 @@ func (se *SearchEngine) initializeIndex(estimatedSize int) error {
 	// If we need IVF, we must train first
 	if estimatedSize > config.MaxFlatSize && config.NList > 0 {
 		trainSize := min(estimatedSize/10, 10000)
+		log.Printf("Large dataset (%d > %d), training index with %d samples", estimatedSize, config.MaxFlatSize, trainSize)
 		err := se.generateTrainingData(trainSize)
 		if err != nil {
 			return fmt.Errorf("failed to train index: %v", err)
 		}
+		log.Printf("Index training completed successfully")
 	}
 
 	se.initialized = true

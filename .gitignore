@@ -28,3 +28,4 @@ gosec.sarif
 gpu_search/cuda_ops/build/
 gpu_search/*.so
 *.so
+server.log
