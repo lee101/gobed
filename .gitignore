@@ -16,6 +16,8 @@ model/
 gobed_cuda
 *.out
 *.test
+*.o
+*.a
 
 # Python caches
 __pycache__/
@@ -29,3 +31,38 @@ gpu_search/cuda_ops/build/
 gpu_search/*.so
 *.so
 server.log
+
+# Binary executables in bed directory
+bed/bed
+bed/bed_real
+bed/bed_perf
+bed/bed_*
+bed/model/
+
+# Test data
+testdata/
+test_anime.txt
+ai.txt
+
+# Generated test files
+test/
+
+# Benchmark directories
+#bed/benchmarks/
+#cmd/bench_*/
+#cmd/quality_test/
+cmd/test_cuda/
+
+# Docker and scripts
+docker-compose.yml
+gpu_env.sh
+
+# CUDA source files (if generated/compiled)
+# Note: keeping source .cu files but ignoring compiled ones
+
+# GitHub workflows and configs
+.github/workflows/
+
+# Docker configs
+Dockerfile.*
+bed/model/
