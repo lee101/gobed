@@ -30,6 +30,14 @@ func (h *minHeap) Pop() interface{} {
 	return x
 }
 
+// heapPool reduces heap allocations
+var heapPool = sync.Pool{
+	New: func() interface{} {
+		h := make(minHeap, 0, 32)
+		return &h
+	},
+}
+
 // FlatIndex is a simple flat index for exact search
 type FlatIndex struct {
 	vectors []simd.Vec512
@@ -73,9 +81,13 @@ func (idx *FlatIndex) SearchTopK(query *simd.Vec512, K int) []SearchResult {
 		return nil
 	}
 
-	// Use min-heap to maintain top-K
-	h := &minHeap{}
-	heap.Init(h)
+	// Get heap from pool
+	h := heapPool.Get().(*minHeap)
+	*h = (*h)[:0]
+	defer func() {
+		*h = (*h)[:0]
+		heapPool.Put(h)
+	}()
 
 	for i := range idx.vectors {
 		score := simd.Dot512(query, &idx.vectors[i])
@@ -103,11 +115,15 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 		return nil
 	}
 
-	numWorkers := runtime.NumCPU()
+	numWorkers := runtime.GOMAXPROCS(0) // Use actual available CPUs
 	n := len(idx.vectors)
 
-	// If dataset is small, use single-threaded
-	if n < 1000 {
+	// Adaptive threshold based on K and vector count
+	threshold := K * 100
+	if threshold < 1000 {
+		threshold = 1000
+	}
+	if n < threshold {
 		return idx.SearchTopK(query, K)
 	}
 
@@ -117,6 +133,7 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 		results []SearchResult
 	}
 
+	// Pre-size channel to avoid blocking
 	resultChan := make(chan chunkResult, numWorkers)
 	var wg sync.WaitGroup
 
@@ -135,9 +152,13 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 		go func(start, end int) {
 			defer wg.Done()
 
-			// Local heap for this chunk
-			h := &minHeap{}
-			heap.Init(h)
+			// Get heap from pool
+			h := heapPool.Get().(*minHeap)
+			*h = (*h)[:0]
+			defer func() {
+				*h = (*h)[:0]
+				heapPool.Put(h)
+			}()
 
 			for i := start; i < end; i++ {
 				score := simd.Dot512(query, &idx.vectors[i])
@@ -170,9 +191,13 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 		allResults = append(allResults, chunk.results...)
 	}
 
-	// Final top-K selection
-	h := &minHeap{}
-	heap.Init(h)
+	// Final top-K selection with pooled heap
+	h := heapPool.Get().(*minHeap)
+	*h = (*h)[:0]
+	defer func() {
+		*h = (*h)[:0]
+		heapPool.Put(h)
+	}()
 
 	for _, res := range allResults {
 		if h.Len() < K {

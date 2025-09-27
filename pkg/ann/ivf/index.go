@@ -41,9 +41,10 @@ func (idx *IVFIndex) Train(vectors []simd.Vec512, scales []float32) {
 	idx.KMeans.Fit(vectors, scales)
 	idx.Trained = true
 
-	// Initialize empty lists
+	// Initialize empty lists with capacity hint
+	avgListSize := len(vectors) / idx.NList
 	for i := range idx.Lists {
-		idx.Lists[i] = make([]int, 0)
+		idx.Lists[i] = make([]int, 0, avgListSize*2) // 2x for headroom
 	}
 }
 
@@ -104,16 +105,35 @@ func (idx *IVFIndex) AddBatch(vectors []simd.Vec512, scales []float32, ids []int
 	}
 	wg.Wait()
 
-	// Group by cluster
+	// Count per cluster first for pre-allocation
+	clusterCounts := make([]int, idx.NList)
+	for _, cluster := range assignments {
+		clusterCounts[cluster]++
+	}
+
+	// Group by cluster with pre-allocated sizes
 	clusterGroups := make([][]int, idx.NList)
+	for i := range clusterGroups {
+		if clusterCounts[i] > 0 {
+			clusterGroups[i] = make([]int, 0, clusterCounts[i])
+		}
+	}
+
 	for i, cluster := range assignments {
 		clusterGroups[cluster] = append(clusterGroups[cluster], startIdx+i)
 	}
 
-	// Add to inverted lists
+	// Add to inverted lists - batch lock operations
 	for cluster, indices := range clusterGroups {
 		if len(indices) > 0 {
 			idx.ListLocks[cluster].Lock()
+			// Check capacity and grow if needed
+			if cap(idx.Lists[cluster])-len(idx.Lists[cluster]) < len(indices) {
+				newCap := len(idx.Lists[cluster]) + len(indices)*2
+				newList := make([]int, len(idx.Lists[cluster]), newCap)
+				copy(newList, idx.Lists[cluster])
+				idx.Lists[cluster] = newList
+			}
 			idx.Lists[cluster] = append(idx.Lists[cluster], indices...)
 			idx.ListLocks[cluster].Unlock()
 		}
@@ -129,8 +149,16 @@ func (idx *IVFIndex) Search(query *simd.Vec512, k int) []flat.SearchResult {
 	// Find nprobe nearest clusters
 	clusters := idx.KMeans.PredictMultiple(query, idx.NProbe)
 
+	// Pre-calculate total capacity needed
+	totalCap := 0
+	for _, cluster := range clusters {
+		if cluster >= 0 && cluster < len(idx.Lists) {
+			totalCap += len(idx.Lists[cluster])
+		}
+	}
+
 	// Collect candidates from selected lists
-	candidates := make([]int, 0, idx.NProbe*100) // Estimate size
+	candidates := make([]int, 0, totalCap)
 
 	for _, cluster := range clusters {
 		idx.ListLocks[cluster].RLock()

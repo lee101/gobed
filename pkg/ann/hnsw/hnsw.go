@@ -23,6 +23,10 @@ type HNSW struct {
 	entryPoint int          // Entry point for search
 	distFunc   DistanceFunc // Distance function
 	mu         sync.RWMutex // Global lock
+
+	// Object pools
+	visitedPool *sync.Pool
+	heapPool    *sync.Pool
 }
 
 // Node represents a node in the HNSW graph
@@ -43,7 +47,7 @@ func NewHNSW(M, efConstruction int) *HNSW {
 	mMax0 := M * 2
 	ml := 1.0 / math.Log(2.0)
 
-	return &HNSW{
+	h := &HNSW{
 		M:              M,
 		MMax:           mMax,
 		MMax0:          mMax0,
@@ -51,10 +55,25 @@ func NewHNSW(M, efConstruction int) *HNSW {
 		ef:             efConstruction,
 		ml:             ml,
 		seed:           rand.Int63(),
-		nodes:          make([]Node, 0),
+		nodes:          make([]Node, 0, 1000), // Pre-allocate
 		entryPoint:     -1,
 		distFunc:       l2Distance,
 	}
+
+	// Initialize pools
+	h.visitedPool = &sync.Pool{
+		New: func() interface{} {
+			return make(map[int]bool, 1000)
+		},
+	}
+	h.heapPool = &sync.Pool{
+		New: func() interface{} {
+			h := make(CandidateHeap, 0, efConstruction)
+			return &h
+		},
+	}
+
+	return h
 }
 
 // SetEf sets the search parameter ef
@@ -73,8 +92,12 @@ func (h *HNSW) Add(vec simd.Vec512, scale float32, id int) {
 	defer h.mu.Unlock()
 
 	if len(h.nodes) >= id+1 {
-		// Reallocate if necessary
-		newNodes := make([]Node, id+1)
+		// Grow with extra capacity to reduce reallocations
+		newCap := (id + 1) * 2
+		if newCap < len(h.nodes)+100 {
+			newCap = len(h.nodes) + 100
+		}
+		newNodes := make([]Node, id+1, newCap)
 		copy(newNodes, h.nodes)
 		h.nodes = newNodes
 	}
@@ -90,9 +113,17 @@ func (h *HNSW) Add(vec simd.Vec512, scale float32, id int) {
 		Neighbors: make([][]int, level+1),
 	}
 
-	// Initialize neighbor lists
+	// Initialize neighbor lists with capacity
+	maxNeighbors := h.MMax
+	if level == 0 {
+		maxNeighbors = h.MMax0
+	}
 	for l := 0; l <= level; l++ {
-		node.Neighbors[l] = make([]int, 0)
+		cap := maxNeighbors
+		if l == 0 {
+			cap = h.MMax0
+		}
+		node.Neighbors[l] = make([]int, 0, cap)
 	}
 
 	if h.entryPoint == -1 {
@@ -179,12 +210,28 @@ func (h *HNSW) Search(query *simd.Vec512, k int) []SearchResult {
 
 // searchLayer searches for nearest neighbors at a specific layer
 func (h *HNSW) searchLayer(query *simd.Vec512, ep int, ef int, layer int) []Candidate {
-	visited := make(map[int]bool)
-	candidates := &CandidateHeap{}
-	heap.Init(candidates)
+	// Get from pools
+	visited := h.visitedPool.Get().(map[int]bool)
+	for k := range visited {
+		delete(visited, k) // Clear the map
+	}
+	defer h.visitedPool.Put(visited)
 
-	w := &CandidateHeap{}
+	candidates := h.heapPool.Get().(*CandidateHeap)
+	*candidates = (*candidates)[:0]
+	heap.Init(candidates)
+	defer func() {
+		*candidates = (*candidates)[:0]
+		h.heapPool.Put(candidates)
+	}()
+
+	w := h.heapPool.Get().(*CandidateHeap)
+	*w = (*w)[:0]
 	heap.Init(w)
+	defer func() {
+		*w = (*w)[:0]
+		h.heapPool.Put(w)
+	}()
 
 	dist := h.distFunc(query, &h.nodes[ep].Vector)
 	heap.Push(candidates, Candidate{ID: ep, Distance: -dist}) // Negative for max heap

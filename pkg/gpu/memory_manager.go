@@ -144,12 +144,6 @@ func NewGPUMemoryManager(config GPUMemoryConfig) (*GPUMemoryManager, error) {
 	// Set finalizer
 	runtime.SetFinalizer(manager, (*GPUMemoryManager).destroy)
 
-	fmt.Printf("🧠 GPU Memory Manager initialized:\n")
-	fmt.Printf("   Total Memory: %.2f GB\n", float64(totalMemory)/1024/1024/1024)
-	fmt.Printf("   Max Usage: %.2f GB (%.1f%%)\n", 
-		float64(maxUsage)/1024/1024/1024, config.MaxMemoryUsagePercent*100)
-	fmt.Printf("   Reserve: %.2f GB\n", float64(reserveMemory)/1024/1024/1024)
-
 	return manager, nil
 }
 
@@ -159,13 +153,13 @@ func newGPUBlockPool(blockSize uint64, maxBlocks int) (*GPUBlockPool, error) {
 		blockSize:   blockSize,
 		maxBlocks:   maxBlocks,
 		freeBlocks:  make([]unsafe.Pointer, 0, maxBlocks),
-		allocBlocks: make(map[unsafe.Pointer]bool),
+		allocBlocks: make(map[unsafe.Pointer]bool, maxBlocks),
 	}
 
-	// Pre-allocate some blocks for better performance
-	initialBlocks := maxBlocks / 4
-	if initialBlocks > 10 {
-		initialBlocks = 10
+	// Pre-allocate more blocks for better performance
+	initialBlocks := maxBlocks / 2
+	if initialBlocks > 20 {
+		initialBlocks = 20
 	}
 
 	for i := 0; i < initialBlocks; i++ {

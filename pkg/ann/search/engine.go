@@ -31,6 +31,10 @@ type Engine struct {
 	trained bool
 	size    int
 	mu      sync.RWMutex
+
+	// Object pools for reducing allocations
+	candidatePool *sync.Pool
+	resultPool    *sync.Pool
 }
 
 // Config holds engine configuration
@@ -94,13 +98,33 @@ func NewEngine(config Config) *Engine {
 		config.RerankSize = 128
 	}
 
-	return &Engine{
+	// Pre-allocate with estimated capacity
+	initialCap := config.MaxFlatSize
+	if initialCap <= 0 {
+		initialCap = 1500
+	}
+
+	e := &Engine{
 		config:     config,
 		flatIndex:  flat.NewFlatIndex(config.MaxFlatSize),
-		rawVectors: make([]simd.Vec512, 0),
-		scales:     make([]float32, 0),
-		ids:        make([]int, 0),
+		rawVectors: make([]simd.Vec512, 0, initialCap),
+		scales:     make([]float32, 0, initialCap),
+		ids:        make([]int, 0, initialCap),
 	}
+
+	// Initialize object pools
+	e.candidatePool = &sync.Pool{
+		New: func() interface{} {
+			return make([]int, 0, config.NProbe*100)
+		},
+	}
+	e.resultPool = &sync.Pool{
+		New: func() interface{} {
+			return make([]SearchResult, 0, config.RerankSize)
+		},
+	}
+
+	return e
 }
 
 // Train trains the index on sample data
@@ -272,15 +296,26 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 			flatResults = e.flatIndex.SearchTopK(query, k)
 		}
 
-		// Convert results
-		results := make([]SearchResult, len(flatResults))
-		for i, r := range flatResults {
-			results[i] = SearchResult{
+		// Convert results using pool
+		resultsPtr := e.resultPool.Get().(*[]SearchResult)
+		results := (*resultsPtr)[:0]
+
+		// Ensure capacity
+		if cap(results) < len(flatResults) {
+			results = make([]SearchResult, 0, len(flatResults))
+		}
+
+		for _, r := range flatResults {
+			results = append(results, SearchResult{
 				ID:       r.ID,
 				Score:    float32(r.Score),
 				Distance: float32(-r.Score), // Convert similarity to distance
-			}
+			})
 		}
+		defer func() {
+			*resultsPtr = results
+			e.resultPool.Put(resultsPtr)
+		}()
 		return results, nil
 	}
 
@@ -294,9 +329,9 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 	if e.hnswRouter != nil {
 		// Use HNSW for fast routing
 		hnswResults := e.hnswRouter.Search(query, e.config.NProbe)
-		clusters = make([]int, len(hnswResults))
-		for i, r := range hnswResults {
-			clusters[i] = r.ID
+		clusters = make([]int, 0, len(hnswResults))
+		for _, r := range hnswResults {
+			clusters = append(clusters, r.ID)
 		}
 	} else {
 		// Fall back to k-means
@@ -322,7 +357,16 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 
 // collectCandidates collects vector indices from selected clusters
 func (e *Engine) collectCandidates(clusters []int) []int {
-	candidateSet := make(map[int]bool)
+	// Estimate total size first to avoid map reallocations
+	totalSize := 0
+	for _, cluster := range clusters {
+		if cluster >= 0 && cluster < len(e.ivfIndex.Lists) {
+			totalSize += len(e.ivfIndex.Lists[cluster])
+		}
+	}
+
+	// Use a map with pre-allocated size hint
+	candidateSet := make(map[int]bool, totalSize)
 
 	for _, cluster := range clusters {
 		if cluster >= 0 && cluster < len(e.ivfIndex.Lists) {
@@ -334,11 +378,20 @@ func (e *Engine) collectCandidates(clusters []int) []int {
 		}
 	}
 
-	candidates := make([]int, 0, len(candidateSet))
+	// Get candidates from pool
+	candidatesPtr := e.candidatePool.Get().(*[]int)
+	candidates := (*candidatesPtr)[:0]
+
+	// Ensure capacity
+	if cap(candidates) < len(candidateSet) {
+		candidates = make([]int, 0, len(candidateSet))
+	}
+
 	for idx := range candidateSet {
 		candidates = append(candidates, idx)
 	}
 
+	// Return to pool later (caller must handle)
 	return candidates
 }
 
