@@ -1,18 +1,18 @@
-# 🚀 GPU Search Implementation Guide
+#  GPU Search Implementation Guide
 
-## ✅ Current Status
+##  Current Status
 
 ### Working Components
-- ✅ **RTX 3080 GPU** detected and functional (16.9 GB VRAM)
-- ✅ **PyTorch CUDA** operations working perfectly
-- ✅ **Performance verified**: 0.57ms for 10K vectors, 1.42ms for 100K vectors
-- ✅ **Batch processing**: 52K QPS for batch-32 on 10K vectors
+-  **RTX 3080 GPU** detected and functional (16.9 GB VRAM)
+-  **PyTorch CUDA** operations working perfectly
+-  **Performance verified**: 0.57ms for 10K vectors, 1.42ms for 100K vectors
+-  **Batch processing**: 52K QPS for batch-32 on 10K vectors
 
 ### Build Issues & Solutions
-- ❌ **CUDA 12.0 + GCC 13.3** incompatibility 
-- ✅ **Solution**: Use PyTorch's built-in CUDA ops instead of custom kernels
+-  **CUDA 12.0 + GCC 13.3** incompatibility 
+-  **Solution**: Use PyTorch's built-in CUDA ops instead of custom kernels
 
-## 📊 Measured Performance
+##  Measured Performance
 
 | Database Size | Single Query | Batch-32 | Memory |
 |--------------|-------------|----------|---------|
@@ -21,7 +21,7 @@
 | 100K vectors | **1.42ms** (706 QPS) | 19,021 QPS | 68 MB |
 | 500K vectors | **6.73ms** (149 QPS) | 3,950 QPS | 279 MB |
 
-## 🔧 Working Implementation (PyTorch)
+##  Working Implementation (PyTorch)
 
 ### 1. Simple GPU Search in Python
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 ```
 
-## 🎯 Alternative: ONNX Runtime with CUDA
+##  Alternative: ONNX Runtime with CUDA
 
 Since custom CUDA compilation is problematic, use ONNX Runtime:
 
@@ -180,7 +180,7 @@ func searchWithONNX(query []int8) ([]int64, []float32) {
 }
 ```
 
-## 📈 Production Recommendations
+##  Production Recommendations
 
 ### For Your Setup
 1. **Use PyTorch directly** - It works perfectly on your RTX 3080
@@ -199,7 +199,7 @@ func searchWithONNX(query []int8) ([]int64, []float32) {
 - **1M vectors**: ~15ms latency, 70 QPS single, 2K QPS batch
 - **With IVF-PQ**: ~2ms for 1M vectors (with 95% recall)
 
-## 🚀 Quick Start
+##  Quick Start
 
 ```bash
 # 1. Install PyTorch with CUDA
@@ -217,7 +217,7 @@ curl -X POST http://localhost:5000/search \
   -d '{"query": [1,2,3,...], "k": 10}'
 ```
 
-## ✅ Summary
+##  Summary
 
 While custom CUDA kernels would be ideal, the **PyTorch implementation provides excellent performance** on your RTX 3080:
 - Sub-2ms latency for 100K vectors

@@ -78,7 +78,7 @@ class OptimizedGPUServer:
             "peak_throughput": 0
         }
         
-        print(f"🚀 Optimized GPU Server initialized")
+        print(f" Optimized GPU Server initialized")
         print(f"   Max batch: {config.max_batch_size:,}")
         print(f"   Embedding workers: {config.num_embedding_workers}")
         print(f"   Index workers: {config.num_index_workers}")
@@ -136,7 +136,7 @@ class OptimizedGPUServer:
     
     def _embedding_worker(self, worker_id: int):
         """Optimized embedding worker with dynamic batching"""
-        print(f"🔧 Embedding worker {worker_id} started")
+        print(f" Embedding worker {worker_id} started")
         
         batch_buffer = []
         last_batch_time = time.perf_counter()
@@ -181,7 +181,7 @@ class OptimizedGPUServer:
         if batch_buffer:
             self._process_embedding_batch(batch_buffer, worker_id)
         
-        print(f"🔧 Embedding worker {worker_id} stopped")
+        print(f" Embedding worker {worker_id} stopped")
     
     def _process_embedding_batch(self, batch_items: List, worker_id: int):
         """Process a batch of embedding requests"""
@@ -266,7 +266,7 @@ class OptimizedGPUServer:
             worker.start()
             self.embedding_workers.append(worker)
         
-        print(f"🚀 Started {self.config.num_embedding_workers} embedding workers")
+        print(f" Started {self.config.num_embedding_workers} embedding workers")
     
     def stop_workers(self):
         """Stop all workers"""
@@ -509,7 +509,7 @@ def get_stats():
 
 
 if __name__ == '__main__':
-    print("🚀 Starting Optimized GPU Server...")
+    print(" Starting Optimized GPU Server...")
     
     # Start workers
     gpu_server.start_workers()

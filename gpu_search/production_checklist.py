@@ -16,7 +16,7 @@ torch.ops.load_library('/home/lee/code/gobed/gpu_search/cuda_ops/build/libgobed_
 
 def main():
     """Essential production readiness checks"""
-    print("🚀 PRODUCTION READINESS CHECKLIST")
+    print(" PRODUCTION READINESS CHECKLIST")
     print("=" * 60)
     
     checks = {}
@@ -35,15 +35,15 @@ def main():
                 "version": cuda_version,
                 "memory_gb": memory_gb
             }
-            print(f"   ✅ Device: {device_name}")
-            print(f"   ✅ CUDA: {cuda_version}")
-            print(f"   ✅ Memory: {memory_gb:.1f} GB")
+            print(f"    Device: {device_name}")
+            print(f"    CUDA: {cuda_version}")
+            print(f"    Memory: {memory_gb:.1f} GB")
         else:
             checks["cuda"] = {"available": False}
-            print("   ❌ CUDA not available")
+            print("    CUDA not available")
             return False
     except Exception as e:
-        print(f"   ❌ CUDA check failed: {e}")
+        print(f"    CUDA check failed: {e}")
         return False
     
     # 2. CUDA Ops Loading
@@ -59,11 +59,11 @@ def main():
             "loaded": True,
             "basic_test": result.shape[0] == 10
         }
-        print("   ✅ Library loaded")
-        print("   ✅ Basic operation successful")
+        print("    Library loaded")
+        print("    Basic operation successful")
     except Exception as e:
         checks["ops"] = {"loaded": False, "error": str(e)}
-        print(f"   ❌ CUDA ops failed: {e}")
+        print(f"    CUDA ops failed: {e}")
         return False
     
     # 3. Performance Baseline
@@ -92,17 +92,17 @@ def main():
             "meets_baseline": qps > 1000  # Minimum 1K QPS
         }
         
-        print(f"   ✅ Latency: {latency*1000:.2f}ms")
-        print(f"   ✅ Throughput: {qps:.0f} QPS")
+        print(f"    Latency: {latency*1000:.2f}ms")
+        print(f"    Throughput: {qps:.0f} QPS")
         
         if qps > 1000:
-            print("   ✅ Meets baseline performance")
+            print("    Meets baseline performance")
         else:
-            print("   ⚠️  Below baseline performance")
+            print("     Below baseline performance")
             
     except Exception as e:
         checks["performance"] = {"error": str(e)}
-        print(f"   ❌ Performance test failed: {e}")
+        print(f"    Performance test failed: {e}")
         return False
     
     # 4. Error Handling
@@ -113,13 +113,13 @@ def main():
         try:
             result = torch.ops.gobed_ann.i8dot512_scores(q_wrong, db)
             checks["error_handling"] = {"robust": False}
-            print("   ❌ Error handling: Should have failed")
+            print("    Error handling: Should have failed")
         except RuntimeError:
             checks["error_handling"] = {"robust": True}
-            print("   ✅ Error handling: Properly catches errors")
+            print("    Error handling: Properly catches errors")
     except Exception as e:
         checks["error_handling"] = {"error": str(e)}
-        print(f"   ❌ Error handling test failed: {e}")
+        print(f"    Error handling test failed: {e}")
         return False
     
     # 5. Memory Management
@@ -148,13 +148,13 @@ def main():
         }
         
         if stable:
-            print(f"   ✅ Memory stable: {memory_growth/1e6:.1f}MB growth")
+            print(f"    Memory stable: {memory_growth/1e6:.1f}MB growth")
         else:
-            print(f"   ⚠️  Memory growth: {memory_growth/1e6:.1f}MB")
+            print(f"     Memory growth: {memory_growth/1e6:.1f}MB")
             
     except Exception as e:
         checks["memory"] = {"error": str(e)}
-        print(f"   ❌ Memory test failed: {e}")
+        print(f"    Memory test failed: {e}")
         return False
     
     # 6. Production Configuration
@@ -176,12 +176,12 @@ def main():
             exists = True  # Go package existence would be checked separately
         
         checks["config"][name.lower().replace(" ", "_")] = exists
-        status = "✅" if exists else "❌"
+        status = "" if exists else ""
         print(f"   {status} {name}: {'OK' if exists else 'Missing'}")
     
     # Summary
     print("\n" + "=" * 60)
-    print("📊 DEPLOYMENT STATUS")
+    print(" DEPLOYMENT STATUS")
     print("=" * 60)
     
     all_good = all([
@@ -193,19 +193,19 @@ def main():
     ])
     
     if all_good:
-        print("🎯 READY FOR PRODUCTION DEPLOYMENT")
-        print("\n✅ All critical checks passed")
-        print("✅ Performance meets baseline")
-        print("✅ Error handling robust")
-        print("✅ Memory management stable")
+        print(" READY FOR PRODUCTION DEPLOYMENT")
+        print("\n All critical checks passed")
+        print(" Performance meets baseline")
+        print(" Error handling robust")
+        print(" Memory management stable")
         
-        print("\n📋 Deployment Notes:")
+        print("\n Deployment Notes:")
         print("- Monitor GPU memory usage")
         print("- Set up health checks")
         print("- Configure graceful degradation to CPU")
         print("- Test with production data volumes")
     else:
-        print("⚠️  ISSUES FOUND - REVIEW BEFORE DEPLOYMENT")
+        print("  ISSUES FOUND - REVIEW BEFORE DEPLOYMENT")
         
         if not checks["performance"]["meets_baseline"]:
             print("- Performance below baseline")

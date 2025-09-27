@@ -148,7 +148,7 @@ func LoadModel() (*EmbeddingModel, error) {
 	}
 
 	loadTime := time.Since(start)
-	fmt.Printf("✅ Model loaded in %v (vocab: %d, dims: %d)\n", loadTime, vocabSize, embedDim)
+	fmt.Printf(" Model loaded in %v (vocab: %d, dims: %d)\n", loadTime, vocabSize, embedDim)
 	return model, nil
 }
 

@@ -164,9 +164,8 @@ func main() {
 	searchTime := time.Since(startSearch)
 
 	// Display results
-	fmt.Printf("\n🔍 Search: \"%s\"\n", *searchQuery)
-	fmt.Printf("⏱️  Time: %.2fms\n", float64(searchTime.Microseconds())/1000.0)
-	fmt.Printf("📊 Results: %d matches\n\n", numResults)
+	fmt.Printf("\n🔍 %s\n", *searchQuery)
+	fmt.Printf("⚡ %.3fms | %d results\n\n", float64(searchTime.Microseconds())/1000.0, numResults)
 
 	for i := 0; i < numResults; i++ {
 		idx := indices[i]
@@ -185,7 +184,7 @@ func main() {
 
 		marker := "  "
 		if contains {
-			marker = "✅"
+			marker = ""
 		}
 
 		// Format output
@@ -196,21 +195,20 @@ func main() {
 			}
 		}
 
-		fmt.Printf("%s %2d. %s:%d (%.4f)\n",
-			marker, i+1, relPath, doc.LineNum, score)
-
-		// Show content preview
+		// Concise output format
 		content := strings.TrimSpace(doc.Content)
-		if len(content) > 100 {
-			content = content[:97] + "..."
+		if len(content) > 80 {
+			content = content[:77] + "..."
 		}
 
-		// Highlight query in content
 		if contains {
 			content = highlightQuery(content, *searchQuery)
+			fmt.Printf("%s%s:%d (%.3f)\n  %s\n\n",
+				marker, relPath, doc.LineNum, score, content)
+		} else {
+			fmt.Printf("%s:%d (%.3f)\n  %s\n\n",
+				relPath, doc.LineNum, score, content)
 		}
-
-		fmt.Printf("     %s\n\n", content)
 	}
 
 	if *debug {
@@ -245,8 +243,11 @@ func indexDirectory(dir, pattern string, maxFiles int, model *gobed.EmbeddingMod
 			}
 		}
 
-		// Skip large files
-		if info.Size() > 10*1024*1024 {
+		// Skip extremely large files (>100MB)
+		if info.Size() > 100*1024*1024 {
+			if debug {
+				log.Printf("Skipping large file %s (%d MB)", path, info.Size()/(1024*1024))
+			}
 			return nil
 		}
 

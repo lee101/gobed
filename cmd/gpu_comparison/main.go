@@ -384,7 +384,7 @@ func benchmarkHybridFP16(vectors [][]float32, queries [][]float32, k int) Benchm
 // printResults displays benchmark results in a formatted table
 func printResults(results []BenchmarkResult) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 120))
-	fmt.Printf("📊 PERFORMANCE COMPARISON RESULTS\n")
+	fmt.Printf(" PERFORMANCE COMPARISON RESULTS\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 120))
 
 	// Header
@@ -409,7 +409,7 @@ func printResults(results []BenchmarkResult) {
 	if len(results) > 0 {
 		baseline := results[0] // CPU as baseline
 
-		fmt.Printf("\n📈 Speedup vs CPU:\n")
+		fmt.Printf("\n Speedup vs CPU:\n")
 		for i := 1; i < len(results); i++ {
 			indexSpeedup := baseline.IndexTime.Seconds() / results[i].IndexTime.Seconds()
 			searchSpeedup := baseline.SearchTime.Seconds() / results[i].SearchTime.Seconds()
@@ -449,7 +449,7 @@ func runFullComparison() {
 		// Run benchmarks
 		var results []BenchmarkResult
 
-		fmt.Printf("\n⏱️  Running benchmarks...\n")
+		fmt.Printf("\n  Running benchmarks...\n")
 
 		// CPU baseline
 		fmt.Printf("   Testing CPU-Standard...\n")
@@ -471,7 +471,7 @@ func runFullComparison() {
 		printResults(results)
 
 		// Memory pressure test
-		fmt.Printf("\n💾 Memory Efficiency Analysis:\n")
+		fmt.Printf("\n Memory Efficiency Analysis:\n")
 		fp32Memory := float64(cfg.numVectors*cfg.dim*4) / (1024 * 1024)
 		fp16Memory := float64(cfg.numVectors*cfg.dim*2) / (1024 * 1024)
 		int8Memory := float64(cfg.numVectors*cfg.dim*1) / (1024 * 1024)
@@ -482,7 +482,7 @@ func runFullComparison() {
 		fmt.Printf("     INT8: %.1f MB (%.1fx reduction)\n", int8Memory, fp32Memory/int8Memory)
 
 		// Performance per watt estimate (simplified)
-		fmt.Printf("\n⚡ Efficiency Estimates:\n")
+		fmt.Printf("\n Efficiency Estimates:\n")
 		fmt.Printf("   INT8 provides best performance/watt ratio\n")
 		fmt.Printf("   FP16 offers good balance of speed and accuracy\n")
 		fmt.Printf("   FP32 maintains highest accuracy but uses most resources\n")
@@ -491,7 +491,7 @@ func runFullComparison() {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 GPU LIBTORCH INDEXING COMPREHENSIVE COMPARISON")
+	fmt.Println(" GPU LIBTORCH INDEXING COMPREHENSIVE COMPARISON")
 	fmt.Println("================================================================================")
 	fmt.Printf("System Configuration:\n")
 	fmt.Printf("  CPUs: %d\n", runtime.NumCPU())
@@ -507,12 +507,12 @@ func main() {
 	rand.Seed(42)
 
 	// Check for gobed model
-	fmt.Printf("🔍 Checking for gobed model...\n")
+	fmt.Printf(" Checking for gobed model...\n")
 	model, err := gobed.LoadModel()
 	if err != nil {
-		fmt.Printf("⚠️  Gobed model not found, using synthetic benchmarks\n")
+		fmt.Printf("  Gobed model not found, using synthetic benchmarks\n")
 	} else {
-		fmt.Printf("✅ Gobed model loaded successfully\n")
+		fmt.Printf(" Gobed model loaded successfully\n")
 		model.Close()
 	}
 
@@ -521,7 +521,7 @@ func main() {
 
 	// Final summary
 	fmt.Printf("\n%s\n", strings.Repeat("=", 120))
-	fmt.Printf("📊 EXECUTIVE SUMMARY\n")
+	fmt.Printf(" EXECUTIVE SUMMARY\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 120))
 	fmt.Printf("\nKey Findings:\n")
 	fmt.Printf("  1. INT8 Quantization:\n")
@@ -548,5 +548,5 @@ func main() {
 	fmt.Printf("  • Batch operations for GPU efficiency\n")
 	fmt.Printf("  • Profile your specific workload for optimal settings\n")
 
-	fmt.Printf("\n✅ Benchmark suite completed successfully!\n")
+	fmt.Printf("\n Benchmark suite completed successfully!\n")
 }

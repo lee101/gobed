@@ -39,7 +39,7 @@ type GPUBenchmarkResult struct {
 }
 
 func main() {
-	fmt.Println("🚀 GPU LibTorch Comprehensive Benchmark")
+	fmt.Println(" GPU LibTorch Comprehensive Benchmark")
 	fmt.Println("=======================================")
 
 	// Check system info
@@ -47,7 +47,7 @@ func main() {
 	cudaAvailable := C.torch_cuda_is_available() != 0
 	deviceCount := int(C.torch_cuda_device_count())
 
-	fmt.Printf("📊 System Information:\n")
+	fmt.Printf(" System Information:\n")
 	fmt.Printf("   LibTorch version: %s\n", version)
 	fmt.Printf("   CUDA available: %v\n", cudaAvailable)
 	fmt.Printf("   Device count: %d\n", deviceCount)
@@ -55,7 +55,7 @@ func main() {
 	fmt.Printf("   CPU cores: %d\n", runtime.NumCPU())
 
 	if !cudaAvailable {
-		log.Fatal("❌ CUDA not available - this benchmark requires GPU")
+		log.Fatal(" CUDA not available - this benchmark requires GPU")
 	}
 
 	// Focus on 512D and 1024D as requested
@@ -69,7 +69,7 @@ func main() {
 		{VectorDim: 1024, TrainingSize: 5000, IndexSize: 50000, QueryCount: 500, K: 10, Name: "1024D-50K"},
 	}
 
-	fmt.Printf("\n🚀 Running GPU Performance Benchmarks...\n")
+	fmt.Printf("\n Running GPU Performance Benchmarks...\n")
 	fmt.Printf("\n%-12s %-8s %-8s %-8s %-12s %-10s %-10s %-8s %-6s\n",
 		"Config", "Dim", "Index", "Queries", "Index/sec", "Query/ms", "QPS", "Memory", "GPU")
 	fmt.Println("------------------------------------------------------------------------------------")
@@ -100,7 +100,7 @@ func main() {
 	}
 
 	// Print detailed summary
-	fmt.Println("\n📈 Detailed Performance Analysis:")
+	fmt.Println("\n Detailed Performance Analysis:")
 	fmt.Println("=================================")
 
 	for i, result := range results {
@@ -114,7 +114,7 @@ func main() {
 		fmt.Printf("   Total: %v\n", result.TotalTime)
 	}
 
-	fmt.Println("\n✅ GPU Benchmark completed!")
+	fmt.Println("\n GPU Benchmark completed!")
 }
 
 func runGPUBenchmark(config GPUBenchmarkConfig) GPUBenchmarkResult {

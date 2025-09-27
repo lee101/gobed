@@ -26,7 +26,7 @@ TARGET_INDEX_RATE=150000    # > 150k embeddings/sec
 BENCH_FILE=$(ls -t benchmark-results/bench_*.txt 2>/dev/null | head -1)
 
 if [ -z "$BENCH_FILE" ]; then
-    echo -e "${YELLOW}⚠️  No benchmark results found. Running benchmarks...${NC}"
+    echo -e "${YELLOW}  No benchmark results found. Running benchmarks...${NC}"
     make bench
     BENCH_FILE=$(ls -t benchmark-results/bench_*.txt 2>/dev/null | head -1)
 fi
@@ -36,7 +36,7 @@ if [ -z "$BENCH_FILE" ]; then
     exit 1
 fi
 
-echo -e "${GREEN}📊 Analyzing: $BENCH_FILE${NC}"
+echo -e "${GREEN} Analyzing: $BENCH_FILE${NC}"
 echo ""
 
 # Initialize counters
@@ -53,7 +53,7 @@ check_metric() {
     local unit="$5"
 
     if [ -z "$value" ]; then
-        echo -e "${YELLOW}⚠️  $name: No data available${NC}"
+        echo -e "${YELLOW}  $name: No data available${NC}"
         ((WARNINGS++))
         return
     fi
@@ -70,7 +70,7 @@ check_metric() {
     fi
 
     if [ "$result" = "1" ]; then
-        echo -e "${GREEN}✅ $name: $value $unit (target: $comparison $target $unit)${NC}"
+        echo -e "${GREEN} $name: $value $unit (target: $comparison $target $unit)${NC}"
         ((PASSED++))
     else
         echo -e "${RED}✗ $name: $value $unit (target: $comparison $target $unit)${NC}"
@@ -122,10 +122,10 @@ echo -e "\n${BLUE}Test Results:${NC}"
 
 # Check if GPU is being used
 if grep -q "GPU mode" "$BENCH_FILE"; then
-    echo -e "${GREEN}✅ GPU acceleration enabled${NC}"
+    echo -e "${GREEN} GPU acceleration enabled${NC}"
     ((PASSED++))
 else
-    echo -e "${YELLOW}⚠️  GPU acceleration status unknown${NC}"
+    echo -e "${YELLOW}  GPU acceleration status unknown${NC}"
     ((WARNINGS++))
 fi
 
@@ -135,7 +135,7 @@ if grep -q "FAIL" "$BENCH_FILE"; then
     echo -e "${RED}✗ Found $FAILURES test failures${NC}"
     ((FAILED++))
 else
-    echo -e "${GREEN}✅ All tests passed${NC}"
+    echo -e "${GREEN} All tests passed${NC}"
     ((PASSED++))
 fi
 
@@ -164,16 +164,16 @@ fi
 # Performance grade
 echo -e "\n${BLUE}Performance Grade:${NC}"
 if [ "$FAILED" -eq 0 ] && [ "$SUCCESS_RATE" -ge 90 ]; then
-    echo -e "${GREEN}⭐⭐⭐⭐⭐ EXCELLENT - All targets met!${NC}"
+    echo -e "${GREEN} EXCELLENT - All targets met!${NC}"
     EXIT_CODE=0
 elif [ "$SUCCESS_RATE" -ge 75 ]; then
-    echo -e "${GREEN}⭐⭐⭐⭐ GOOD - Most targets met${NC}"
+    echo -e "${GREEN} GOOD - Most targets met${NC}"
     EXIT_CODE=0
 elif [ "$SUCCESS_RATE" -ge 50 ]; then
-    echo -e "${YELLOW}⭐⭐⭐ FAIR - Some optimization needed${NC}"
+    echo -e "${YELLOW} FAIR - Some optimization needed${NC}"
     EXIT_CODE=1
 else
-    echo -e "${RED}⭐⭐ NEEDS IMPROVEMENT - Multiple targets missed${NC}"
+    echo -e "${RED} NEEDS IMPROVEMENT - Multiple targets missed${NC}"
     EXIT_CODE=1
 fi
 

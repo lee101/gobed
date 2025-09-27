@@ -214,7 +214,7 @@ class EmbeddingModel:
 def benchmark_gpu_performance():
     """Run comprehensive GPU benchmark"""
     print("=" * 80)
-    print("🚀 REAL GPU PERFORMANCE BENCHMARK")
+    print(" REAL GPU PERFORMANCE BENCHMARK")
     print("=" * 80)
     
     indexer = GPUIndexer(dim=384, use_int8=False)
@@ -261,7 +261,7 @@ def benchmark_gpu_performance():
         print()
     
     print("=" * 80)
-    print("✅ This is REAL GPU acceleration!")
+    print(" This is REAL GPU acceleration!")
     print("=" * 80)
 
 

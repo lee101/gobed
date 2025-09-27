@@ -553,18 +553,18 @@ func printProfileResults(results []*BenchmarkResults) {
 		fmt.Printf("%s:\n", r.Scenario.Name)
 
 		if r.SearchLatency < time.Millisecond {
-			fmt.Printf("  ✨ Sub-millisecond search achieved!\n")
+			fmt.Printf("   Sub-millisecond search achieved!\n")
 		} else if r.SearchLatency < 2*time.Millisecond {
-			fmt.Printf("  ✅ Excellent latency: %v\n", r.SearchLatency)
+			fmt.Printf("   Excellent latency: %v\n", r.SearchLatency)
 		} else if r.SearchLatency < 5*time.Millisecond {
-			fmt.Printf("  ⚡ Good latency: %v\n", r.SearchLatency)
+			fmt.Printf("   Good latency: %v\n", r.SearchLatency)
 		} else {
-			fmt.Printf("  ⚠️  High latency: %v\n", r.SearchLatency)
+			fmt.Printf("    High latency: %v\n", r.SearchLatency)
 		}
 
 		memoryMB := r.Metrics["memory_mb"].(float64)
 		docsPerMB := float64(r.Scenario.DocumentCount) / memoryMB
-		fmt.Printf("  📊 Memory efficiency: %.0f docs/MB\n", docsPerMB)
+		fmt.Printf("   Memory efficiency: %.0f docs/MB\n", docsPerMB)
 
 		fmt.Println()
 	}

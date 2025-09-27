@@ -33,7 +33,7 @@ func (m *MockEmbedder) Encode(text string) ([]float32, error) {
 }
 
 func TestTorchInfo(t *testing.T) {
-	t.Log("🔍 Testing LibTorch info...")
+	t.Log(" Testing LibTorch info...")
 	
 	version, cudaAvailable, deviceCount := GetTorchInfo()
 	
@@ -51,7 +51,7 @@ func TestTorchInfo(t *testing.T) {
 }
 
 func TestTorchNativeIndexerCreation(t *testing.T) {
-	t.Log("🚀 Testing LibTorch native indexer creation...")
+	t.Log(" Testing LibTorch native indexer creation...")
 	
 	config := DefaultTorchNativeConfig()
 	config.VectorDim = 128 // Smaller for faster testing
@@ -86,7 +86,7 @@ func TestTorchNativeIndexerCreation(t *testing.T) {
 }
 
 func TestTorchNativeIndexerTraining(t *testing.T) {
-	t.Log("🔧 Testing LibTorch native indexer training...")
+	t.Log(" Testing LibTorch native indexer training...")
 	
 	config := DefaultTorchNativeConfig()
 	config.VectorDim = 128
@@ -205,7 +205,7 @@ func TestTorchNativeIndexerAddVectors(t *testing.T) {
 }
 
 func TestTorchNativeIndexerSearch(t *testing.T) {
-	t.Log("🔍 Testing LibTorch native indexer search...")
+	t.Log(" Testing LibTorch native indexer search...")
 	
 	config := DefaultTorchNativeConfig()
 	config.VectorDim = 128

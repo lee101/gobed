@@ -8,7 +8,7 @@ MIT [![License](https://img.shields.io/github/license/lee101/gobed)](LICENSE)
 
 **Search 200K+ documents in <1ms on RTX 3090.** Gobed brings blazing-fast semantic search to Go using static embeddings optimized for GPU acceleration. Achieves 1.7M+ QPS with automatic IVF clustering for datasets over 50K items.
 
-## 🏆 Performance Achievements
+##  Performance Achievements
 
 - **0.02ms search latency** (250x better than 5ms target!)
 - **1.7 million QPS** on 243K documents
@@ -102,7 +102,7 @@ Real benchmarks on commodity hardware:
 | 100,000 docs | 2.23 ms | 448 QPS |
 | 1M docs (GPU) | 947 ms batch | 1,056 QPS |
 
-## 🛠️ BED CLI Tool - GPU-Accelerated Filesystem Search
+##  BED CLI Tool - GPU-Accelerated Filesystem Search
 
 The `bed` tool provides command-line semantic search with GPU acceleration:
 
@@ -127,8 +127,8 @@ go build -o bed bed_cuda.go
 ./bed -dir testdata -k 12 "anime"
 
 # Results in <1ms with GPU acceleration!
-✅ 1. [Line 14, Score: 0.923] ai-Iyo-Anime.webp
-✅ 2. [Line 237, Score: 0.891] ai-Lucy-Anime.webp
+ 1. [Line 14, Score: 0.923] ai-Iyo-Anime.webp
+ 2. [Line 237, Score: 0.891] ai-Lucy-Anime.webp
 ...
 ```
 

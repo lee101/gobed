@@ -29,7 +29,7 @@ class OptimizedGPUIndexer:
         self.vectors = None
         self.current_size = 0
         
-        print(f"🚀 Optimized GPU Indexer initialized on {self.device}")
+        print(f" Optimized GPU Indexer initialized on {self.device}")
         if self.device.type == "cuda":
             print(f"   GPU: {torch.cuda.get_device_name(0)}")
             print(f"   Precision: {'FP16' if self.use_half_precision else 'FP32'}")
@@ -258,11 +258,11 @@ class OptimizedGPUIndexer:
 def benchmark_optimizations():
     """Comprehensive benchmark of all optimization techniques"""
     print("=" * 80)
-    print("🚀 COMPREHENSIVE OPTIMIZATION BENCHMARK")
+    print(" COMPREHENSIVE OPTIMIZATION BENCHMARK")
     print("=" * 80)
     
     if not torch.cuda.is_available():
-        print("❌ No GPU available")
+        print(" No GPU available")
         return
     
     # Test parameters
@@ -292,7 +292,7 @@ def benchmark_optimizations():
     results = {}
     
     for config_name, use_fp16, use_chunked in configs:
-        print(f"\n📊 Testing {config_name}:")
+        print(f"\n Testing {config_name}:")
         
         indexer = OptimizedGPUIndexer(dim=dim, use_half_precision=use_fp16)
         
@@ -324,7 +324,7 @@ def benchmark_optimizations():
     
     # Compare results
     print(f"\n{'='*50}")
-    print("📈 OPTIMIZATION COMPARISON")
+    print(" OPTIMIZATION COMPARISON")
     print(f"{'='*50}")
     
     baseline = results["FP32 Fused"]["search_time"]
@@ -333,7 +333,7 @@ def benchmark_optimizations():
         print(f"{name:15s}: {speedup:.1f}x speedup, {result['qps']:.0f} qps")
     
     print("\n" + "=" * 80)
-    print("✅ ALGORITHMIC OPTIMIZATIONS COMPLETE")
+    print(" ALGORITHMIC OPTIMIZATIONS COMPLETE")
     print("Key findings: FP16 precision and adaptive chunking provide best results")
     print("=" * 80)
 

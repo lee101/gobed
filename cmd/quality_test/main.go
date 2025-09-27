@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🔍 SEARCH QUALITY TEST - INT8 OPTIMIZED")
+	fmt.Println(" SEARCH QUALITY TEST - INT8 OPTIMIZED")
 	fmt.Println("========================================\n")
 
 	// Create a diverse corpus of documents with clear topics
@@ -30,7 +30,7 @@ func main() {
 	searchEngine := gobed.NewSearchEngine(model)
 
 	// Index documents
-	fmt.Println("📊 Indexing documents...")
+	fmt.Println(" Indexing documents...")
 	start := time.Now()
 
 	ids := make([]int, numDocs)
@@ -44,7 +44,7 @@ func main() {
 	}
 
 	indexTime := time.Since(start)
-	fmt.Printf("✅ Indexed in %.2fs (%.0f docs/sec)\n\n",
+	fmt.Printf(" Indexed in %.2fs (%.0f docs/sec)\n\n",
 		indexTime.Seconds(), float64(numDocs)/indexTime.Seconds())
 
 	// Test queries with expected matches
@@ -95,7 +95,7 @@ func main() {
 		},
 	}
 
-	fmt.Println("🎯 TESTING SEARCH QUALITY")
+	fmt.Println(" TESTING SEARCH QUALITY")
 	fmt.Println(strings.Repeat("=", 80))
 
 	for _, test := range testQueries {
@@ -112,7 +112,7 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("⏱️  Search time: %.2fms\n\n", float64(searchTime.Microseconds())/1000.0)
+		fmt.Printf("  Search time: %.2fms\n\n", float64(searchTime.Microseconds())/1000.0)
 
 		// Display top 5 results with quality analysis
 		fmt.Println("Top 5 Results:")
@@ -142,11 +142,11 @@ func main() {
 				}
 			}
 
-			quality := "❌ Poor"
+			quality := " Poor"
 			if matchCount >= 3 {
-				quality = "✅ Excellent"
+				quality = " Excellent"
 			} else if matchCount >= 2 {
-				quality = "👍 Good"
+				quality = " Good"
 			} else if matchCount >= 1 {
 				quality = "🔶 Fair"
 			}
@@ -209,21 +209,21 @@ func main() {
 		}
 
 		if similarFound && (!oppositeFound || similarRank < oppositeRank) {
-			fmt.Printf("  ✅ Good semantic understanding: Similar concepts (rank %d) ranked higher than opposites\n",
+			fmt.Printf("   Good semantic understanding: Similar concepts (rank %d) ranked higher than opposites\n",
 				similarRank)
 		} else if similarFound {
 			fmt.Printf("  🔶 Fair: Found similar concepts at rank %d\n", similarRank)
 		} else {
-			fmt.Printf("  ❌ Poor: Did not find semantically similar concepts in top 10\n")
+			fmt.Printf("   Poor: Did not find semantically similar concepts in top 10\n")
 		}
 	}
 
 	// Final statistics
-	fmt.Println("\n\n📊 QUALITY SUMMARY")
+	fmt.Println("\n\n QUALITY SUMMARY")
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("✅ Search is working with int8 quantization")
-	fmt.Println("📈 Performance: Sub-millisecond latency achieved")
-	fmt.Println("🎯 Quality: Check results above for semantic accuracy")
+	fmt.Println(" Search is working with int8 quantization")
+	fmt.Println(" Performance: Sub-millisecond latency achieved")
+	fmt.Println(" Quality: Check results above for semantic accuracy")
 }
 
 func createTestCorpus() []string {

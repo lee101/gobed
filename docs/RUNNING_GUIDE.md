@@ -30,7 +30,7 @@ go build -o gobed main.go
 
 ## Key Findings
 
-✅ **Good Separation**: Related texts show 4-8x higher similarity than unrelated texts
+ **Good Separation**: Related texts show 4-8x higher similarity than unrelated texts
 - Related texts: 0.15-0.35 similarity
 - Unrelated texts: -0.02-0.05 similarity
 - Clear semantic understanding demonstrated

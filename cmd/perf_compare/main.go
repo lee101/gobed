@@ -11,11 +11,11 @@ import (
 
 func main() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("⚡ FLOAT32 vs INT8 PERFORMANCE COMPARISON")
+	fmt.Println(" FLOAT32 vs INT8 PERFORMANCE COMPARISON")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// System info
-	fmt.Println("\n📊 System Information:")
+	fmt.Println("\n System Information:")
 	fmt.Printf("  CPU cores: %d\n", runtime.NumCPU())
 	fmt.Printf("  Architecture: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 	fmt.Printf("  Go version: %s\n", runtime.Version())
@@ -30,7 +30,7 @@ func main() {
 	}
 
 	// Load Float32 model
-	fmt.Println("\n1️⃣ FLOAT32 MODEL")
+	fmt.Println("\n1⃣ FLOAT32 MODEL")
 	fmt.Println(strings.Repeat("-", 50))
 
 	startLoad := time.Now()
@@ -39,7 +39,7 @@ func main() {
 		panic(fmt.Sprintf("Failed to load Float32 model: %v", err))
 	}
 	loadTimeF32 := time.Since(startLoad)
-	fmt.Printf("✅ Load time: %v\n", loadTimeF32)
+	fmt.Printf(" Load time: %v\n", loadTimeF32)
 
 	// Warmup
 	for i := 0; i < 100; i++ {
@@ -91,7 +91,7 @@ func main() {
 	fmt.Printf("  Rate: %.0f/sec\n", float64(simCount)/simTimeF32.Seconds())
 
 	// INT8 simulation (conversion only since full INT8 model needs AVX-512)
-	fmt.Println("\n2️⃣ INT8 SIMULATION (Conversion)")
+	fmt.Println("\n2⃣ INT8 SIMULATION (Conversion)")
 	fmt.Println(strings.Repeat("-", 50))
 
 	// Convert embeddings to INT8
@@ -126,7 +126,7 @@ func main() {
 	fmt.Printf("  Speedup vs Float32: %.2fx\n", simTimeF32.Seconds()/simTimeInt8.Seconds())
 
 	// Memory comparison
-	fmt.Println("\n3️⃣ MEMORY COMPARISON")
+	fmt.Println("\n3⃣ MEMORY COMPARISON")
 	fmt.Println(strings.Repeat("-", 50))
 
 	vocabSize := modelF32.VocabSize
@@ -149,7 +149,7 @@ func main() {
 	fmt.Printf("  Reduction: %.1f%%\n", (1.0-float64(int8EmbeddingSize)/float64(f32EmbeddingSize))*100)
 
 	// Accuracy comparison
-	fmt.Println("\n4️⃣ ACCURACY COMPARISON")
+	fmt.Println("\n4⃣ ACCURACY COMPARISON")
 	fmt.Println(strings.Repeat("-", 50))
 
 	fmt.Println("Similarity scores:")
@@ -169,27 +169,27 @@ func main() {
 
 	// Summary
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 SUMMARY")
+	fmt.Println(" SUMMARY")
 	fmt.Println(strings.Repeat("=", 80))
 
-	fmt.Printf("\n🎯 Performance:\n")
+	fmt.Printf("\n Performance:\n")
 	fmt.Printf("  Float32 encoding: %.0f ops/sec\n", throughputF32)
 	fmt.Printf("  Float32 similarity: %.0f/sec\n", float64(simCount)/simTimeF32.Seconds())
 	fmt.Printf("  INT8 similarity: %.0f/sec (%.1fx faster)\n",
 		float64(simCount)/simTimeInt8.Seconds(),
 		simTimeF32.Seconds()/simTimeInt8.Seconds())
 
-	fmt.Printf("\n💾 Memory:\n")
+	fmt.Printf("\n Memory:\n")
 	fmt.Printf("  Model size reduction: 75%%\n")
 	fmt.Printf("  Embedding size reduction: 75%%\n")
 
-	fmt.Printf("\n📈 Trade-offs:\n")
-	fmt.Printf("  ✅ 75%% memory reduction\n")
-	fmt.Printf("  ✅ Faster similarity computation\n")
-	fmt.Printf("  ⚠️  ~5%% accuracy loss on average\n")
-	fmt.Printf("  ⚠️  Requires quantization step\n")
+	fmt.Printf("\n Trade-offs:\n")
+	fmt.Printf("   75%% memory reduction\n")
+	fmt.Printf("   Faster similarity computation\n")
+	fmt.Printf("    ~5%% accuracy loss on average\n")
+	fmt.Printf("    Requires quantization step\n")
 
-	fmt.Println("\n✅ Performance comparison completed!")
+	fmt.Println("\n Performance comparison completed!")
 }
 
 func convertToInt8(embedding []float32) []uint8 {

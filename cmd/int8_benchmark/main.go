@@ -11,7 +11,7 @@ import (
 
 func main() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("🚀 INT8 vs FLOAT32 PERFORMANCE & ACCURACY COMPARISON")
+	fmt.Println(" INT8 vs FLOAT32 PERFORMANCE & ACCURACY COMPARISON")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Test sentences
@@ -29,7 +29,7 @@ func main() {
 	}
 
 	// Load both models
-	fmt.Println("\n📦 Loading models...")
+	fmt.Println("\n Loading models...")
 
 	// Load standard Float32 model
 	fmt.Println("Loading Float32 model...")
@@ -54,7 +54,7 @@ func main() {
 
 	// Accuracy comparison
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 ACCURACY COMPARISON")
+	fmt.Println(" ACCURACY COMPARISON")
 	fmt.Println(strings.Repeat("=", 80))
 
 	var totalDiff float64
@@ -95,22 +95,22 @@ func main() {
 	}
 
 	avgDiff := totalDiff / float64(comparisons)
-	fmt.Printf("\n📈 Accuracy Summary:\n")
+	fmt.Printf("\n Accuracy Summary:\n")
 	fmt.Printf("  Average difference: %.6f\n", avgDiff)
 	fmt.Printf("  Maximum difference: %.6f\n", maxDiff)
 	fmt.Printf("  Comparisons made: %d\n", comparisons)
 
 	if avgDiff < 0.01 {
-		fmt.Println("  ✅ Excellent accuracy! INT8 is nearly identical to Float32")
+		fmt.Println("   Excellent accuracy! INT8 is nearly identical to Float32")
 	} else if avgDiff < 0.05 {
-		fmt.Println("  ✅ Good accuracy! INT8 provides sufficient precision")
+		fmt.Println("   Good accuracy! INT8 provides sufficient precision")
 	} else {
-		fmt.Println("  ⚠️  Moderate accuracy loss with INT8")
+		fmt.Println("    Moderate accuracy loss with INT8")
 	}
 
 	// Performance comparison
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("⚡ PERFORMANCE COMPARISON")
+	fmt.Println(" PERFORMANCE COMPARISON")
 	fmt.Println(strings.Repeat("=", 80))
 
 	iterations := 1000
@@ -160,7 +160,7 @@ func main() {
 
 	speedup := timeFloat32.Seconds() / timeInt8.Seconds()
 
-	fmt.Println("\n📊 Performance Results:")
+	fmt.Println("\n Performance Results:")
 	fmt.Println(strings.Repeat("-", 50))
 	fmt.Printf("Float32:\n")
 	fmt.Printf("  Total time:        %v\n", timeFloat32)
@@ -180,7 +180,7 @@ func main() {
 
 	// Memory usage comparison
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("💾 MEMORY USAGE COMPARISON")
+	fmt.Println(" MEMORY USAGE COMPARISON")
 	fmt.Println(strings.Repeat("=", 80))
 
 	vocabSize := modelFloat32.VocabSize
@@ -202,7 +202,7 @@ func main() {
 	edgeCases := []string{
 		"",                           // Empty string
 		"a",                          // Single character
-		"🔥🚀💯",                        // Emojis
+		"💯",                        // Emojis
 		strings.Repeat("test ", 100), // Long text
 	}
 
@@ -223,18 +223,18 @@ func main() {
 		_, errInt8 := modelInt8.Encode(text)
 
 		if errF32 != nil || errInt8 != nil {
-			fmt.Printf("❌ Error\n")
+			fmt.Printf(" Error\n")
 		} else {
-			fmt.Printf("✅ OK\n")
+			fmt.Printf(" OK\n")
 		}
 	}
 
 	// Summary
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📈 SUMMARY")
+	fmt.Println(" SUMMARY")
 	fmt.Println(strings.Repeat("=", 80))
 
-	fmt.Printf("\n🎯 Key Findings:\n")
+	fmt.Printf("\n Key Findings:\n")
 	fmt.Printf("  • INT8+SIMD is %.1fx faster than Float32\n", speedup)
 	fmt.Printf("  • Memory usage reduced by %.0f%%\n", memorySaving)
 	fmt.Printf("  • Average accuracy difference: %.4f%%\n", avgDiff*100)
@@ -242,11 +242,11 @@ func main() {
 		throughputFloat32, throughputInt8)
 
 	if speedup > 2.0 && avgDiff < 0.01 {
-		fmt.Println("\n✅ EXCELLENT! INT8+SIMD provides major speedup with minimal accuracy loss")
+		fmt.Println("\n EXCELLENT! INT8+SIMD provides major speedup with minimal accuracy loss")
 	} else if speedup > 1.5 && avgDiff < 0.05 {
-		fmt.Println("\n✅ GOOD! INT8+SIMD provides significant benefits")
+		fmt.Println("\n GOOD! INT8+SIMD provides significant benefits")
 	} else {
-		fmt.Println("\n⚠️  Results show moderate improvements")
+		fmt.Println("\n  Results show moderate improvements")
 	}
 }
 

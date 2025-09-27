@@ -39,7 +39,7 @@ def test_batch_size(batch_size, num_batches=5):
     return avg_throughput
 
 def main():
-    print("🚀 GPU Server Batch Size Benchmark")
+    print(" GPU Server Batch Size Benchmark")
     print("=" * 50)
     
     # Test different batch sizes
@@ -57,7 +57,7 @@ def main():
             print()
     
     # Analysis
-    print("📊 BATCH SIZE ANALYSIS")
+    print(" BATCH SIZE ANALYSIS")
     print("=" * 50)
     
     baseline = results.get(256, 0)
@@ -71,7 +71,7 @@ def main():
     best_batch = max(results.keys(), key=lambda k: results[k])
     best_throughput = results[best_batch]
     
-    print(f"\n🎯 OPTIMAL BATCH SIZE: {best_batch}")
+    print(f"\n OPTIMAL BATCH SIZE: {best_batch}")
     print(f"   Throughput: {best_throughput:.0f} texts/sec")
     if baseline > 0:
         print(f"   Improvement: {best_throughput/baseline:.1f}x over 256 batch")

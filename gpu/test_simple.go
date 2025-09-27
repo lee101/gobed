@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🔥 Simple LibTorch CGO Test")
+	fmt.Println(" Simple LibTorch CGO Test")
 	fmt.Println("===========================")
 
 	// Test 1: Check LibTorch info
@@ -32,7 +32,7 @@ func main() {
 	fmt.Printf("   Device count: %d\n", deviceCount)
 
 	if !cudaAvailable {
-		fmt.Println("   ⚠️  CUDA not available, using CPU")
+		fmt.Println("     CUDA not available, using CPU")
 	}
 
 	// Test 2: Create indexer
@@ -54,10 +54,10 @@ func main() {
 
 	handle := C.torch_indexer_create(config)
 	if handle == nil {
-		log.Fatal("❌ Failed to create indexer")
+		log.Fatal(" Failed to create indexer")
 	}
 	defer C.torch_indexer_destroy(handle)
-	fmt.Println("   ✅ Indexer created successfully")
+	fmt.Println("    Indexer created successfully")
 
 	// Test 3: Generate training data
 	fmt.Println("\n3. Generating training data...")
@@ -81,9 +81,9 @@ func main() {
 	trainTime := time.Since(start)
 
 	if result == 0 {
-		log.Fatal("❌ Failed to train indexer")
+		log.Fatal(" Failed to train indexer")
 	}
-	fmt.Printf("   ✅ Training completed in %v\n", trainTime)
+	fmt.Printf("    Training completed in %v\n", trainTime)
 
 	// Test 5: Generate and add vectors
 	fmt.Println("\n5. Adding vectors to index...")
@@ -104,9 +104,9 @@ func main() {
 	indexTime := time.Since(start)
 
 	if result == 0 {
-		log.Fatal("❌ Failed to add vectors")
+		log.Fatal(" Failed to add vectors")
 	}
-	fmt.Printf("   ✅ Added %d vectors in %v\n", numVectors, indexTime)
+	fmt.Printf("    Added %d vectors in %v\n", numVectors, indexTime)
 	fmt.Printf("   Indexing rate: %.0f vectors/sec\n", float64(numVectors)/indexTime.Seconds())
 
 	// Test 6: Search
@@ -124,10 +124,10 @@ func main() {
 	searchTime := time.Since(start)
 
 	if searchResult.count == 0 {
-		log.Fatal("❌ Search returned no results")
+		log.Fatal(" Search returned no results")
 	}
 
-	fmt.Printf("   ✅ Search completed in %v\n", searchTime)
+	fmt.Printf("    Search completed in %v\n", searchTime)
 	fmt.Printf("   Found %d results\n", int(searchResult.count))
 	fmt.Printf("   Search latency: %.2f ms\n", searchTime.Seconds()*1000)
 
@@ -143,9 +143,9 @@ func main() {
 
 	// Check that the first result is the query itself (ID 0)
 	if int(ids[0]) == 0 {
-		fmt.Println("   🎯 Exact match found!")
+		fmt.Println("    Exact match found!")
 	} else {
-		fmt.Printf("   ⚠️  Expected exact match, got ID %d\n", int(ids[0]))
+		fmt.Printf("     Expected exact match, got ID %d\n", int(ids[0]))
 	}
 
 	// Free search results
@@ -164,14 +164,14 @@ func main() {
 	fmt.Printf("   Built: %v\n", stats.index_built != 0)
 
 	// Performance summary
-	fmt.Println("\n📊 Performance Summary:")
+	fmt.Println("\n Performance Summary:")
 	fmt.Printf("   Training: %d vectors in %v\n", numTraining, trainTime)
 	fmt.Printf("   Indexing: %d vectors in %v (%.0f vec/sec)\n", 
 		numVectors, indexTime, float64(numVectors)/indexTime.Seconds())
 	fmt.Printf("   Search: %v latency (%.0f QPS potential)\n", 
 		searchTime, 1.0/searchTime.Seconds())
 
-	fmt.Println("\n✅ All tests passed! LibTorch CGO integration working.")
+	fmt.Println("\n All tests passed! LibTorch CGO integration working.")
 }
 
 func min(a, b int) int {

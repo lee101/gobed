@@ -1,11 +1,11 @@
 # LibTorch Integration Status
 
-## ✅ Completed Components
+##  Completed Components
 
 ### 1. TorchScript Model Export
 - **File**: `/home/lee/code/gobed/gpu_search/simple_search_module.py`
 - **Output**: `/home/lee/code/gobed/model/simple_gpu_search_module.pt`
-- **Status**: ✅ Successfully exported and tested
+- **Status**:  Successfully exported and tested
 - **Features**:
   - Native PyTorch int8 dot product search
   - Batch search capabilities
@@ -14,7 +14,7 @@
 
 ### 2. Custom CUDA Operations
 - **File**: `/home/lee/code/gobed/gpu_search/cuda_ops/search_ops.cu`
-- **Status**: ✅ Compiled successfully
+- **Status**:  Compiled successfully
 - **Operations Implemented**:
   - `i8dot512_scores`: INT8 dot product using `__dp4a` intrinsic
   - `build_pq_lut`: Product Quantization lookup table generation
@@ -23,7 +23,7 @@
 
 ### 3. Build System
 - **File**: `/home/lee/code/gobed/gpu_search/cuda_ops/CMakeLists.txt`
-- **Status**: ✅ Successfully builds CUDA extension
+- **Status**:  Successfully builds CUDA extension
 - **Features**:
   - Supports CUDA 12.0+ with GCC 12
   - Multiple GPU architectures (60-90)
@@ -44,7 +44,7 @@
 Using existing Python GPU server as bridge:
 - Go → HTTP → Python → TorchScript → CUDA kernels → GPU
 
-## 🎯 Next Steps for Pure Go Implementation
+##  Next Steps for Pure Go Implementation
 
 ### Option 1: Fix gotch Environment
 ```bash
@@ -65,16 +65,16 @@ Consider alternatives to gotch:
 - Custom C++ bridge with minimal interface
 - WebAssembly runtime for TorchScript
 
-## 🔧 Implementation Ready
+##  Implementation Ready
 All infrastructure is in place:
-- ✅ TorchScript model exported and working
-- ✅ Custom CUDA ops compiled and registered
-- ✅ GPU pipeline tested and functional
-- ✅ Performance benchmarks available
+-  TorchScript model exported and working
+-  Custom CUDA ops compiled and registered
+-  GPU pipeline tested and functional
+-  Performance benchmarks available
 
 **The pure Go GPU implementation is 95% complete** - only the Go→LibTorch binding needs to be resolved.
 
-## 📊 Current Performance
+##  Current Performance
 With Python bridge:
 - **Indexing**: 2000+ texts/sec with GPU embedding
 - **Search**: 0.24ms single query latency  

@@ -16,7 +16,7 @@ func main() {
 	dim := 384 // Standard embedding dimension
 	k := 100   // Top-k results
 
-	fmt.Printf("🚀 GPU Maximum Performance Benchmark - RTX 3090\n")
+	fmt.Printf(" GPU Maximum Performance Benchmark - RTX 3090\n")
 	fmt.Printf("================================================\n")
 	fmt.Printf("Documents: %d\n", numDocs)
 	fmt.Printf("Dimension: %d\n", dim)
@@ -48,7 +48,7 @@ func main() {
 	config.NList = 1024  // IVF clusters
 	config.NProbe = 32   // Clusters to search
 
-	fmt.Println("\n📊 Initializing GPU Index...")
+	fmt.Println("\n Initializing GPU Index...")
 	index, err := gobed.NewCUDAMaxPerfIndex(dim, numDocs*2,
 		gobed.WithConfig(config))
 	if err != nil {
@@ -64,13 +64,13 @@ func main() {
 		log.Fatalf("Failed to add vectors: %v", err)
 	}
 	addTime := time.Since(addStart)
-	fmt.Printf("✅ Added %d vectors in %.2fms (%.0f vectors/sec)\n",
+	fmt.Printf(" Added %d vectors in %.2fms (%.0f vectors/sec)\n",
 		numDocs, float64(addTime.Microseconds())/1000.0,
 		float64(numDocs)/addTime.Seconds())
 
 	// Build IVF index if enabled
 	if config.NList > 0 {
-		fmt.Printf("\n🏗️ Building IVF index with %d clusters...\n", config.NList)
+		fmt.Printf("\n🏗 Building IVF index with %d clusters...\n", config.NList)
 		ivfStart := time.Now()
 
 		// Use subset for training
@@ -79,27 +79,27 @@ func main() {
 
 		err = index.BuildIVF(trainingVectors)
 		if err != nil {
-			fmt.Printf("⚠️ IVF build failed (continuing with flat index): %v\n", err)
+			fmt.Printf(" IVF build failed (continuing with flat index): %v\n", err)
 		} else {
 			ivfTime := time.Since(ivfStart)
-			fmt.Printf("✅ IVF index built in %.2fs\n", ivfTime.Seconds())
+			fmt.Printf(" IVF index built in %.2fs\n", ivfTime.Seconds())
 		}
 	}
 
 	// Generate test queries
-	fmt.Println("\n🔍 Generating test queries...")
+	fmt.Println("\n Generating test queries...")
 	numQueries := 1000
 	queries, _ := generateInt8Embeddings(numQueries, dim)
 
 	// Warmup phase - critical for GPU performance
-	fmt.Println("\n🔥 Warming up GPU...")
+	fmt.Println("\n Warming up GPU...")
 	for i := 0; i < 10; i++ {
 		warmupQueries := queries[:100*dim]
 		_, _, _ = index.SearchBatch(warmupQueries, 10)
 	}
 
 	// Benchmark different batch sizes
-	fmt.Println("\n⚡ PERFORMANCE BENCHMARKS")
+	fmt.Println("\n PERFORMANCE BENCHMARKS")
 	fmt.Println("=" * 50)
 
 	batchSizes := []int{1, 10, 100, 500, 1000}
@@ -138,7 +138,7 @@ func main() {
 	}
 
 	// Test latency for single queries
-	fmt.Println("\n🎯 SINGLE QUERY LATENCY TEST")
+	fmt.Println("\n SINGLE QUERY LATENCY TEST")
 	fmt.Println("=" * 50)
 
 	singleQuery := queries[:dim]
@@ -163,21 +163,21 @@ func main() {
 
 	// Get final statistics
 	stats := index.GetStats()
-	fmt.Println("\n📊 FINAL STATISTICS")
+	fmt.Println("\n FINAL STATISTICS")
 	fmt.Println("=" * 50)
 	for key, value := range stats {
 		fmt.Printf("%s: %v\n", key, value)
 	}
 
 	// Target performance check
-	fmt.Println("\n🎯 TARGET PERFORMANCE")
+	fmt.Println("\n TARGET PERFORMANCE")
 	fmt.Println("=" * 50)
 	targetMs := 5.0
 	if average(singleTimes) < targetMs {
-		fmt.Printf("✅ ACHIEVED: Single query < %.1fms (%.3fms)\n",
+		fmt.Printf(" ACHIEVED: Single query < %.1fms (%.3fms)\n",
 			targetMs, average(singleTimes))
 	} else {
-		fmt.Printf("❌ NOT MET: Single query > %.1fms (%.3fms)\n",
+		fmt.Printf(" NOT MET: Single query > %.1fms (%.3fms)\n",
 			targetMs, average(singleTimes))
 		fmt.Println("   Consider: Reducing nprobe, using smaller k, or enabling IVF")
 	}

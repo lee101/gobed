@@ -26,7 +26,7 @@ type Int8Result512 struct {
 }
 
 func main() {
-	fmt.Println("🚀 Standalone Int8 Model Test")
+	fmt.Println(" Standalone Int8 Model Test")
 	
 	// Test if model file exists
 	modelPath := "../model/modelint8_512dim.safetensors"
@@ -40,11 +40,11 @@ func main() {
 		log.Fatalf("Tokenizer not found: %s", tokenizerPath)
 	}
 	
-	fmt.Println("✅ Required files exist")
+	fmt.Println(" Required files exist")
 	
 	// Check model size
 	info, _ := os.Stat(modelPath)
-	fmt.Printf("📊 Model size: %.1f MB\n", float64(info.Size())/(1024*1024))
+	fmt.Printf(" Model size: %.1f MB\n", float64(info.Size())/(1024*1024))
 	
 	// Test basic vocab loading
 	data, err := os.ReadFile(tokenizerPath)
@@ -62,7 +62,7 @@ func main() {
 		log.Fatalf("Failed to parse tokenizer: %v", err)
 	}
 	
-	fmt.Printf("📝 Vocab size: %d tokens\n", len(tokenizerData.Model.Vocab))
+	fmt.Printf(" Vocab size: %d tokens\n", len(tokenizerData.Model.Vocab))
 	
 	// Test simple tokenization
 	vocab := make(map[string]int16)
@@ -97,12 +97,12 @@ func main() {
 		"deep learning",
 	}
 	
-	fmt.Println("\n🔧 Testing tokenization:")
+	fmt.Println("\n Testing tokenization:")
 	for _, text := range testTexts {
 		tokens := simpleTokenize(text)
 		fmt.Printf("  %q -> %v\n", text, tokens)
 	}
 	
-	fmt.Println("\n✅ Tokenization working!")
-	fmt.Println("🎯 Int8 model files are ready for Go implementation")
+	fmt.Println("\n Tokenization working!")
+	fmt.Println(" Int8 model files are ready for Go implementation")
 }

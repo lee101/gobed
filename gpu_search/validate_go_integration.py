@@ -40,10 +40,10 @@ def test_c_api_compatibility():
         result = torch.ops.gobed_ann.i8dot512_scores(q, db)
         assert result.is_contiguous(), "Result not contiguous"
         
-        print("  ✅ Memory layout: Contiguous tensors handled correctly")
+        print("   Memory layout: Contiguous tensors handled correctly")
         
     except Exception as e:
-        print(f"  ❌ Memory layout: {e}")
+        print(f"   Memory layout: {e}")
         return False
     
     # Test 2: Data pointer access (for Go FFI)
@@ -57,11 +57,11 @@ def test_c_api_compatibility():
         assert db_ptr != 0, "Database pointer is null"
         assert result_ptr != 0, "Result pointer is null"
         
-        print(f"  ✅ Data pointers: Valid pointers obtained")
+        print(f"   Data pointers: Valid pointers obtained")
         print(f"     Query: 0x{q_ptr:x}, DB: 0x{db_ptr:x}, Result: 0x{result_ptr:x}")
         
     except Exception as e:
-        print(f"  ❌ Data pointers: {e}")
+        print(f"   Data pointers: {e}")
         return False
     
     return True
@@ -69,7 +69,7 @@ def test_c_api_compatibility():
 
 def test_error_handling_for_go():
     """Test error handling patterns that work well with Go"""
-    print("⚠️  Testing Go-friendly error handling...")
+    print("  Testing Go-friendly error handling...")
     
     device = torch.device("cuda")
     
@@ -98,20 +98,20 @@ def test_error_handling_for_go():
             q = case["q"]()
             db = case["db"]()
             result = torch.ops.gobed_ann.i8dot512_scores(q, db)
-            print(f"  ❌ {case['name']}: Should have failed")
+            print(f"   {case['name']}: Should have failed")
         except RuntimeError as e:
             # RuntimeError is good for Go integration
-            print(f"  ✅ {case['name']}: Properly raised RuntimeError")
+            print(f"   {case['name']}: Properly raised RuntimeError")
             success_count += 1
         except Exception as e:
-            print(f"  ⚠️  {case['name']}: Unexpected error type: {type(e).__name__}")
+            print(f"    {case['name']}: Unexpected error type: {type(e).__name__}")
     
     return success_count == len(error_cases)
 
 
 def test_performance_for_production():
     """Test performance characteristics for production deployment"""
-    print("⚡ Testing production performance...")
+    print(" Testing production performance...")
     
     device = torch.device("cuda")
     
@@ -198,7 +198,7 @@ def test_performance_for_production():
     with open('performance_baseline.json', 'w') as f:
         json.dump(results, f, indent=2)
     
-    print("  ✅ Performance baseline saved to performance_baseline.json")
+    print("   Performance baseline saved to performance_baseline.json")
     return True
 
 
@@ -230,7 +230,7 @@ def test_concurrent_access():
         for i, result in enumerate(results):
             assert result.shape[0] == 1000, f"Result {i} has wrong shape"
         
-        print("  ✅ Concurrent access: Multiple operations completed successfully")
+        print("   Concurrent access: Multiple operations completed successfully")
         
         # Cleanup
         for tensors in [queries, dbs, results]:
@@ -241,13 +241,13 @@ def test_concurrent_access():
         return True
         
     except Exception as e:
-        print(f"  ❌ Concurrent access: {e}")
+        print(f"   Concurrent access: {e}")
         return False
 
 
 def test_memory_stability():
     """Test memory stability for long-running Go services"""
-    print("💾 Testing memory stability...")
+    print(" Testing memory stability...")
     
     device = torch.device("cuda")
     
@@ -284,14 +284,14 @@ def test_memory_stability():
         
         # Allow 10MB growth tolerance
         if memory_growth < 10 * 1024 * 1024:
-            print(f"  ✅ Memory stability: Growth {memory_growth/1e6:.1f}MB (acceptable)")
+            print(f"   Memory stability: Growth {memory_growth/1e6:.1f}MB (acceptable)")
             return True
         else:
-            print(f"  ❌ Memory stability: Growth {memory_growth/1e6:.1f}MB (too much)")
+            print(f"   Memory stability: Growth {memory_growth/1e6:.1f}MB (too much)")
             return False
             
     except Exception as e:
-        print(f"  ❌ Memory stability: {e}")
+        print(f"   Memory stability: {e}")
         return False
 
 
@@ -320,7 +320,7 @@ def main():
             results.append(success)
             print()
         except Exception as e:
-            print(f"  ❌ Test failed with exception: {e}")
+            print(f"   Test failed with exception: {e}")
             results.append(False)
             print()
     
@@ -329,26 +329,26 @@ def main():
     total = len(results)
     
     print("=" * 80)
-    print("📊 VALIDATION SUMMARY")
+    print(" VALIDATION SUMMARY")
     print("=" * 80)
     print(f"Tests passed: {passed}/{total}")
     print(f"Success rate: {passed/total*100:.1f}%")
     
     if passed == total:
-        print("\n🎯 READY FOR GO LIBTORCH INTEGRATION")
-        print("✅ C API compatibility verified")
-        print("✅ Error handling Go-friendly")  
-        print("✅ Performance baselines established")
-        print("✅ Concurrent access stable")
-        print("✅ Memory management robust")
+        print("\n READY FOR GO LIBTORCH INTEGRATION")
+        print(" C API compatibility verified")
+        print(" Error handling Go-friendly")  
+        print(" Performance baselines established")
+        print(" Concurrent access stable")
+        print(" Memory management robust")
         
-        print("\n📋 Integration Notes:")
+        print("\n Integration Notes:")
         print("- Use contiguous tensors for FFI")
         print("- Handle RuntimeError exceptions")
         print("- Monitor memory growth in long-running services")
         print("- Performance baseline saved to performance_baseline.json")
     else:
-        print(f"\n⚠️  {total-passed} TESTS FAILED - REVIEW REQUIRED")
+        print(f"\n  {total-passed} TESTS FAILED - REVIEW REQUIRED")
     
     print("=" * 80)
     return passed == total

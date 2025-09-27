@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 GoEmbedding Quick Demo")
+	fmt.Println(" GoEmbedding Quick Demo")
 	fmt.Println("========================")
 
 	// Load the production model (119MB, bundled with package)
@@ -20,7 +20,7 @@ func main() {
 
 	// Show model info
 	info := model.GetModelInfo()
-	fmt.Printf("✅ Loaded %s\n", info["model_type"])
+	fmt.Printf(" Loaded %s\n", info["model_type"])
 	fmt.Printf("   Vocabulary: %v tokens\n", info["vocab_size"])
 	fmt.Printf("   Dimensions: %v\n", info["embedding_dim"])
 
@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Show embeddings (first 5 dimensions)
-	fmt.Printf("\n📊 Embeddings:\n")
+	fmt.Printf("\n Embeddings:\n")
 	fmt.Printf("'%s'\n", text1)
 	fmt.Printf("  -> [%.3f, %.3f, %.3f, %.3f, %.3f] (1024-dim)\n",
 		emb1[0], emb1[1], emb1[2], emb1[3], emb1[4])
@@ -51,7 +51,7 @@ func main() {
 
 	// Calculate similarity
 	similarity := gobed.CosineSimilarity(emb1, emb2)
-	fmt.Printf("\n🔍 Cosine Similarity: %.6f\n", similarity)
+	fmt.Printf("\n Cosine Similarity: %.6f\n", similarity)
 
 	// Additional metrics
 	norm1 := gobed.CalculateNorm(emb1)
@@ -61,7 +61,7 @@ func main() {
 	fmt.Printf("📏 Vector Norms: %.3f, %.3f\n", norm1, norm2)
 	fmt.Printf("📐 Euclidean Distance: %.3f\n", distance)
 
-	fmt.Println("\n✅ Demo completed!")
-	fmt.Println("💡 This package provides perfect consistency with Python PyTorch")
-	fmt.Println("🎯 Ready for production use in your Go applications")
+	fmt.Println("\n Demo completed!")
+	fmt.Println(" This package provides perfect consistency with Python PyTorch")
+	fmt.Println(" Ready for production use in your Go applications")
 }

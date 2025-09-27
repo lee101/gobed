@@ -1,4 +1,4 @@
-# 🚀 GPU Indexing Usage Guide
+#  GPU Indexing Usage Guide
 
 ## Table of Contents
 1. [Quick Start](#quick-start)

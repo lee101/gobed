@@ -170,7 +170,7 @@ func simulateINT8Quantization(numElements int) (scale float32, zeroPoint int8, q
 // Demo functions
 func demoEmbeddingPipeline() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("⚡ EMBEDDING PIPELINE: CPU vs GPU SIMULATION\n")
+	fmt.Printf(" EMBEDDING PIPELINE: CPU vs GPU SIMULATION\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	cpu := NewCPUBaseline()
@@ -210,7 +210,7 @@ func demoEmbeddingPipeline() {
 			float64(rtx4090.Nanoseconds())/1000)
 	}
 
-	fmt.Printf("\n📊 Speedup vs CPU:\n")
+	fmt.Printf("\n Speedup vs CPU:\n")
 	for _, tc := range testCases {
 		cpuTime := cpu.SimulateEmbeddingLookup(tc.numTokens, vocabSize, embedDim)
 		t4INT8 := gpuT4.SimulateEmbeddingLookup(tc.numTokens, vocabSize, embedDim, true)
@@ -225,7 +225,7 @@ func demoEmbeddingPipeline() {
 
 func demoSearchPerformance() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("🔍 VECTOR SEARCH: CPU vs GPU SIMULATION\n")
+	fmt.Printf(" VECTOR SEARCH: CPU vs GPU SIMULATION\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	cpu := NewCPUBaseline()
@@ -273,7 +273,7 @@ func demoSearchPerformance() {
 			float64(a100.Nanoseconds())/1e6)
 	}
 
-	fmt.Printf("\n📊 Queries per second (QPS):\n")
+	fmt.Printf("\n Queries per second (QPS):\n")
 	for _, tc := range testCases {
 		cpuTime := time.Duration(0)
 		for i := 0; i < tc.numQueries; i++ {
@@ -296,7 +296,7 @@ func demoSearchPerformance() {
 
 func demoMemoryComparison() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("💾 MEMORY USAGE COMPARISON\n")
+	fmt.Printf(" MEMORY USAGE COMPARISON\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	vectorCounts := []int{10000, 100000, 1000000, 10000000}
@@ -316,7 +316,7 @@ func demoMemoryComparison() {
 			count, fp32Size, fp16Size, int8Size, savings)
 	}
 
-	fmt.Printf("\n📊 GPU Memory Bandwidth Utilization:\n")
+	fmt.Printf("\n GPU Memory Bandwidth Utilization:\n")
 	fmt.Printf("   T4 (320 GB/s): Good for up to 10M INT8 vectors\n")
 	fmt.Printf("   RTX3090 (936 GB/s): Good for up to 30M INT8 vectors\n")
 	fmt.Printf("   A100 (1935 GB/s): Good for up to 60M INT8 vectors\n")
@@ -325,7 +325,7 @@ func demoMemoryComparison() {
 
 func demoScalingAnalysis() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("📈 SCALING ANALYSIS: GPU EFFICIENCY\n")
+	fmt.Printf(" SCALING ANALYSIS: GPU EFFICIENCY\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	cpu := NewCPUBaseline()
@@ -356,7 +356,7 @@ func demoScalingAnalysis() {
 			math.Min(efficiency, 100))
 	}
 
-	fmt.Printf("\n💡 Key Insights:\n")
+	fmt.Printf("\n Key Insights:\n")
 	fmt.Printf("   • GPU efficiency increases with dataset size\n")
 	fmt.Printf("   • Small datasets (<1K) may not benefit from GPU\n")
 	fmt.Printf("   • Batch processing dramatically improves throughput\n")
@@ -365,7 +365,7 @@ func demoScalingAnalysis() {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 GPU ACCELERATION SIMULATION - REALISTIC PERFORMANCE MODELING")
+	fmt.Println(" GPU ACCELERATION SIMULATION - REALISTIC PERFORMANCE MODELING")
 	fmt.Println("================================================================================")
 	fmt.Printf("System: %d CPU cores @ ~3.5 GHz\n", runtime.NumCPU())
 	fmt.Printf("Simulating: T4, RTX 3090, RTX 4090, A100 GPUs\n")
@@ -381,23 +381,23 @@ func main() {
 
 	// Final summary
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("🎯 PRODUCTION RECOMMENDATIONS\n")
+	fmt.Printf(" PRODUCTION RECOMMENDATIONS\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
-	fmt.Printf("\n📊 GPU Selection Guide:\n")
+	fmt.Printf("\n GPU Selection Guide:\n")
 	fmt.Printf("   • T4: Best value for inference, good for <10M vectors\n")
 	fmt.Printf("   • RTX 3090: Excellent price/performance, handles 30M vectors\n")
 	fmt.Printf("   • RTX 4090: Latest consumer GPU, best single-GPU performance\n")
 	fmt.Printf("   • A100: Enterprise-grade, maximum memory bandwidth\n")
 
-	fmt.Printf("\n⚡ Optimization Strategies:\n")
+	fmt.Printf("\n Optimization Strategies:\n")
 	fmt.Printf("   1. Use INT8 quantization for 4x memory savings\n")
 	fmt.Printf("   2. Batch operations to maximize GPU utilization\n")
 	fmt.Printf("   3. Keep data on GPU to avoid PCIe transfers\n")
 	fmt.Printf("   4. Use approximate search (IVF) for large datasets\n")
 	fmt.Printf("   5. Profile your specific workload for tuning\n")
 
-	fmt.Printf("\n✅ Expected Performance Gains:\n")
+	fmt.Printf("\n Expected Performance Gains:\n")
 	fmt.Printf("   • Embedding: 10-25x speedup with batching\n")
 	fmt.Printf("   • Search: 50-1000x speedup for large datasets\n")
 	fmt.Printf("   • Memory: 4x reduction with INT8\n")

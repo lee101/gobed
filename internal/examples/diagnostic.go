@@ -109,7 +109,7 @@ func diagnosticMain() {
 		fmt.Printf("  Std similarity: %.6f\n", std)
 
 		if maxSim-minSim < 0.01 {
-			fmt.Println("  ❌ POOR diversity - embeddings are too similar!")
+			fmt.Println("   POOR diversity - embeddings are too similar!")
 		} else {
 			fmt.Println("  ✓ Good diversity - embeddings are different")
 		}

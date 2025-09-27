@@ -58,7 +58,7 @@ class HighThroughputGPUPipeline:
         self.workers_running = False
         self.workers = []
         
-        print(f"🚀 High-Throughput GPU Pipeline initialized")
+        print(f" High-Throughput GPU Pipeline initialized")
         print(f"   Max batch size: {config.max_batch_size:,}")
         print(f"   GPU memory limit: {config.gpu_memory_limit_gb:.1f} GB")
         print(f"   Workers: {config.num_workers}")
@@ -152,7 +152,7 @@ class HighThroughputGPUPipeline:
     
     def _gpu_worker(self, worker_id: int):
         """GPU worker for parallel processing"""
-        print(f"🔧 GPU Worker {worker_id} started")
+        print(f" GPU Worker {worker_id} started")
         
         while self.workers_running:
             try:
@@ -189,7 +189,7 @@ class HighThroughputGPUPipeline:
                 if not self.workers_running:
                     break
         
-        print(f"🔧 GPU Worker {worker_id} stopped")
+        print(f" GPU Worker {worker_id} stopped")
     
     def start_workers(self):
         """Start parallel GPU workers"""
@@ -204,7 +204,7 @@ class HighThroughputGPUPipeline:
             worker.start()
             self.workers.append(worker)
         
-        print(f"🚀 Started {self.config.num_workers} GPU workers")
+        print(f" Started {self.config.num_workers} GPU workers")
     
     def stop_workers(self):
         """Stop all workers"""
@@ -229,12 +229,12 @@ class HighThroughputGPUPipeline:
         if not texts:
             return {"texts_indexed": 0, "total_time": 0}
         
-        print(f"🚀 Starting parallel indexing of {len(texts):,} texts...")
+        print(f" Starting parallel indexing of {len(texts):,} texts...")
         start_time = time.perf_counter()
         
         # Create optimal batches
         batches = self._create_batches(texts)
-        print(f"📦 Created {len(batches)} batches (avg size: {len(texts)//len(batches):,})")
+        print(f" Created {len(batches)} batches (avg size: {len(texts)//len(batches):,})")
         
         # Start workers
         self.start_workers()
@@ -257,7 +257,7 @@ class HighThroughputGPUPipeline:
                 completed = len(batch_times)
                 if completed % max(1, len(batches) // 10) == 0:
                     progress = completed / len(batches) * 100
-                    print(f"📈 Progress: {progress:.1f}% ({completed}/{len(batches)} batches)")
+                    print(f" Progress: {progress:.1f}% ({completed}/{len(batches)} batches)")
             
             # Combine all embeddings
             if all_embeddings:
@@ -282,7 +282,7 @@ class HighThroughputGPUPipeline:
             "gpu_memory_used": torch.cuda.memory_allocated() / 1e9
         }
         
-        print(f"✅ Parallel indexing complete!")
+        print(f" Parallel indexing complete!")
         print(f"   Total time: {total_time:.2f}s")
         print(f"   Throughput: {throughput:.0f} texts/sec")
         print(f"   GPU memory: {stats['gpu_memory_used']:.1f} GB")
@@ -294,7 +294,7 @@ class HighThroughputGPUPipeline:
         if not hasattr(self, 'indexed_embeddings') or self.indexed_embeddings is None:
             raise RuntimeError("No texts indexed yet")
         
-        print(f"🔍 Parallel search for {len(queries)} queries...")
+        print(f" Parallel search for {len(queries)} queries...")
         start_time = time.perf_counter()
         
         # Process queries in large batch
@@ -334,7 +334,7 @@ class HighThroughputGPUPipeline:
         search_time = time.perf_counter() - start_time
         search_qps = len(queries) / search_time
         
-        print(f"✅ Search complete: {search_time*1000:.1f}ms ({search_qps:.0f} QPS)")
+        print(f" Search complete: {search_time*1000:.1f}ms ({search_qps:.0f} QPS)")
         
         return results
 
@@ -342,7 +342,7 @@ class HighThroughputGPUPipeline:
 def benchmark_high_throughput():
     """Benchmark the high-throughput pipeline"""
     print("=" * 80)
-    print("🚀 HIGH-THROUGHPUT GPU PIPELINE BENCHMARK")
+    print(" HIGH-THROUGHPUT GPU PIPELINE BENCHMARK")
     print("=" * 80)
     
     # Configuration for maximum throughput
@@ -364,10 +364,10 @@ def benchmark_high_throughput():
     texts = [f"Sample text {i} with some content for embedding" for i in range(num_texts)]
     
     # Benchmark indexing
-    print(f"\n🚀 Benchmarking indexing with {num_texts:,} texts...")
+    print(f"\n Benchmarking indexing with {num_texts:,} texts...")
     stats = pipeline.index_texts_parallel(texts)
     
-    print(f"\n📊 Indexing Results:")
+    print(f"\n Indexing Results:")
     print(f"   Texts: {stats['texts_indexed']:,}")
     print(f"   Time: {stats['total_time']:.2f}s")
     print(f"   Throughput: {stats['throughput']:,.0f} texts/sec")
@@ -382,15 +382,15 @@ def benchmark_high_throughput():
         "gpu acceleration demo"
     ] * 8  # 32 queries total
     
-    print(f"\n🔍 Benchmarking search with {len(queries)} queries...")
+    print(f"\n Benchmarking search with {len(queries)} queries...")
     search_results = pipeline.search_parallel(queries, k=5)
     
-    print(f"\n📊 Search Results:")
+    print(f"\n Search Results:")
     print(f"   Queries: {len(queries)}")
     print(f"   Results per query: 5")
     print(f"   Sample result: {search_results[0][0]['text'][:50]}...")
     
-    print(f"\n🎯 Performance Summary:")
+    print(f"\n Performance Summary:")
     print(f"   Indexing: {stats['throughput']:,.0f} texts/sec")
     print(f"   GPU utilization: HIGH (parallel workers)")
     print(f"   Memory usage: {stats['gpu_memory_used']:.1f} GB")

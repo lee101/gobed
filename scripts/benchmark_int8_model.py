@@ -126,7 +126,7 @@ def cosine_similarity(a, b):
 
 def benchmark_model():
     """Benchmark the int8 model"""
-    print("🚀 Benchmarking Int8 512-dim Model")
+    print(" Benchmarking Int8 512-dim Model")
     print("=" * 50)
 
     # Paths
@@ -134,11 +134,11 @@ def benchmark_model():
     tokenizer_path = Path("model/tokenizer.json")
 
     if not model_path.exists():
-        print(f"❌ Model not found: {model_path}")
+        print(f" Model not found: {model_path}")
         return
 
     if not tokenizer_path.exists():
-        print(f"❌ Tokenizer not found: {tokenizer_path}")
+        print(f" Tokenizer not found: {tokenizer_path}")
         return
 
     # Load model
@@ -150,18 +150,18 @@ def benchmark_model():
     embeddings = tensors['embeddings.weight']
     scales = tensors['embeddings.scales']
 
-    print(f"✅ Model loaded in {load_time:.3f}s")
+    print(f" Model loaded in {load_time:.3f}s")
     print(f"   Embeddings shape: {embeddings.shape}")
     print(f"   Scales shape: {scales.shape}")
     print(f"   Memory usage: {embeddings.nbytes + scales.nbytes / 1024 / 1024:.1f} MB")
 
     # Load tokenizer vocab
-    print(f"📝 Loading tokenizer from {tokenizer_path}")
+    print(f" Loading tokenizer from {tokenizer_path}")
     with open(tokenizer_path) as f:
         tokenizer_data = json.load(f)
 
     vocab = tokenizer_data['model']['vocab']
-    print(f"✅ Loaded vocab with {len(vocab)} tokens")
+    print(f" Loaded vocab with {len(vocab)} tokens")
 
     # Test texts
     test_texts = [
@@ -178,13 +178,13 @@ def benchmark_model():
     ]
 
     # Warm up
-    print("\n🔥 Warming up...")
+    print("\n Warming up...")
     for text in test_texts[:3]:
         tokens = simple_tokenize(text, vocab)
         _ = embed_tokens(tokens, embeddings, scales)
 
     # Benchmark embedding speed
-    print("\n⏱️  Benchmarking embedding speed...")
+    print("\n  Benchmarking embedding speed...")
     num_iterations = 1000
 
     start_time = time.time()
@@ -197,13 +197,13 @@ def benchmark_model():
     avg_latency = (total_time / num_iterations) * 1000  # ms
     throughput = num_iterations / total_time
 
-    print(f"📊 Performance Results:")
+    print(f" Performance Results:")
     print(f"   Total time: {total_time:.3f}s")
     print(f"   Average latency: {avg_latency:.3f}ms")
     print(f"   Throughput: {throughput:.0f} embeddings/sec")
 
     # Test similarity computation
-    print("\n🎯 Testing similarity computation...")
+    print("\n Testing similarity computation...")
 
     test_pairs = [
         ("machine learning", "machine learning"),
@@ -223,7 +223,7 @@ def benchmark_model():
         print(f"   Similarity('{text1}', '{text2}') = {similarity:.4f}")
 
     # Memory analysis
-    print("\n💾 Memory Analysis:")
+    print("\n Memory Analysis:")
 
     # Original model size (float32, 1024 dims)
     original_size = 30522 * 1024 * 4  # bytes
@@ -236,7 +236,7 @@ def benchmark_model():
     print(f"   Space saved: {(1 - int8_size / original_size) * 100:.1f}%")
 
     # Quality analysis
-    print("\n🔍 Quality Analysis:")
+    print("\n Quality Analysis:")
 
     # Check embedding statistics
     embedding_stats = {
@@ -258,7 +258,7 @@ def benchmark_model():
     print(f"   Scale stats: min={scale_stats['min']:.6f}, max={scale_stats['max']:.6f}, "
           f"mean={scale_stats['mean']:.6f}, std={scale_stats['std']:.6f}")
 
-    print("\n✅ Benchmark complete!")
+    print("\n Benchmark complete!")
 
 if __name__ == "__main__":
     benchmark_model()

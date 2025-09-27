@@ -37,7 +37,7 @@ def simulate_current_approach(texts: List[str], batch_size: int = 256) -> float:
     total_time = time.perf_counter() - start_time
     throughput = len(texts) / total_time
     
-    print(f"✅ Current approach complete:")
+    print(f" Current approach complete:")
     print(f"   Time: {total_time:.2f}s")
     print(f"   Throughput: {throughput:.0f} texts/sec")
     
@@ -45,7 +45,7 @@ def simulate_current_approach(texts: List[str], batch_size: int = 256) -> float:
 
 def simulate_optimized_approach(texts: List[str], batch_size: int = 4096, chunk_size: int = 8192, max_workers: int = 8) -> float:
     """Simulate optimized parallel processing with large batches"""
-    print(f"\n🚀 Simulating OPTIMIZED approach...")
+    print(f"\n Simulating OPTIMIZED approach...")
     print(f"   Batch size: {batch_size}")
     print(f"   Chunk size: {chunk_size}")
     print(f"   Workers: {max_workers}")
@@ -103,7 +103,7 @@ def simulate_optimized_approach(texts: List[str], batch_size: int = 4096, chunk_
     total_time = time.perf_counter() - start_time
     throughput = len(texts) / total_time
     
-    print(f"✅ Optimized approach complete:")
+    print(f" Optimized approach complete:")
     print(f"   Time: {total_time:.2f}s")
     print(f"   Throughput: {throughput:.0f} texts/sec")
     
@@ -119,7 +119,7 @@ def run_benchmark():
     test_sizes = [1000, 5000, 10000]
     
     for num_texts in test_sizes:
-        print(f"\n📊 TESTING WITH {num_texts:,} TEXTS")
+        print(f"\n TESTING WITH {num_texts:,} TEXTS")
         print("-" * 50)
         
         # Generate test data
@@ -140,25 +140,25 @@ def run_benchmark():
         improvement = optimized_throughput / current_throughput
         time_saved = (num_texts / current_throughput) - (num_texts / optimized_throughput)
         
-        print(f"\n📈 PERFORMANCE COMPARISON:")
+        print(f"\n PERFORMANCE COMPARISON:")
         print(f"   Current:     {current_throughput:,.0f} texts/sec")
         print(f"   Optimized:   {optimized_throughput:,.0f} texts/sec")
         print(f"   Improvement: {improvement:.1f}x faster")
         print(f"   Time saved:  {time_saved:.1f} seconds")
         
         if improvement > 5.0:
-            print("   🚀 EXCELLENT optimization!")
+            print("    EXCELLENT optimization!")
         elif improvement > 3.0:
-            print("   ✅ Very good optimization")
+            print("    Very good optimization")
         elif improvement > 2.0:
-            print("   ✅ Good optimization")
+            print("    Good optimization")
         else:
-            print("   ⚠️  Limited improvement")
+            print("     Limited improvement")
 
 def demonstrate_gpu_utilization():
     """Show GPU utilization improvement"""
     print("\n" + "=" * 80)
-    print("📊 GPU UTILIZATION ANALYSIS")
+    print(" GPU UTILIZATION ANALYSIS")
     print("=" * 80)
     
     print("\nCurrent Approach:")
@@ -175,14 +175,14 @@ def demonstrate_gpu_utilization():
     print("   Parallel workers: 8 (concurrent)")
     print("   GPU idle time: Minimal")
     
-    print("\n🎯 Key Optimizations:")
+    print("\n Key Optimizations:")
     print("   1. Larger batches → Better GPU memory bandwidth")
     print("   2. Parallel processing → Higher GPU occupancy")
     print("   3. Chunked processing → Optimal GPU scheduling")
     print("   4. Memory pre-allocation → Reduced overhead")
 
 if __name__ == "__main__":
-    print("🚀 GPU Search Optimization Benchmark")
+    print(" GPU Search Optimization Benchmark")
     print("This simulates the performance improvements you'll see with the optimizations")
     print()
     
@@ -190,17 +190,17 @@ if __name__ == "__main__":
     demonstrate_gpu_utilization()
     
     print("\n" + "=" * 80)
-    print("💡 IMPLEMENTATION SUMMARY")
+    print(" IMPLEMENTATION SUMMARY")
     print("=" * 80)
-    print("✅ Modified main.go with parallel processing")
-    print("✅ Increased batch size from 256 to 4096")
-    print("✅ Added concurrent chunk processing")
-    print("✅ Implemented progress monitoring")
-    print("✅ Added performance analysis")
+    print(" Modified main.go with parallel processing")
+    print(" Increased batch size from 256 to 4096")
+    print(" Added concurrent chunk processing")
+    print(" Implemented progress monitoring")
+    print(" Added performance analysis")
     print()
-    print("🎯 Expected results in your Go application:")
+    print(" Expected results in your Go application:")
     print("   Current: ~700 texts/sec")
     print("   Optimized: 3,500-7,000 texts/sec")
     print("   Improvement: 5-10x faster")
     print()
-    print("🚀 Ready to test with: go run main.go --performance-test")
+    print(" Ready to test with: go run main.go --performance-test")

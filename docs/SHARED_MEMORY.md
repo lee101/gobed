@@ -2,11 +2,11 @@
 
 This document describes the shared memory implementation in Gobed for zero-copy, cross-process vector search.
 
-## 🎯 Overview
+##  Overview
 
 Gobed's shared memory architecture enables multiple processes to share the same vector index without duplicating data in memory. This is achieved through memory-mapped files that provide zero-copy access to vectors and metadata.
 
-## 🏗️ Architecture
+## 🏗 Architecture
 
 ### Core Components
 
@@ -37,7 +37,7 @@ Metadata File (metadata.mmap):
 └─────────────────────────┘
 ```
 
-## 💡 Key Features
+##  Key Features
 
 ### Zero-Copy Search
 Vectors are accessed directly from shared memory without copying:
@@ -70,7 +70,7 @@ numVectors := atomic.LoadUint64(&idx.header.NumVectors)
 atomic.AddUint64(&idx.header.TotalSearches, 1)
 ```
 
-## 📊 Performance Benefits
+##  Performance Benefits
 
 ### Memory Efficiency
 - **Shared across processes**: Single copy in memory serves all processes
@@ -87,7 +87,7 @@ atomic.AddUint64(&idx.header.TotalSearches, 1)
 - **Process isolation**: Crashes don't affect other processes
 - **Dynamic scaling**: Add/remove processes on demand
 
-## 🚀 Usage Examples
+##  Usage Examples
 
 ### Basic Shared Memory Index
 
@@ -153,7 +153,7 @@ server.Start()
 // GET  /metrics     - Performance metrics
 ```
 
-## 🔧 Configuration Options
+##  Configuration Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -164,7 +164,7 @@ server.Start()
 | `CacheSize` | Hot vector cache size | 1,000 |
 | `UseLockFree` | Use lock-free algorithms | true |
 
-## 📈 Benchmark Results
+##  Benchmark Results
 
 Based on testing with 10,000 documents:
 
@@ -192,14 +192,14 @@ Based on testing with 10,000 documents:
 | Shared Memory | 1.28s | 7,812 docs/sec |
 | **Improvement** | **60x faster** | - |
 
-## ⚠️ Limitations
+##  Limitations
 
 1. **Platform Support**: Currently optimized for Linux with mmap support
 2. **Write Concurrency**: Single writer, multiple readers model
 3. **Fixed Size**: Maximum vectors must be specified at creation
 4. **Memory Mapping**: Requires sufficient virtual memory
 
-## 🔮 Future Enhancements
+##  Future Enhancements
 
 - [ ] Dynamic resizing of shared memory regions
 - [ ] Multi-writer support with fine-grained locking
@@ -207,7 +207,7 @@ Based on testing with 10,000 documents:
 - [ ] Persistent memory (Intel Optane) support
 - [ ] GPU shared memory integration
 
-## 🛠️ Troubleshooting
+##  Troubleshooting
 
 ### Segmentation Faults
 - Ensure memory-mapped files exist before reading

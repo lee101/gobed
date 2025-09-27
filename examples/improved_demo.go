@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 Gobed Improved Demo - Showing Performance Optimizations")
+	fmt.Println(" Gobed Improved Demo - Showing Performance Optimizations")
 	fmt.Println("=" + "="*60)
 
 	// Load the model
@@ -19,7 +19,7 @@ func main() {
 	}
 
 	// Example 1: Using preset configurations for search
-	fmt.Println("\n📊 Example 1: Simplified Search with Presets")
+	fmt.Println("\n Example 1: Simplified Search with Presets")
 	fmt.Println("-" * 50)
 
 	// Create search engines with different presets
@@ -76,7 +76,7 @@ func main() {
 	}
 
 	// Example 2: Memory-optimized batch processing
-	fmt.Println("\n📊 Example 2: Memory-Optimized Batch Processing")
+	fmt.Println("\n Example 2: Memory-Optimized Batch Processing")
 	fmt.Println("-" * 50)
 
 	// Generate a larger batch of texts
@@ -99,7 +99,7 @@ func main() {
 	fmt.Printf("Average time per document: %v\n", batchTime/time.Duration(len(batchTexts)))
 
 	// Example 3: Show simplified configuration
-	fmt.Println("\n📊 Example 3: Simplified Configuration")
+	fmt.Println("\n Example 3: Simplified Configuration")
 	fmt.Println("-" * 50)
 
 	fmt.Println("Available presets:")
@@ -107,7 +107,7 @@ func main() {
 	fmt.Println("  - BalancedPreset: Best for 50K-500K vectors, balances speed/accuracy")
 	fmt.Println("  - AccuratePreset: Best for >500K vectors, prioritizes accuracy")
 
-	fmt.Println("\n✅ Demo completed successfully!")
+	fmt.Println("\n Demo completed successfully!")
 	fmt.Println("\nKey improvements demonstrated:")
 	fmt.Println("  1. Simplified search configuration with presets")
 	fmt.Println("  2. Built-in memory pooling for better performance")

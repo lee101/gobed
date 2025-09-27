@@ -5,7 +5,7 @@
 
 set -e
 
-echo "📝 Generating test data (ai.txt with 240k lines)..."
+echo " Generating test data (ai.txt with 240k lines)..."
 
 # Output file
 OUTPUT="ai.txt"
@@ -114,23 +114,23 @@ for batch in $(seq 1 $BATCHES); do
     fi
 done
 
-echo -e "\n✅ Generated $(wc -l < "$OUTPUT") lines in $OUTPUT"
+echo -e "\n Generated $(wc -l < "$OUTPUT") lines in $OUTPUT"
 
 # Generate smaller test files
-echo "📝 Creating smaller test datasets..."
+echo " Creating smaller test datasets..."
 
 # Small test file (100 lines)
 head -100 "$OUTPUT" > testdata/small_test.txt
-echo "✅ Created testdata/small_test.txt (100 lines)"
+echo " Created testdata/small_test.txt (100 lines)"
 
 # Medium test file (10k lines)
 head -10000 "$OUTPUT" > testdata/medium_test.txt
-echo "✅ Created testdata/medium_test.txt (10,000 lines)"
+echo " Created testdata/medium_test.txt (10,000 lines)"
 
 # Large test file (50k lines)
 head -50000 "$OUTPUT" > testdata/large_test.txt
-echo "✅ Created testdata/large_test.txt (50,000 lines)"
+echo " Created testdata/large_test.txt (50,000 lines)"
 
 echo ""
-echo "📊 Test data summary:"
+echo " Test data summary:"
 ls -lh "$OUTPUT" testdata/*.txt 2>/dev/null | awk '{print "  " $9 ": " $5}'

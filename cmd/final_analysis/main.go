@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🔍 Final Performance Analysis - GPU vs CPU Truth")
+	fmt.Println(" Final Performance Analysis - GPU vs CPU Truth")
 	fmt.Println(strings.Repeat("=", 70))
 
 	// System information
@@ -25,13 +25,13 @@ func main() {
 	cudaAvailable := C.torch_cuda_is_available() != 0
 	deviceCount := int(C.torch_cuda_device_count())
 
-	fmt.Printf("📊 System Configuration:\n")
+	fmt.Printf(" System Configuration:\n")
 	fmt.Printf("   Go: %s | CPU Cores: %d\n", runtime.Version(), runtime.GOMAXPROCS(0))
 	fmt.Printf("   LibTorch: %s\n", version)
 	fmt.Printf("   CUDA Available: %v | Devices: %d\n", cudaAvailable, deviceCount)
 
 	if !cudaAvailable {
-		fmt.Printf("❌ LibTorch CUDA backend not functional\n")
+		fmt.Printf(" LibTorch CUDA backend not functional\n")
 	}
 
 	// Test realistic workloads
@@ -52,22 +52,22 @@ func main() {
 
 	for i, tc := range testCases {
 		fmt.Printf("\n🧪 Test %d: %s\n", i+1, tc.name)
-		fmt.Printf("   📝 %d vectors, %dD, %d queries, device:%d\n", 
+		fmt.Printf("    %d vectors, %dD, %d queries, device:%d\n", 
 			tc.vectors, tc.dim, tc.queries, tc.deviceID)
 		
 		result := runBenchmark(tc.vectors, tc.dim, tc.queries, tc.deviceID)
 		results[i] = result
 		
-		fmt.Printf("   ⏱️  Index: %v (%.0f vec/sec)\n", result.IndexTime, result.IndexRate)
-		fmt.Printf("   🔍 Search: %.1fμs avg (%.0f QPS)\n", 
+		fmt.Printf("     Index: %v (%.0f vec/sec)\n", result.IndexTime, result.IndexRate)
+		fmt.Printf("    Search: %.1fμs avg (%.0f QPS)\n", 
 			result.AvgSearchMicros, result.QPS)
-		fmt.Printf("   💾 Memory: %.1fMB (%s)\n", 
+		fmt.Printf("    Memory: %.1fMB (%s)\n", 
 			result.MemoryMB, 
 			map[bool]string{true: "GPU", false: "CPU"}[result.UsingGPU])
 	}
 
 	// Comparative analysis
-	fmt.Printf("\n📊 Performance Comparison:\n")
+	fmt.Printf("\n Performance Comparison:\n")
 	fmt.Printf(strings.Repeat("-", 70))
 	fmt.Printf("%-20s %10s %10s %10s %8s\n", "Test", "Index/sec", "Search μs", "QPS", "Device")
 	fmt.Printf(strings.Repeat("-", 70))
@@ -81,15 +81,15 @@ func main() {
 			testCases[i].name[:20], result.IndexRate, result.AvgSearchMicros, result.QPS, device)
 	}
 
-	fmt.Printf("\n💡 Key Insights:\n")
+	fmt.Printf("\n Key Insights:\n")
 	fmt.Printf("   * GPU* = Manual CUDA memory + CPU compute (not true GPU acceleration)\n")
 	fmt.Printf("   * Performance differences show hardware characteristics\n")
 	fmt.Printf("   * Memory usage indicates successful CUDA operations\n")
 	
-	fmt.Printf("\n🎯 Conclusion:\n")
-	fmt.Printf("   ✅ System works correctly with good performance\n")
-	fmt.Printf("   ⚠️  LibTorch CUDA backend needs proper installation\n")
-	fmt.Printf("   🚀 Ready for true GPU acceleration with fixed LibTorch\n")
+	fmt.Printf("\n Conclusion:\n")
+	fmt.Printf("    System works correctly with good performance\n")
+	fmt.Printf("     LibTorch CUDA backend needs proper installation\n")
+	fmt.Printf("    Ready for true GPU acceleration with fixed LibTorch\n")
 
 	fmt.Printf("\n" + strings.Repeat("=", 70))
 }

@@ -18,7 +18,7 @@ torch.ops.load_library('/home/lee/code/gobed/gpu_search/cuda_ops/build/libgobed_
 
 def test_input_validation():
     """Test input validation and error handling"""
-    print("🔍 Testing input validation...")
+    print(" Testing input validation...")
     tests_passed = 0
     total_tests = 0
     
@@ -30,9 +30,9 @@ def test_input_validation():
         q = torch.randn(512, device=device)  # float32 instead of int8
         db = torch.randint(-128, 127, (100, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_scores(q, db)
-        print("  ❌ Wrong query dtype: Should have failed")
+        print("   Wrong query dtype: Should have failed")
     except Exception:
-        print("  ✅ Wrong query dtype: Correctly rejected")
+        print("   Wrong query dtype: Correctly rejected")
         tests_passed += 1
     
     # Test 2: Wrong dimensions
@@ -41,9 +41,9 @@ def test_input_validation():
         q = torch.randint(-128, 127, (256,), dtype=torch.int8, device=device)  # 256 instead of 512
         db = torch.randint(-128, 127, (100, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_scores(q, db)
-        print("  ❌ Wrong query dimension: Should have failed")
+        print("   Wrong query dimension: Should have failed")
     except Exception:
-        print("  ✅ Wrong query dimension: Correctly rejected")
+        print("   Wrong query dimension: Correctly rejected")
         tests_passed += 1
     
     # Test 3: CPU tensors
@@ -52,9 +52,9 @@ def test_input_validation():
         q = torch.randint(-128, 127, (512,), dtype=torch.int8)  # CPU tensor
         db = torch.randint(-128, 127, (100, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_scores(q, db)
-        print("  ❌ CPU tensor: Should have failed")
+        print("   CPU tensor: Should have failed")
     except Exception:
-        print("  ✅ CPU tensor: Correctly rejected")
+        print("   CPU tensor: Correctly rejected")
         tests_passed += 1
     
     return tests_passed, total_tests
@@ -62,7 +62,7 @@ def test_input_validation():
 
 def test_edge_cases():
     """Test edge cases and boundary conditions"""
-    print("🎯 Testing edge cases...")
+    print(" Testing edge cases...")
     tests_passed = 0
     total_tests = 0
     
@@ -75,12 +75,12 @@ def test_edge_cases():
         db = torch.empty((0, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_scores(q, db)
         if result.shape[0] == 0:
-            print("  ✅ Empty database: Handled correctly")
+            print("   Empty database: Handled correctly")
             tests_passed += 1
         else:
-            print(f"  ❌ Empty database: Wrong shape {result.shape}")
+            print(f"   Empty database: Wrong shape {result.shape}")
     except Exception as e:
-        print(f"  ❌ Empty database: Failed with {e}")
+        print(f"   Empty database: Failed with {e}")
     
     # Test 2: Single vector database
     total_tests += 1
@@ -89,12 +89,12 @@ def test_edge_cases():
         db = torch.randint(-128, 127, (1, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_scores(q, db)
         if result.shape[0] == 1:
-            print("  ✅ Single vector database: Handled correctly")
+            print("   Single vector database: Handled correctly")
             tests_passed += 1
         else:
-            print(f"  ❌ Single vector database: Wrong shape {result.shape}")
+            print(f"   Single vector database: Wrong shape {result.shape}")
     except Exception as e:
-        print(f"  ❌ Single vector database: Failed with {e}")
+        print(f"   Single vector database: Failed with {e}")
     
     # Test 3: Large database
     total_tests += 1
@@ -103,17 +103,17 @@ def test_edge_cases():
         db = torch.randint(-128, 127, (100000, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_scores(q, db)
         if result.shape[0] == 100000:
-            print("  ✅ Large database (100K): Handled correctly")
+            print("   Large database (100K): Handled correctly")
             tests_passed += 1
         else:
-            print(f"  ❌ Large database: Wrong shape {result.shape}")
+            print(f"   Large database: Wrong shape {result.shape}")
         del db, result
         torch.cuda.empty_cache()
     except torch.cuda.OutOfMemoryError:
-        print("  ✅ Large database: OOM handled gracefully")
+        print("   Large database: OOM handled gracefully")
         tests_passed += 1
     except Exception as e:
-        print(f"  ❌ Large database: Failed with {e}")
+        print(f"   Large database: Failed with {e}")
     
     # Test 4: Extreme values
     total_tests += 1
@@ -124,12 +124,12 @@ def test_edge_cases():
         expected = 127 * (-128) * 512  # Should be negative
         actual = result[0].item()
         if actual == expected:
-            print("  ✅ Extreme values: Computed correctly")
+            print("   Extreme values: Computed correctly")
             tests_passed += 1
         else:
-            print(f"  ❌ Extreme values: Expected {expected}, got {actual}")
+            print(f"   Extreme values: Expected {expected}, got {actual}")
     except Exception as e:
-        print(f"  ❌ Extreme values: Failed with {e}")
+        print(f"   Extreme values: Failed with {e}")
     
     return tests_passed, total_tests
 
@@ -159,20 +159,20 @@ def test_numerical_accuracy():
         # Compare results
         max_diff = np.max(np.abs(ref_result - gpu_result))
         if max_diff == 0:
-            print(f"  ✅ Numerical accuracy: Perfect match")
+            print(f"   Numerical accuracy: Perfect match")
             tests_passed += 1
         else:
-            print(f"  ❌ Numerical accuracy: Max difference {max_diff}")
+            print(f"   Numerical accuracy: Max difference {max_diff}")
             
     except Exception as e:
-        print(f"  ❌ Numerical accuracy: Failed with {e}")
+        print(f"   Numerical accuracy: Failed with {e}")
     
     return tests_passed, total_tests
 
 
 def test_batch_operations():
     """Test batch operation edge cases"""
-    print("📦 Testing batch operations...")
+    print(" Testing batch operations...")
     tests_passed = 0
     total_tests = 0
     
@@ -185,12 +185,12 @@ def test_batch_operations():
         db = torch.randint(-128, 127, (100, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_batch(queries, db)
         if result.shape == (1, 100):
-            print("  ✅ Single query batch: Correct shape")
+            print("   Single query batch: Correct shape")
             tests_passed += 1
         else:
-            print(f"  ❌ Single query batch: Wrong shape {result.shape}")
+            print(f"   Single query batch: Wrong shape {result.shape}")
     except Exception as e:
-        print(f"  ❌ Single query batch: Failed with {e}")
+        print(f"   Single query batch: Failed with {e}")
     
     # Test 2: Large batch
     total_tests += 1
@@ -199,19 +199,19 @@ def test_batch_operations():
         db = torch.randint(-128, 127, (1000, 512), dtype=torch.int8, device=device)
         result = torch.ops.gobed_ann.i8dot512_batch(queries, db)
         if result.shape == (64, 1000):
-            print("  ✅ Large batch (64): Correct shape")
+            print("   Large batch (64): Correct shape")
             tests_passed += 1
         else:
-            print(f"  ❌ Large batch: Wrong shape {result.shape}")
+            print(f"   Large batch: Wrong shape {result.shape}")
     except Exception as e:
-        print(f"  ❌ Large batch: Failed with {e}")
+        print(f"   Large batch: Failed with {e}")
     
     return tests_passed, total_tests
 
 
 def test_memory_management():
     """Test memory allocation and cleanup"""
-    print("💾 Testing memory management...")
+    print(" Testing memory management...")
     tests_passed = 0
     total_tests = 1
     
@@ -234,21 +234,21 @@ def test_memory_management():
         memory_leak = final_memory > initial_memory + 1024*1024  # Allow 1MB tolerance
         
         if not memory_leak:
-            print(f"  ✅ Memory leak check: No significant leaks")
+            print(f"   Memory leak check: No significant leaks")
             print(f"     Initial: {initial_memory/1e6:.1f}MB, Final: {final_memory/1e6:.1f}MB")
             tests_passed += 1
         else:
-            print(f"  ❌ Memory leak detected: {(final_memory-initial_memory)/1e6:.1f}MB")
+            print(f"   Memory leak detected: {(final_memory-initial_memory)/1e6:.1f}MB")
             
     except Exception as e:
-        print(f"  ❌ Memory management: Failed with {e}")
+        print(f"   Memory management: Failed with {e}")
     
     return tests_passed, total_tests
 
 
 def test_performance_consistency():
     """Test performance consistency across runs"""
-    print("⚡ Testing performance consistency...")
+    print(" Testing performance consistency...")
     tests_passed = 0
     total_tests = 1
     
@@ -277,14 +277,14 @@ def test_performance_consistency():
         
         # Performance should be consistent (CV < 15%)
         if cv < 0.15:
-            print(f"  ✅ Performance consistency: CV = {cv*100:.1f}%")
+            print(f"   Performance consistency: CV = {cv*100:.1f}%")
             print(f"     Mean latency: {mean_time*1000:.2f}ms")
             tests_passed += 1
         else:
-            print(f"  ❌ Performance inconsistent: CV = {cv*100:.1f}%")
+            print(f"   Performance inconsistent: CV = {cv*100:.1f}%")
             
     except Exception as e:
-        print(f"  ❌ Performance consistency: Failed with {e}")
+        print(f"   Performance consistency: Failed with {e}")
     
     return tests_passed, total_tests
 
@@ -329,7 +329,7 @@ def main():
     
     # Summary
     print("\n" + "=" * 80)
-    print("📊 TEST SUMMARY")
+    print(" TEST SUMMARY")
     print("=" * 80)
     print(f"Total tests: {all_total}")
     print(f"Passed: {all_passed}")
@@ -337,13 +337,13 @@ def main():
     print(f"Success rate: {all_passed/all_total*100:.1f}%")
     
     if all_passed == all_total:
-        print("\n🎯 CORE SYSTEM READY FOR PRODUCTION")
-        print("✅ All critical tests passed")
-        print("✅ Error handling robust")
-        print("✅ Performance consistent")
-        print("✅ Memory management stable")
+        print("\n CORE SYSTEM READY FOR PRODUCTION")
+        print(" All critical tests passed")
+        print(" Error handling robust")
+        print(" Performance consistent")
+        print(" Memory management stable")
     else:
-        print(f"\n⚠️  {all_total - all_passed} TESTS FAILED - REVIEW REQUIRED")
+        print(f"\n  {all_total - all_passed} TESTS FAILED - REVIEW REQUIRED")
     
     print("=" * 80)
     return all_passed == all_total

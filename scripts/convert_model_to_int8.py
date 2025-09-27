@@ -116,7 +116,7 @@ def write_safetensors(filepath, tensors, metadata=None):
         # Write tensor data
         f.write(tensor_bytes)
 
-    print(f"✅ Saved {filepath} ({len(tensors)} tensors, {len(tensor_bytes) / 1024 / 1024:.1f} MB)")
+    print(f" Saved {filepath} ({len(tensors)} tensors, {len(tensor_bytes) / 1024 / 1024:.1f} MB)")
 
 def quantize_to_int8(embeddings, dim_reduction=512):
     """
@@ -223,7 +223,7 @@ def main():
     output_path = Path("model/modelint8_512dim.safetensors")
 
     if not input_path.exists():
-        print(f"❌ Input file not found: {input_path}")
+        print(f" Input file not found: {input_path}")
         print("Please ensure model/real_model.safetensors exists")
         return
 
@@ -246,7 +246,7 @@ def main():
                 break
 
     if embedding_tensor is None:
-        print("❌ Could not find embedding tensor")
+        print(" Could not find embedding tensor")
         print("Available tensors:")
         for name, tensor in tensors.items():
             print(f"  {name}: shape={tensor.shape if hasattr(tensor, 'shape') else 'unknown'}")
@@ -262,11 +262,11 @@ def main():
             print(f"Reshaping from {embedding_tensor.shape} to ({vocab_size}, {embedding_dim})")
             embedding_tensor = embedding_tensor.reshape(vocab_size, embedding_dim)
         else:
-            print("❌ Cannot determine correct shape for embedding tensor")
+            print(" Cannot determine correct shape for embedding tensor")
             return
 
     # Quantize to int8 with dimension reduction
-    print("\n🔧 Converting to int8 with 512 dimensions...")
+    print("\n Converting to int8 with 512 dimensions...")
     quantized_embeddings, scales = quantize_to_int8(embedding_tensor, dim_reduction=512)
 
     # Test reconstruction quality
@@ -290,17 +290,17 @@ def main():
     }
 
     # Save the quantized model
-    print(f"\n💾 Saving quantized model to {output_path}")
+    print(f"\n Saving quantized model to {output_path}")
     output_path.parent.mkdir(exist_ok=True)
     write_safetensors(output_path, output_tensors, metadata)
 
     # Print summary
-    print("\n✅ Conversion complete!")
+    print("\n Conversion complete!")
     print(f"Original: {input_path.stat().st_size / 1024 / 1024:.1f} MB")
     print(f"Quantized: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
     print(f"Space saved: {(1 - output_path.stat().st_size / input_path.stat().st_size) * 100:.1f}%")
 
-    print("\n📝 Next steps:")
+    print("\n Next steps:")
     print("1. Update the tokenizer to output int16 token IDs")
     print("2. Update the model loader to use the int8 embeddings")
     print("3. Test performance with the quantized model")

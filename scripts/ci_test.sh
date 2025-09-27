@@ -25,23 +25,23 @@ run_stage() {
     local script_path="$2"
 
     echo ""
-    echo -e "${BLUE}🚀 Stage: ${stage_name}${NC}"
+    echo -e "${BLUE} Stage: ${stage_name}${NC}"
     echo "================================================"
 
     if [ -f "$script_path" ]; then
         if bash "$script_path"; then
-            echo -e "${GREEN}✅ STAGE PASSED: ${stage_name}${NC}"
+            echo -e "${GREEN} STAGE PASSED: ${stage_name}${NC}"
         else
-            echo -e "${RED}❌ STAGE FAILED: ${stage_name}${NC}"
+            echo -e "${RED} STAGE FAILED: ${stage_name}${NC}"
             PIPELINE_SUCCESS=false
         fi
     else
-        echo -e "${YELLOW}⚠️  STAGE SKIPPED: ${stage_name} (script not found: $script_path)${NC}"
+        echo -e "${YELLOW}  STAGE SKIPPED: ${stage_name} (script not found: $script_path)${NC}"
     fi
 }
 
 # Pipeline stages
-echo -e "${YELLOW}📋 Running CI Pipeline Stages${NC}"
+echo -e "${YELLOW} Running CI Pipeline Stages${NC}"
 
 # Stage 1: Environment Detection and Setup
 run_stage "GPU Detection & Environment Setup" "scripts/detect_gpu.sh"
@@ -57,7 +57,7 @@ run_stage "Performance & Benchmark Testing" "scripts/performance_test.sh"
 
 # Additional quick checks
 echo ""
-echo -e "${BLUE}🔍 Additional CI Checks${NC}"
+echo -e "${BLUE} Additional CI Checks${NC}"
 echo "================================================"
 
 # Check if key files exist
@@ -94,7 +94,7 @@ for script in "${SCRIPTS[@]}"; do
     if [ -x "$script" ]; then
         echo -e "${GREEN}✓${NC} $script (executable)"
     else
-        echo -e "${YELLOW}⚠${NC} $script (not executable)"
+        echo -e "${YELLOW}${NC} $script (not executable)"
     fi
 done
 
@@ -102,7 +102,7 @@ done
 echo ""
 echo "Checking git status..."
 if git status --porcelain | grep -q .; then
-    echo -e "${YELLOW}⚠️  Working directory has uncommitted changes${NC}"
+    echo -e "${YELLOW}  Working directory has uncommitted changes${NC}"
     git status --short
 else
     echo -e "${GREEN}✓ Working directory clean${NC}"
@@ -115,14 +115,14 @@ echo -e "${BLUE}            CI Pipeline Summary             ${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════${NC}"
 
 if [ "$PIPELINE_SUCCESS" = "true" ]; then
-    echo -e "${GREEN}🎉 ALL STAGES PASSED${NC}"
+    echo -e "${GREEN} ALL STAGES PASSED${NC}"
     echo ""
-    echo -e "${GREEN}✅ Project is ready for CI/CD deployment${NC}"
-    echo -e "${GREEN}✅ All build targets validated${NC}"
-    echo -e "${GREEN}✅ Test suite comprehensive${NC}"
-    echo -e "${GREEN}✅ Performance benchmarks completed${NC}"
+    echo -e "${GREEN} Project is ready for CI/CD deployment${NC}"
+    echo -e "${GREEN} All build targets validated${NC}"
+    echo -e "${GREEN} Test suite comprehensive${NC}"
+    echo -e "${GREEN} Performance benchmarks completed${NC}"
 else
-    echo -e "${RED}❌ SOME STAGES FAILED${NC}"
+    echo -e "${RED} SOME STAGES FAILED${NC}"
     echo ""
     echo -e "${RED}Please review failed stages above${NC}"
 fi

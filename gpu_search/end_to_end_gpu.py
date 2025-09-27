@@ -38,7 +38,7 @@ class GPUIndex:
         self.norms = torch.zeros(max_vectors, dtype=torch.float32, device=self.device)
         self.ids = torch.arange(max_vectors, dtype=torch.int64, device=self.device)
         
-        print(f"📊 GPU Index initialized:")
+        print(f" GPU Index initialized:")
         print(f"   Device: {torch.cuda.get_device_name()}")
         print(f"   Max vectors: {max_vectors:,}")
         print(f"   Dimension: {dim}")
@@ -204,7 +204,7 @@ class EmbeddingModelGPU(nn.Module):
 def benchmark_end_to_end():
     """Benchmark the complete GPU pipeline"""
     print("\n" + "="*80)
-    print("🚀 END-TO-END GPU PIPELINE BENCHMARK")
+    print(" END-TO-END GPU PIPELINE BENCHMARK")
     print("="*80)
     
     device = torch.device("cuda")
@@ -214,7 +214,7 @@ def benchmark_end_to_end():
     index = GPUIndex(dim=512, max_vectors=1000000, use_int8=True)
     
     # Generate test data ON GPU
-    print("\n📦 Generating test data directly on GPU...")
+    print("\n Generating test data directly on GPU...")
     num_docs = 100000
     max_seq_len = 128
     batch_size = 1000
@@ -239,11 +239,11 @@ def benchmark_end_to_end():
         if (batch_start + batch_size) % 10000 == 0:
             print(f"  Indexed {batch_start + batch_size} documents...")
     
-    print(f"\n✅ Indexed {num_docs} documents")
+    print(f"\n Indexed {num_docs} documents")
     print(f"   GPU memory used: {index._get_memory_usage():.1f} MB")
     
     # Benchmark search
-    print("\n🔍 Benchmarking search...")
+    print("\n Benchmarking search...")
     
     # Single query
     query_tokens = torch.randint(0, 30522, (1, max_seq_len), device=device)
@@ -288,7 +288,7 @@ def benchmark_end_to_end():
     print(f"  Batch-{batch_queries} latency: {batch_time/num_batches*1000:.2f} ms")
     print(f"  Batch throughput: {total_queries/batch_time:.0f} QPS")
     
-    print("\n📊 Key Achievement:")
+    print("\n Key Achievement:")
     print("  • ZERO CPU-GPU transfers during operation")
     print("  • Custom CUDA kernels for INT8 search")
     print("  • Everything stays on GPU from start to finish")
@@ -370,7 +370,7 @@ def test_cuda_kernels():
 
 
 if __name__ == "__main__":
-    print("🚀 Pure GPU Search System")
+    print(" Pure GPU Search System")
     print("=" * 80)
     print(f"GPU: {torch.cuda.get_device_name()}")
     print(f"CUDA: {torch.version.cuda}")
@@ -384,5 +384,5 @@ if __name__ == "__main__":
     benchmark_end_to_end()
     
     print("\n" + "="*80)
-    print("✅ PURE GPU SEARCH SYSTEM COMPLETE!")
+    print(" PURE GPU SEARCH SYSTEM COMPLETE!")
     print("="*80)

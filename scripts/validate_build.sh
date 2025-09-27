@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}🏗️  GoBeD Build Validation${NC}"
+echo -e "${BLUE}🏗  GoBeD Build Validation${NC}"
 echo "============================"
 
 cd "$(dirname "$0")/.."
@@ -48,11 +48,11 @@ build_test() {
         if [ "$goos" = "linux" ]; then
             echo "Building CUDA libraries..."
             if ! (cd bed && make cuda 2>/dev/null); then
-                echo -e "${YELLOW}⚠️  CUDA library build failed, skipping GPU build${NC}"
+                echo -e "${YELLOW}  CUDA library build failed, skipping GPU build${NC}"
                 build_success=false
             fi
         else
-            echo -e "${YELLOW}⚠️  GPU builds only supported on Linux${NC}"
+            echo -e "${YELLOW}  GPU builds only supported on Linux${NC}"
             build_success=false
         fi
     fi
@@ -61,18 +61,18 @@ build_test() {
         # Build main binary
         echo "Building gobed binary..."
         if GOOS="$goos" GOARCH="$goarch" CGO_ENABLED="$cgo_enabled" go build $gpu_tags -ldflags "-s -w" -o "${build_dir}/gobed${output_suffix}" ./cmd/demo; then
-            echo -e "${GREEN}✅ gobed binary built successfully${NC}"
+            echo -e "${GREEN} gobed binary built successfully${NC}"
         else
-            echo -e "${RED}❌ gobed binary build failed${NC}"
+            echo -e "${RED} gobed binary build failed${NC}"
             build_success=false
         fi
 
         # Build bed binary
         echo "Building bed binary..."
         if (cd bed && GOOS="$goos" GOARCH="$goarch" CGO_ENABLED="$cgo_enabled" go build $gpu_tags -ldflags "-s -w" -o "${build_dir}/bed${output_suffix}" .); then
-            echo -e "${GREEN}✅ bed binary built successfully${NC}"
+            echo -e "${GREEN} bed binary built successfully${NC}"
         else
-            echo -e "${RED}❌ bed binary build failed${NC}"
+            echo -e "${RED} bed binary build failed${NC}"
             build_success=false
         fi
 
@@ -85,16 +85,16 @@ build_test() {
 
             # Check file exists and has reasonable size
             if [ -f "$gobed_binary" ] && [ $(stat -f%z "$gobed_binary" 2>/dev/null || stat -c%s "$gobed_binary" 2>/dev/null || echo 0) -gt 1000000 ]; then
-                echo -e "${GREEN}✅ gobed binary validation passed${NC}"
+                echo -e "${GREEN} gobed binary validation passed${NC}"
             else
-                echo -e "${RED}❌ gobed binary validation failed${NC}"
+                echo -e "${RED} gobed binary validation failed${NC}"
                 build_success=false
             fi
 
             if [ -f "$bed_binary" ] && [ $(stat -f%z "$bed_binary" 2>/dev/null || stat -c%s "$bed_binary" 2>/dev/null || echo 0) -gt 1000000 ]; then
-                echo -e "${GREEN}✅ bed binary validation passed${NC}"
+                echo -e "${GREEN} bed binary validation passed${NC}"
             else
-                echo -e "${RED}❌ bed binary validation failed${NC}"
+                echo -e "${RED} bed binary validation failed${NC}"
                 build_success=false
             fi
 
@@ -102,25 +102,25 @@ build_test() {
             if [ "$goos" = "$(go env GOOS)" ] && [ "$goarch" = "$(go env GOARCH)" ]; then
                 echo "Testing binary execution..."
                 if "$gobed_binary" --help >/dev/null 2>&1 || "$gobed_binary" -h >/dev/null 2>&1 || true; then
-                    echo -e "${GREEN}✅ gobed binary execution test passed${NC}"
+                    echo -e "${GREEN} gobed binary execution test passed${NC}"
                 else
-                    echo -e "${YELLOW}⚠️  gobed binary execution test inconclusive${NC}"
+                    echo -e "${YELLOW}  gobed binary execution test inconclusive${NC}"
                 fi
 
                 if "$bed_binary" --help >/dev/null 2>&1 || "$bed_binary" -h >/dev/null 2>&1 || true; then
-                    echo -e "${GREEN}✅ bed binary execution test passed${NC}"
+                    echo -e "${GREEN} bed binary execution test passed${NC}"
                 else
-                    echo -e "${YELLOW}⚠️  bed binary execution test inconclusive${NC}"
+                    echo -e "${YELLOW}  bed binary execution test inconclusive${NC}"
                 fi
             fi
         fi
     fi
 
     if [ "$build_success" = "true" ]; then
-        echo -e "${GREEN}✅ BUILD PASSED: ${build_name}${NC}"
+        echo -e "${GREEN} BUILD PASSED: ${build_name}${NC}"
         ((BUILDS_PASSED++))
     else
-        echo -e "${RED}❌ BUILD FAILED: ${build_name}${NC}"
+        echo -e "${RED} BUILD FAILED: ${build_name}${NC}"
         ((BUILDS_FAILED++))
         FAILED_BUILDS+=("$build_name")
     fi
@@ -137,7 +137,7 @@ elif [ -f "scripts/detect_gpu.sh" ]; then
     source gpu_env.sh
 fi
 
-echo -e "${YELLOW}📦 Go Environment:${NC}"
+echo -e "${YELLOW} Go Environment:${NC}"
 echo "  Go Version: $(go version)"
 echo "  GOOS: $(go env GOOS)"
 echo "  GOARCH: $(go env GOARCH)"
@@ -160,12 +160,12 @@ build_test "windows-amd64-cpu" "windows" "amd64" "false" ".exe"
 if [ "$USE_GPU" = "true" ]; then
     build_test "linux-amd64-gpu" "linux" "amd64" "true" ""
 else
-    echo -e "${YELLOW}⏭️  Skipping GPU builds (CUDA not available)${NC}"
+    echo -e "${YELLOW}⏭  Skipping GPU builds (CUDA not available)${NC}"
 fi
 
 # Create release structure
 echo ""
-echo -e "${BLUE}📦 Creating Release Structure${NC}"
+echo -e "${BLUE} Creating Release Structure${NC}"
 echo "----------------------------------------"
 
 RELEASE_DIR="/tmp/gobed-builds/release"
@@ -181,10 +181,10 @@ for build_dir in /tmp/gobed-builds/*/; do
             cd "$build_dir"
             if [[ "$build_name" == *"windows"* ]]; then
                 zip -q "$RELEASE_DIR/gobed-${build_name}.zip" *
-                echo -e "${GREEN}✅ Created gobed-${build_name}.zip${NC}"
+                echo -e "${GREEN} Created gobed-${build_name}.zip${NC}"
             else
                 tar -czf "$RELEASE_DIR/gobed-${build_name}.tar.gz" *
-                echo -e "${GREEN}✅ Created gobed-${build_name}.tar.gz${NC}"
+                echo -e "${GREEN} Created gobed-${build_name}.tar.gz${NC}"
             fi
         fi
     fi
@@ -217,9 +217,9 @@ echo -e "${BLUE}═════════════════════�
 
 # Exit with error if any builds failed
 if [ $BUILDS_FAILED -gt 0 ]; then
-    echo -e "${RED}❌ Some builds failed!${NC}"
+    echo -e "${RED} Some builds failed!${NC}"
     exit 1
 else
-    echo -e "${GREEN}✅ All builds passed!${NC}"
+    echo -e "${GREEN} All builds passed!${NC}"
     exit 0
 fi

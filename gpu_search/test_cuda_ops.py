@@ -9,29 +9,29 @@ import os
 sys.path.insert(0, '/home/lee/code/gobed/gpu_search/cuda_ops/build')
 os.environ['LD_LIBRARY_PATH'] = '/home/lee/code/gobed/gpu_search/cuda_ops/build:' + os.environ.get('LD_LIBRARY_PATH', '')
 
-print("🔧 Testing Custom CUDA Ops")
+print(" Testing Custom CUDA Ops")
 print("=" * 50)
 
 # Load the compiled library
 try:
     torch.ops.load_library('/home/lee/code/gobed/gpu_search/cuda_ops/build/libgobed_ann_ops.so')
-    print("✅ Loaded libgobed_ann_ops.so")
+    print(" Loaded libgobed_ann_ops.so")
 except Exception as e:
-    print(f"❌ Failed to load library: {e}")
+    print(f" Failed to load library: {e}")
     sys.exit(1)
 
 # Check available ops
-print("\n📋 Available custom ops:")
+print("\n Available custom ops:")
 if hasattr(torch.ops, 'gobed_ann'):
     ops = dir(torch.ops.gobed_ann)
     for op in ops:
         if not op.startswith('_'):
             print(f"  - gobed_ann::{op}")
 else:
-    print("  ❌ No gobed_ann namespace found")
+    print("   No gobed_ann namespace found")
 
 # Test INT8 dot product
-print("\n🚀 Testing INT8 dot product:")
+print("\n Testing INT8 dot product:")
 device = torch.device("cuda")
 
 # Create test data
@@ -45,7 +45,7 @@ print(f"  Query: {query.shape} ({query.dtype})")
 try:
     # Call custom op
     scores = torch.ops.gobed_ann.i8dot512_scores(query, db)
-    print(f"  ✅ Scores computed: {scores.shape} ({scores.dtype})")
+    print(f"   Scores computed: {scores.shape} ({scores.dtype})")
     print(f"  Score range: [{scores.min().item()}, {scores.max().item()}]")
     
     # Benchmark
@@ -61,17 +61,17 @@ try:
     print(f"  Throughput: {1000/latency:.0f} QPS")
     
 except Exception as e:
-    print(f"  ❌ Failed: {e}")
+    print(f"   Failed: {e}")
 
 # Test batch INT8 dot product
-print("\n🚀 Testing batch INT8 dot product:")
+print("\n Testing batch INT8 dot product:")
 batch = 32
 queries = torch.randint(-128, 127, (batch, 512), dtype=torch.int8, device=device)
 print(f"  Queries: {queries.shape} ({queries.dtype})")
 
 try:
     scores_batch = torch.ops.gobed_ann.i8dot512_batch(queries, db)
-    print(f"  ✅ Batch scores computed: {scores_batch.shape} ({scores_batch.dtype})")
+    print(f"   Batch scores computed: {scores_batch.shape} ({scores_batch.dtype})")
     
     # Benchmark
     torch.cuda.synchronize()
@@ -86,6 +86,6 @@ try:
     print(f"  Batch throughput: {batch_throughput:.0f} QPS")
     
 except Exception as e:
-    print(f"  ❌ Failed: {e}")
+    print(f"   Failed: {e}")
 
-print("\n✅ CUDA ops test complete!")
+print("\n CUDA ops test complete!")

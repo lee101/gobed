@@ -80,7 +80,7 @@ func NewVectorIndex(model *EmbeddingModel, config VectorIndexConfig) *VectorInde
 
 	// GPU indexer disabled for now - would be initialized here
 	if config.EnableBulkGPU {
-		fmt.Printf("⚠️  Bulk GPU indexing not yet implemented\n")
+		fmt.Printf("  Bulk GPU indexing not yet implemented\n")
 	}
 
 	return idx

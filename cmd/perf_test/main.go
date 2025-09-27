@@ -13,11 +13,11 @@ import (
 
 func main() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("⚡ PERFORMANCE BENCHMARK: Float32 vs INT8")
+	fmt.Println(" PERFORMANCE BENCHMARK: Float32 vs INT8")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// System info
-	fmt.Println("\n📊 System Information:")
+	fmt.Println("\n System Information:")
 	fmt.Printf("  CPU cores: %d\n", runtime.NumCPU())
 	fmt.Printf("  Go version: %s\n", runtime.Version())
 	fmt.Printf("  GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
@@ -42,7 +42,7 @@ func main() {
 	runtime.ReadMemStats(&m)
 	f32ModelMemory := m.Alloc - baselineMemory
 
-	fmt.Printf("✅ Float32 model loaded in %v\n", loadTimeF32)
+	fmt.Printf(" Float32 model loaded in %v\n", loadTimeF32)
 	fmt.Printf("   Memory used: %.2f MB\n", float64(f32ModelMemory)/(1024*1024))
 
 	// Test texts of varying lengths
@@ -62,17 +62,17 @@ func main() {
 		strings.Repeat("word ", 100), // 100 words
 	}
 
-	fmt.Printf("\n📝 Test corpus: %d texts (varying lengths)\n", len(testTexts))
+	fmt.Printf("\n Test corpus: %d texts (varying lengths)\n", len(testTexts))
 
 	// Warmup
-	fmt.Println("\n🔥 Warming up...")
+	fmt.Println("\n Warming up...")
 	for i := 0; i < 100; i++ {
 		modelF32.Encode(testTexts[0])
 	}
 
 	// Single-threaded benchmark
 	fmt.Println("\n" + strings.Repeat("-", 50))
-	fmt.Println("📊 SINGLE-THREADED PERFORMANCE")
+	fmt.Println(" SINGLE-THREADED PERFORMANCE")
 	fmt.Println(strings.Repeat("-", 50))
 
 	iterations := 1000
@@ -97,7 +97,7 @@ func main() {
 
 	// Multi-threaded benchmark
 	fmt.Println("\n" + strings.Repeat("-", 50))
-	fmt.Println("🚀 MULTI-THREADED PERFORMANCE")
+	fmt.Println(" MULTI-THREADED PERFORMANCE")
 	fmt.Println(strings.Repeat("-", 50))
 
 	numWorkers := runtime.NumCPU()
@@ -131,7 +131,7 @@ func main() {
 
 	// Batch processing test
 	fmt.Println("\n" + strings.Repeat("-", 50))
-	fmt.Println("📦 BATCH PROCESSING TEST")
+	fmt.Println(" BATCH PROCESSING TEST")
 	fmt.Println(strings.Repeat("-", 50))
 
 	batchSizes := []int{1, 10, 50, 100}
@@ -163,7 +163,7 @@ func main() {
 
 	// Memory pressure test
 	fmt.Println("\n" + strings.Repeat("-", 50))
-	fmt.Println("💾 MEMORY PRESSURE TEST")
+	fmt.Println(" MEMORY PRESSURE TEST")
 	fmt.Println(strings.Repeat("-", 50))
 
 	// Generate many embeddings
@@ -217,7 +217,7 @@ func main() {
 
 	// Stress test
 	fmt.Println("\n" + strings.Repeat("-", 50))
-	fmt.Println("🔥 STRESS TEST (30 seconds)")
+	fmt.Println(" STRESS TEST (30 seconds)")
 	fmt.Println(strings.Repeat("-", 50))
 
 	fmt.Println("\nRunning continuous encoding for 30 seconds...")
@@ -242,21 +242,21 @@ func main() {
 	runtime.ReadMemStats(&m)
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 FINAL STATISTICS")
+	fmt.Println(" FINAL STATISTICS")
 	fmt.Println(strings.Repeat("=", 80))
 
-	fmt.Printf("\n🎯 Performance Summary:\n")
+	fmt.Printf("\n Performance Summary:\n")
 	fmt.Printf("  Single-threaded: %.0f encodings/sec\n", throughputF32Single)
 	fmt.Printf("  Multi-threaded:  %.0f encodings/sec (%.1fx speedup)\n",
 		throughputF32Multi, throughputF32Multi/throughputF32Single)
 	fmt.Printf("  Avg latency: %d µs\n", latencyF32Single)
 	fmt.Printf("  Model load time: %v\n", loadTimeF32)
 
-	fmt.Printf("\n💾 Memory Summary:\n")
+	fmt.Printf("\n Memory Summary:\n")
 	fmt.Printf("  Model size: %.2f MB\n", float64(f32ModelMemory)/(1024*1024))
 	fmt.Printf("  Current heap: %.2f MB\n", float64(m.Alloc)/(1024*1024))
 	fmt.Printf("  Total allocated: %.2f MB\n", float64(m.TotalAlloc)/(1024*1024))
 	fmt.Printf("  System memory: %.2f MB\n", float64(m.Sys)/(1024*1024))
 
-	fmt.Println("\n✅ Performance benchmark completed!")
+	fmt.Println("\n Performance benchmark completed!")
 }

@@ -11,24 +11,24 @@ from pathlib import Path
 
 def run_command(cmd, description):
     """Run command and return output"""
-    print(f"\n🔍 {description}")
+    print(f"\n {description}")
     print(f"   Command: {cmd}")
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
-            print(f"   ✅ Success:")
+            print(f"    Success:")
             for line in result.stdout.strip().split('\n')[:10]:  # Limit output
                 print(f"      {line}")
             if len(result.stdout.strip().split('\n')) > 10:
                 print(f"      ... ({len(result.stdout.strip().split('\n')) - 10} more lines)")
         else:
-            print(f"   ❌ Failed (code {result.returncode}):")
+            print(f"    Failed (code {result.returncode}):")
             for line in result.stderr.strip().split('\n')[:5]:
                 if line.strip():
                     print(f"      {line}")
         return result.stdout, result.stderr, result.returncode
     except Exception as e:
-        print(f"   ❌ Exception: {e}")
+        print(f"    Exception: {e}")
         return "", str(e), -1
 
 def check_file_exists(path, description):
@@ -38,7 +38,7 @@ def check_file_exists(path, description):
     
     if os.path.exists(path):
         stat = os.stat(path)
-        print(f"   ✅ Exists - Size: {stat.st_size} bytes")
+        print(f"    Exists - Size: {stat.st_size} bytes")
         if os.path.isfile(path):
             # Try to get file info
             run_command(f"file {path}", f"File type of {path}")
@@ -46,11 +46,11 @@ def check_file_exists(path, description):
                 run_command(f"ldd {path} | head -10", f"Dependencies of {path}")
         return True
     else:
-        print(f"   ❌ Does not exist")
+        print(f"    Does not exist")
         return False
 
 def main():
-    print("🚀 CUDA + LibTorch Deep Diagnosis")
+    print(" CUDA + LibTorch Deep Diagnosis")
     print("=" * 60)
     
     # 1. System CUDA check
@@ -72,7 +72,7 @@ def main():
     
     for cuda_path in cuda_paths:
         if os.path.exists(cuda_path):
-            print(f"\n   ✅ Found CUDA installation: {cuda_path}")
+            print(f"\n    Found CUDA installation: {cuda_path}")
             run_command(f"ls -la {cuda_path}/lib64/ | grep libcudart", f"CUDA Runtime in {cuda_path}")
         
     # 2. Current LibTorch Analysis  

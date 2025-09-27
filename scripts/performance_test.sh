@@ -11,7 +11,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}⚡ GoBeD Performance Test Suite${NC}"
+echo -e "${BLUE} GoBeD Performance Test Suite${NC}"
 echo "================================="
 
 cd "$(dirname "$0")/.."
@@ -34,7 +34,7 @@ perf_test() {
     local expected_pattern="$3"
 
     echo ""
-    echo -e "${BLUE}⚡ ${test_name}${NC}"
+    echo -e "${BLUE} ${test_name}${NC}"
     echo "----------------------------------------"
 
     local start_time=$(date +%s.%N)
@@ -46,9 +46,9 @@ perf_test() {
 
     if [ -n "$expected_pattern" ]; then
         if echo "$test_output" | grep -q "$expected_pattern"; then
-            echo -e "${GREEN}✅ Output validation passed${NC}"
+            echo -e "${GREEN} Output validation passed${NC}"
         else
-            echo -e "${YELLOW}⚠️  Output validation failed or inconclusive${NC}"
+            echo -e "${YELLOW}  Output validation failed or inconclusive${NC}"
         fi
     fi
 
@@ -59,17 +59,17 @@ perf_test() {
 }
 
 # 1. Go Benchmark Tests
-echo -e "${YELLOW}📊 Running Go Benchmarks${NC}"
+echo -e "${YELLOW} Running Go Benchmarks${NC}"
 
 # CPU benchmarks
 echo ""
-echo -e "${BLUE}💻 CPU Benchmarks${NC}"
+echo -e "${BLUE} CPU Benchmarks${NC}"
 perf_test "Go Benchmark CPU" "go test -bench=. -benchtime=3s ./..." "Benchmark"
 
 # GPU benchmarks (if available)
 if [ "$USE_GPU" = "true" ]; then
     echo ""
-    echo -e "${BLUE}🚀 GPU Benchmarks${NC}"
+    echo -e "${BLUE} GPU Benchmarks${NC}"
     perf_test "Go Benchmark GPU" "go test -tags gpu -bench=. -benchtime=3s ./..." "Benchmark"
 fi
 
@@ -85,7 +85,7 @@ fi
 
 # 3. Search Performance Tests
 echo ""
-echo -e "${YELLOW}🔍 Search Performance Tests${NC}"
+echo -e "${YELLOW} Search Performance Tests${NC}"
 
 # Create test workspace
 mkdir -p /tmp/gobed-perf-test
@@ -104,7 +104,7 @@ done
 # Test CPU search performance
 if [ -f "/tmp/gobed-perf-cpu" ]; then
     echo ""
-    echo -e "${BLUE}💻 CPU Search Performance${NC}"
+    echo -e "${BLUE} CPU Search Performance${NC}"
     perf_test "CPU Search Small Dataset" "/tmp/gobed-perf-cpu -dir testdata -k 5 'machine learning'" ""
     perf_test "CPU Search Large Dataset" "/tmp/gobed-perf-cpu -dir perf-data -k 10 'neural networks'" ""
 fi
@@ -117,7 +117,7 @@ if [ -f "/tmp/bed-test" ] || command -v bed &> /dev/null; then
     fi
 
     echo ""
-    echo -e "${BLUE}🛏️  Bed Search Performance${NC}"
+    echo -e "${BLUE}🛏  Bed Search Performance${NC}"
     perf_test "Bed CPU Search Small" "$BED_BINARY -dir testdata -k 5 'machine learning'" ""
     perf_test "Bed CPU Search Large" "$BED_BINARY -dir perf-data -k 10 'artificial intelligence'" ""
 fi
@@ -125,7 +125,7 @@ fi
 # Test GPU search performance (if available)
 if [ "$USE_GPU" = "true" ] && [ -f "/tmp/gobed-perf-gpu" ]; then
     echo ""
-    echo -e "${BLUE}🚀 GPU Search Performance${NC}"
+    echo -e "${BLUE} GPU Search Performance${NC}"
     perf_test "GPU Search Small Dataset" "/tmp/gobed-perf-gpu -dir testdata -k 5 'machine learning'" ""
     perf_test "GPU Search Large Dataset" "/tmp/gobed-perf-gpu -dir perf-data -k 10 'neural networks'" ""
 
@@ -179,7 +179,7 @@ fi
 
 # 5. Stress Test
 echo ""
-echo -e "${YELLOW}💪 Stress Tests${NC}"
+echo -e "${YELLOW} Stress Tests${NC}"
 
 # Concurrent search test
 if [ -f "/tmp/gobed-perf-cpu" ]; then
@@ -215,7 +215,7 @@ echo -e "${BLUE}═════════════════════�
 
 # System info
 echo ""
-echo -e "${YELLOW}💻 System Information${NC}"
+echo -e "${YELLOW} System Information${NC}"
 echo "CPU: $(nproc) cores"
 echo "Memory: $(free -h | awk '/^Mem:/{print $2}' 2>/dev/null || echo 'Unknown')"
 if command -v nvidia-smi &> /dev/null; then
@@ -224,4 +224,4 @@ fi
 echo "Go Version: $(go version)"
 
 echo ""
-echo -e "${GREEN}✅ Performance testing completed${NC}"
+echo -e "${GREEN} Performance testing completed${NC}"

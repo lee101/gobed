@@ -20,11 +20,11 @@ type BenchResult struct {
 
 func main() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("🚀 REAL-WORLD PERFORMANCE BENCHMARK")
+	fmt.Println(" REAL-WORLD PERFORMANCE BENCHMARK")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// System info
-	fmt.Printf("\n📊 System: %d cores, %s/%s, Go %s\n",
+	fmt.Printf("\n System: %d cores, %s/%s, Go %s\n",
 		runtime.NumCPU(), runtime.GOOS, runtime.GOARCH, runtime.Version())
 
 	// Load model
@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("✅ Model loaded in %v (vocab=%d, dim=%d)\n",
+	fmt.Printf(" Model loaded in %v (vocab=%d, dim=%d)\n",
 		time.Since(startLoad), model.VocabSize, model.EmbedDim)
 
 	// Test texts - realistic use cases
@@ -42,13 +42,13 @@ func main() {
 	mediumText := "Machine learning algorithms are transforming how we process information."
 	longText := strings.Repeat("Natural language processing with deep learning models. ", 10)
 
-	fmt.Printf("\n📝 Test texts:\n")
+	fmt.Printf("\n Test texts:\n")
 	fmt.Printf("  Short:  %d chars\n", len(shortText))
 	fmt.Printf("  Medium: %d chars\n", len(mediumText))
 	fmt.Printf("  Long:   %d chars\n", len(longText))
 
 	// Warmup
-	fmt.Print("\n🔥 Warming up...")
+	fmt.Print("\n Warming up...")
 	for i := 0; i < 100; i++ {
 		model.Encode(shortText)
 	}
@@ -248,15 +248,15 @@ func main() {
 
 	// Summary
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 PERFORMANCE SUMMARY")
+	fmt.Println(" PERFORMANCE SUMMARY")
 	fmt.Println(strings.Repeat("=", 80))
 
-	fmt.Println("\n🎯 Throughput (operations/second):")
+	fmt.Println("\n Throughput (operations/second):")
 	for _, r := range results {
 		fmt.Printf("  %-15s: %10.0f ops/sec\n", r.Name, r.Throughput)
 	}
 
-	fmt.Println("\n⏱️ Latency (per operation):")
+	fmt.Println("\n Latency (per operation):")
 	for _, r := range results {
 		if r.Latency < time.Microsecond {
 			fmt.Printf("  %-15s: %10.0f ns\n", r.Name, float64(r.Latency.Nanoseconds()))
@@ -272,21 +272,21 @@ func main() {
 	concurrent := results[3].Throughput
 	speedup := concurrent / singleThreaded
 
-	fmt.Printf("\n📈 Key Metrics:\n")
+	fmt.Printf("\n Key Metrics:\n")
 	fmt.Printf("  Single-thread throughput: %.0f ops/sec\n", singleThreaded)
 	fmt.Printf("  Multi-thread throughput:  %.0f ops/sec\n", concurrent)
 	fmt.Printf("  Parallel speedup:         %.1fx\n", speedup)
 	fmt.Printf("  Similarity ops:           %.0f/sec\n", results[4].Throughput)
 
 	// Estimate INT8 improvements
-	fmt.Println("\n💡 Projected INT8 Performance:")
+	fmt.Println("\n Projected INT8 Performance:")
 	fmt.Printf("  Memory usage:      -75%% (119MB → 30MB)\n")
 	fmt.Printf("  Cache efficiency:  ~2x better\n")
 	fmt.Printf("  SIMD speedup:      2-4x (with AVX-512)\n")
 	fmt.Printf("  Expected throughput: %.0f-%.0f ops/sec\n",
 		singleThreaded*2, singleThreaded*4)
 
-	fmt.Println("\n✅ Benchmark completed!")
+	fmt.Println("\n Benchmark completed!")
 }
 
 func printResult(r BenchResult) {

@@ -95,7 +95,7 @@ func GenerateSyntheticCorpus(dir string, numFiles int, linesPerFile int) error {
 
 // RunIndexingBenchmark benchmarks indexing performance
 func (b *Benchmark) RunIndexingBenchmark(config src.SearchConfig, corpusDir string, name string) (*src.GPUSearchIndex, time.Duration, error) {
-	log.Printf("📊 Running indexing benchmark: %s", name)
+	log.Printf(" Running indexing benchmark: %s", name)
 
 	index, err := src.NewGPUSearchIndex(config)
 	if err != nil {
@@ -116,15 +116,15 @@ func (b *Benchmark) RunIndexingBenchmark(config src.SearchConfig, corpusDir stri
 	chunks := stats["num_chunks"].(int)
 	files := stats["num_files"].(int)
 
-	log.Printf("  ✅ Indexed %d chunks from %d files in %.2fs", chunks, files, indexTime.Seconds())
-	log.Printf("  📈 Rate: %.0f chunks/sec", float64(chunks)/indexTime.Seconds())
+	log.Printf("   Indexed %d chunks from %d files in %.2fs", chunks, files, indexTime.Seconds())
+	log.Printf("   Rate: %.0f chunks/sec", float64(chunks)/indexTime.Seconds())
 
 	return index, indexTime, nil
 }
 
 // RunSearchBenchmark benchmarks search performance
 func (b *Benchmark) RunSearchBenchmark(index *src.GPUSearchIndex, queries []string, k int) ([]float64, float64, error) {
-	log.Printf("  🔍 Running search benchmark with %d queries", len(queries))
+	log.Printf("   Running search benchmark with %d queries", len(queries))
 
 	// Warmup
 	for i := 0; i < min(10, len(queries)); i++ {
@@ -174,7 +174,7 @@ func (b *Benchmark) RunBatchSearchBenchmark(index *src.GPUSearchIndex, batchSize
 			start := time.Now()
 			_, err := index.BatchSearch(queries, 10)
 			if err != nil {
-				log.Printf("  ❌ Batch search failed: %v", err)
+				log.Printf("   Batch search failed: %v", err)
 				continue
 			}
 			totalTime += time.Since(start)
@@ -283,7 +283,7 @@ func (b *Benchmark) RunParameterSweep(corpusDir string) {
 				// Index
 				index, indexTime, err := b.RunIndexingBenchmark(config, corpusDir, name)
 				if err != nil {
-					log.Printf("    ❌ Failed: %v", err)
+					log.Printf("     Failed: %v", err)
 					continue
 				}
 
@@ -295,7 +295,7 @@ func (b *Benchmark) RunParameterSweep(corpusDir string) {
 
 				latencies, qps, err := b.RunSearchBenchmark(index, queries, 10)
 				if err != nil {
-					log.Printf("    ❌ Search failed: %v", err)
+					log.Printf("     Search failed: %v", err)
 					index.Close()
 					continue
 				}
@@ -384,7 +384,7 @@ func (b *Benchmark) RunConcurrentBenchmark(index *src.GPUSearchIndex, numWorkers
 	p99 := percentile(latencies, 0.99)
 	mu.Unlock()
 
-	log.Printf("  ✅ Results:")
+	log.Printf("   Results:")
 	log.Printf("     Total queries: %d", queries)
 	log.Printf("     QPS: %.0f", qps)
 	log.Printf("     Avg latency: %.2fms", avgLatencyMs)
@@ -434,15 +434,15 @@ func (b *Benchmark) PrintSummary() {
 		}
 	}
 
-	fmt.Printf("\n🏆 Best QPS: %s\n", bestQPS.Name)
+	fmt.Printf("\n Best QPS: %s\n", bestQPS.Name)
 	fmt.Printf("   - QPS: %.0f\n", bestQPS.QPS)
 	fmt.Printf("   - P50 Latency: %.2fms\n", bestQPS.LatencyP50)
 
-	fmt.Printf("\n🏆 Best Latency: %s\n", bestLatency.Name)
+	fmt.Printf("\n Best Latency: %s\n", bestLatency.Name)
 	fmt.Printf("   - P50 Latency: %.2fms\n", bestLatency.LatencyP50)
 	fmt.Printf("   - QPS: %.0f\n", bestLatency.QPS)
 
-	fmt.Printf("\n🏆 Most Memory Efficient: %s\n", bestMemory.Name)
+	fmt.Printf("\n Most Memory Efficient: %s\n", bestMemory.Name)
 	fmt.Printf("   - Memory: %.2fMB\n", bestMemory.MemoryMB)
 	fmt.Printf("   - QPS: %.0f\n", bestMemory.QPS)
 
@@ -457,7 +457,7 @@ func (b *Benchmark) PrintSummary() {
 	avgQPS := totalQPS / float64(len(b.results))
 	avgLatency := totalLatency / float64(len(b.results))
 
-	fmt.Printf("\n📊 Overall Statistics:\n")
+	fmt.Printf("\n Overall Statistics:\n")
 	fmt.Printf("   - Average QPS: %.0f\n", avgQPS)
 	fmt.Printf("   - Average P50 Latency: %.2fms\n", avgLatency)
 	fmt.Printf("   - Configurations tested: %d\n", len(b.results))
@@ -511,7 +511,7 @@ func main() {
 		}
 		defer os.RemoveAll(tempDir)
 
-		log.Printf("📝 Generating synthetic corpus with %d files...", *numFiles)
+		log.Printf(" Generating synthetic corpus with %d files...", *numFiles)
 		if err := GenerateSyntheticCorpus(tempDir, *numFiles, 100); err != nil {
 			log.Fatal(err)
 		}
@@ -584,7 +584,7 @@ func main() {
 	benchmark.PrintSummary()
 
 	// Print GPU stats
-	fmt.Printf("\n🖥️  System Information:\n")
+	fmt.Printf("\n🖥  System Information:\n")
 	fmt.Printf("   - CPUs: %d\n", runtime.NumCPU())
 	fmt.Printf("   - Go version: %s\n", runtime.Version())
 	fmt.Printf("   - CUDA available: %v\n", os.Getenv("CUDA_VISIBLE_DEVICES") != "-1")

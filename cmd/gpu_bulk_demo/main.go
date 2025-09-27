@@ -19,17 +19,17 @@ import (
 )
 
 func main() {
-	fmt.Printf("🚀 GPU Bulk Indexing Demo\n")
+	fmt.Printf(" GPU Bulk Indexing Demo\n")
 	fmt.Printf("=========================\n\n")
 
 	// Check GPU availability
 	if !gobed.IsCUDAAvailable() {
-		log.Fatal("❌ CUDA not available. GPU bulk indexing requires CUDA.")
+		log.Fatal(" CUDA not available. GPU bulk indexing requires CUDA.")
 	}
 
 	// Display system info
 	gpuInfo := gobed.GetGPUMemoryInfo()
-	fmt.Printf("🖥️  System Information:\n")
+	fmt.Printf("🖥  System Information:\n")
 	fmt.Printf("   GPU VRAM: %d MB total, %d MB available\n", gpuInfo.TotalVRAM, gpuInfo.AvailableVRAM)
 	fmt.Printf("   CPU Cores: %d\n", runtime.NumCPU())
 	fmt.Printf("   Memory Utilization: %.1f%%\n\n", gpuInfo.Utilization)
@@ -52,7 +52,7 @@ func main() {
 }
 
 func selectMode() string {
-	fmt.Printf("📋 Select Demo Mode:\n")
+	fmt.Printf(" Select Demo Mode:\n")
 	fmt.Printf("   1. bulk       - Bulk indexing demonstration\n")
 	fmt.Printf("   2. progressive - Progressive indexing with live updates\n") 
 	fmt.Printf("   3. streaming  - Streaming indexing from data source\n")
@@ -78,7 +78,7 @@ func selectMode() string {
 }
 
 func runBulkIndexingDemo() {
-	fmt.Printf("📦 Bulk Indexing Demo\n")
+	fmt.Printf(" Bulk Indexing Demo\n")
 	fmt.Printf("=====================\n\n")
 
 	// Get dataset size from user
@@ -88,14 +88,14 @@ func runBulkIndexingDemo() {
 	config := gobed.DefaultBulkIndexConfig()
 	config.MaxMemoryMB = int(gobed.GetAvailableVRAM() * 0.8) // Use 80% of VRAM
 	
-	fmt.Printf("🔧 Creating GPU bulk indexer with config:\n")
+	fmt.Printf(" Creating GPU bulk indexer with config:\n")
 	fmt.Printf("   Clusters: %d, Search probes: %d\n", config.NList, config.NProbe)
 	fmt.Printf("   Vector dim: %d, Max memory: %d MB\n", config.VectorDim, config.MaxMemoryMB)
 	fmt.Printf("   Progressive mode: %v\n\n", config.ProgressiveMode)
 
 	indexer, err := gobed.NewGPUIVFBulkIndexer(config)
 	if err != nil {
-		log.Fatalf("❌ Failed to create indexer: %v", err)
+		log.Fatalf(" Failed to create indexer: %v", err)
 	}
 	defer indexer.Close()
 
@@ -107,27 +107,27 @@ func runBulkIndexingDemo() {
 	embeddings, scales := generateSampleEmbeddings(config.VocabSize, config.EmbedDim)
 	start := time.Now()
 	if err := indexer.LoadEmbeddings(embeddings, scales); err != nil {
-		log.Fatalf("❌ Failed to load embeddings: %v", err)
+		log.Fatalf(" Failed to load embeddings: %v", err)
 	}
-	fmt.Printf(" ✅ Done (%v)\n", time.Since(start))
+	fmt.Printf("  Done (%v)\n", time.Since(start))
 
 	// Train k-means
 	fmt.Printf("   Training GPU k-means...")
 	trainingData := generateSampleTrainingData(5000, config.VectorDim)
 	start = time.Now()
 	if err := indexer.TrainKMeans(trainingData.vectors, trainingData.scales, len(trainingData.scales)); err != nil {
-		log.Fatalf("❌ Failed to train k-means: %v", err)
+		log.Fatalf(" Failed to train k-means: %v", err)
 	}
-	fmt.Printf(" ✅ Done (%v)\n", time.Since(start))
+	fmt.Printf("  Done (%v)\n", time.Since(start))
 
 	// Generate token sequences
 	fmt.Printf("   Generating %d token sequences...", numVectors)
 	start = time.Now()
 	tokenSequences := generateSampleTokenSequences(numVectors, config.VectorDim)
-	fmt.Printf(" ✅ Done (%v)\n\n", time.Since(start))
+	fmt.Printf("  Done (%v)\n\n", time.Since(start))
 
 	// Bulk indexing phase
-	fmt.Printf("⚡ Bulk Indexing Phase:\n")
+	fmt.Printf(" Bulk Indexing Phase:\n")
 	
 	progressCallback := func(progress float64) {
 		fmt.Printf("   Progress: %.1f%% complete\n", progress*100)
@@ -138,11 +138,11 @@ func runBulkIndexingDemo() {
 	indexingTime := time.Since(indexingStart)
 	
 	if err != nil {
-		log.Fatalf("❌ Bulk indexing failed: %v", err)
+		log.Fatalf(" Bulk indexing failed: %v", err)
 	}
 
 	// Results
-	fmt.Printf("\n📊 Results:\n")
+	fmt.Printf("\n Results:\n")
 	fmt.Printf("   Vectors indexed: %d\n", indexed)
 	fmt.Printf("   Total time: %v\n", indexingTime)
 	fmt.Printf("   Throughput: %.0f vectors/sec\n", float64(indexed)/indexingTime.Seconds())
@@ -154,11 +154,11 @@ func runBulkIndexingDemo() {
 	memUsage := indexer.GetMemoryUsage()
 	fmt.Printf("   GPU memory used: %d MB\n", memUsage/1024/1024)
 
-	fmt.Printf("\n✅ Bulk indexing demo completed successfully!\n")
+	fmt.Printf("\n Bulk indexing demo completed successfully!\n")
 }
 
 func runProgressiveIndexingDemo() {
-	fmt.Printf("📈 Progressive Indexing Demo\n")
+	fmt.Printf(" Progressive Indexing Demo\n")
 	fmt.Printf("============================\n\n")
 
 	numBatches := getUserInput("Enter number of batches to process", 20)
@@ -170,12 +170,12 @@ func runProgressiveIndexingDemo() {
 	
 	indexer, err := gobed.NewGPUIVFBulkIndexer(config)
 	if err != nil {
-		log.Fatalf("❌ Failed to create indexer: %v", err)
+		log.Fatalf(" Failed to create indexer: %v", err)
 	}
 	defer indexer.Close()
 
 	// Setup
-	fmt.Printf("🔧 Setting up indexer...\n")
+	fmt.Printf(" Setting up indexer...\n")
 	embeddings, scales := generateSampleEmbeddings(config.VocabSize, config.EmbedDim)
 	indexer.LoadEmbeddings(embeddings, scales)
 	
@@ -214,7 +214,7 @@ func runProgressiveIndexingDemo() {
 		batchTime := time.Since(batchStart)
 		
 		if err != nil {
-			fmt.Printf("   ❌ Batch %d failed: %v\n", batch+1, err)
+			fmt.Printf("    Batch %d failed: %v\n", batch+1, err)
 			continue
 		}
 		
@@ -229,7 +229,7 @@ func runProgressiveIndexingDemo() {
 		// Show memory usage every 5 batches
 		if (batch+1) % 5 == 0 {
 			memUsage := indexer.GetMemoryUsage()
-			fmt.Printf("   📊 Memory usage: %d MB, Progress: %.1f%%\n",
+			fmt.Printf("    Memory usage: %d MB, Progress: %.1f%%\n",
 				memUsage/1024/1024, float64(batch+1)/float64(numBatches)*100)
 		}
 		
@@ -238,12 +238,12 @@ func runProgressiveIndexingDemo() {
 	}
 	
 	totalTime := time.Since(startTime)
-	fmt.Printf("\n📊 Progressive Indexing Summary:\n")
+	fmt.Printf("\n Progressive Indexing Summary:\n")
 	fmt.Printf("   Total vectors: %d\n", totalProcessed)
 	fmt.Printf("   Total time: %v\n", totalTime)
 	fmt.Printf("   Overall throughput: %.0f vectors/sec\n", float64(totalProcessed)/totalTime.Seconds())
 	
-	fmt.Printf("\n✅ Progressive indexing demo completed!\n")
+	fmt.Printf("\n Progressive indexing demo completed!\n")
 }
 
 func runStreamingDemo() {
@@ -258,12 +258,12 @@ func runStreamingDemo() {
 	
 	indexer, err := gobed.NewGPUIVFBulkIndexer(config)
 	if err != nil {
-		log.Fatalf("❌ Failed to create indexer: %v", err)
+		log.Fatalf(" Failed to create indexer: %v", err)
 	}
 	defer indexer.Close()
 
 	// Setup
-	fmt.Printf("🔧 Setting up streaming indexer...\n")
+	fmt.Printf(" Setting up streaming indexer...\n")
 	embeddings, scales := generateSampleEmbeddings(config.VocabSize, config.EmbedDim)
 	indexer.LoadEmbeddings(embeddings, scales)
 	
@@ -278,7 +278,7 @@ func runStreamingDemo() {
 	fmt.Printf("\n🌊 Starting streaming indexer...\n")
 	go func() {
 		if err := indexer.StreamingIndex(tokenChan, progressChan); err != nil {
-			log.Printf("❌ Streaming indexer error: %v", err)
+			log.Printf(" Streaming indexer error: %v", err)
 		}
 	}()
 
@@ -295,7 +295,7 @@ func runStreamingDemo() {
 			case tokenChan <- tokens:
 				// Successfully sent
 			case <-time.After(5 * time.Second):
-				fmt.Printf("⚠️  Timeout sending tokens at vector %d\n", i)
+				fmt.Printf("  Timeout sending tokens at vector %d\n", i)
 				return
 			}
 			
@@ -309,7 +309,7 @@ func runStreamingDemo() {
 	}()
 
 	// Progress monitoring
-	fmt.Printf("📊 Monitoring progress (updates every second):\n")
+	fmt.Printf(" Monitoring progress (updates every second):\n")
 	lastUpdateTime := time.Now()
 	
 	for progress := range progressChan {
@@ -324,7 +324,7 @@ func runStreamingDemo() {
 		}
 	}
 
-	fmt.Printf("\n📊 Final Statistics:\n")
+	fmt.Printf("\n Final Statistics:\n")
 	stats := indexer.GetStats()
 	fmt.Printf("   Vectors processed: %d\n", stats.TotalVectors)
 	fmt.Printf("   Batches processed: %d\n", stats.TotalBatches)
@@ -334,14 +334,14 @@ func runStreamingDemo() {
 	memUsage := indexer.GetMemoryUsage()
 	fmt.Printf("   Final memory usage: %d MB\n", memUsage/1024/1024)
 
-	fmt.Printf("\n✅ Streaming demo completed successfully!\n")
+	fmt.Printf("\n Streaming demo completed successfully!\n")
 }
 
 func runBenchmarkDemo() {
 	fmt.Printf("🏁 Benchmark Demo\n")
 	fmt.Printf("=================\n\n")
 
-	fmt.Printf("🚀 Running comprehensive benchmarks...\n\n")
+	fmt.Printf(" Running comprehensive benchmarks...\n\n")
 
 	// Small benchmark
 	runQuickBenchmark("Small Dataset", 10000, 1000)
@@ -357,17 +357,17 @@ func runBenchmarkDemo() {
 		runQuickBenchmark("Large Dataset", 500000, 5000)
 	}
 
-	fmt.Printf("\n✅ Benchmark demo completed!\n")
+	fmt.Printf("\n Benchmark demo completed!\n")
 }
 
 func runQuickBenchmark(name string, numVectors, batchSize int) {
-	fmt.Printf("📊 %s Benchmark:\n", name)
+	fmt.Printf(" %s Benchmark:\n", name)
 	fmt.Printf("   Vectors: %d, Batch size: %d\n", numVectors, batchSize)
 
 	config := gobed.DefaultBulkIndexConfig()
 	indexer, err := gobed.NewGPUIVFBulkIndexer(config)
 	if err != nil {
-		fmt.Printf("   ❌ Failed to create indexer: %v\n\n", err)
+		fmt.Printf("    Failed to create indexer: %v\n\n", err)
 		return
 	}
 	defer indexer.Close()
@@ -388,14 +388,14 @@ func runQuickBenchmark(name string, numVectors, batchSize int) {
 	elapsed := time.Since(start)
 
 	if err != nil {
-		fmt.Printf("   ❌ Benchmark failed: %v\n\n", err)
+		fmt.Printf("    Benchmark failed: %v\n\n", err)
 		return
 	}
 
 	throughput := float64(indexed) / elapsed.Seconds()
 	memUsage := indexer.GetMemoryUsage()
 
-	fmt.Printf("   ✅ Results: %.0f vec/sec, %v total, %d MB memory\n\n",
+	fmt.Printf("    Results: %.0f vec/sec, %v total, %d MB memory\n\n",
 		throughput, elapsed, memUsage/1024/1024)
 }
 

@@ -1,4 +1,4 @@
-# 🚀 GPU LibTorch Indexing Acceleration with INT8 Quantization
+#  GPU LibTorch Indexing Acceleration with INT8 Quantization
 
 ## Overview
 We've created a comprehensive GPU-accelerated indexing system with INT8 quantization for massive performance improvements and memory savings.
@@ -100,13 +100,13 @@ topK := scores.TopK(k, dim=0)         // Get top-k for all queries
 ## Production Recommendations
 
 ### When to Use INT8
-✅ **Good for:**
+ **Good for:**
 - Large-scale production systems
 - Real-time search with latency constraints
 - Memory-constrained environments
 - Approximate nearest neighbor search
 
-❌ **Avoid for:**
+ **Avoid for:**
 - Small datasets (<10k vectors)
 - Applications requiring exact precision
 - Systems without GPU support

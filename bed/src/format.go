@@ -323,7 +323,7 @@ func (f *OutputFormatter) formatStatistic(label string, value interface{}, forma
 	case bool:
 		if v {
 			if f.shouldUseColor() {
-				formatted = f.matchFunc("Yes ⚡")
+				formatted = f.matchFunc("Yes ")
 			} else {
 				formatted = "Yes"
 			}

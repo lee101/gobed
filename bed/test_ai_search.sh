@@ -13,18 +13,18 @@ ar rcs libcuda_search.a cuda_search.o
 # Build bed_real binary (only the specific file)
 CGO_ENABLED=1 go build -o bed_real ./bed_real.go
 
-echo "✅ Build complete"
+echo " Build complete"
 echo ""
 
 # Test searching ai.txt specifically
 AI_FILE="/home/lee/code/gobed/testdata/ai.txt"
 
 if [ ! -f "$AI_FILE" ]; then
-    echo "❌ Error: ai.txt not found at $AI_FILE"
+    echo " Error: ai.txt not found at $AI_FILE"
     exit 1
 fi
 
-echo "📊 Testing searches on ai.txt:"
+echo " Testing searches on ai.txt:"
 echo "================================"
 
 # Create a temp directory with just ai.txt
@@ -49,4 +49,4 @@ echo "-----------------------------------------------------------------"
 rm -rf "$TEMP_DIR"
 
 echo ""
-echo "🚀 All tests complete!"
+echo " All tests complete!"

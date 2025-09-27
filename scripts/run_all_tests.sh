@@ -19,10 +19,10 @@ cd "$(dirname "$0")/.."
 
 # Source GPU environment if available
 if [ -f "gpu_env.sh" ]; then
-    echo -e "${YELLOW}📦 Loading GPU environment...${NC}"
+    echo -e "${YELLOW} Loading GPU environment...${NC}"
     source gpu_env.sh
 else
-    echo -e "${YELLOW}📦 No GPU environment found, running GPU detection...${NC}"
+    echo -e "${YELLOW} No GPU environment found, running GPU detection...${NC}"
     if [ -f "scripts/detect_gpu.sh" ]; then
         bash scripts/detect_gpu.sh
         source gpu_env.sh
@@ -40,14 +40,14 @@ run_test() {
     local test_command="$2"
 
     echo ""
-    echo -e "${BLUE}🔍 Running: ${test_name}${NC}"
+    echo -e "${BLUE} Running: ${test_name}${NC}"
     echo "----------------------------------------"
 
     if eval "$test_command"; then
-        echo -e "${GREEN}✅ PASSED: ${test_name}${NC}"
+        echo -e "${GREEN} PASSED: ${test_name}${NC}"
         ((TESTS_PASSED++))
     else
-        echo -e "${RED}❌ FAILED: ${test_name}${NC}"
+        echo -e "${RED} FAILED: ${test_name}${NC}"
         ((TESTS_FAILED++))
         FAILED_TESTS+=("$test_name")
     fi
@@ -66,7 +66,7 @@ run_test "Build Bed Binary (CPU)" "cd bed && go build -o /tmp/bed-test ."
 
 # 4. GPU Tests (if available)
 if [ "$USE_GPU" = "true" ]; then
-    echo -e "${YELLOW}🚀 GPU Tests Enabled${NC}"
+    echo -e "${YELLOW} GPU Tests Enabled${NC}"
 
     run_test "Build CUDA Libraries" "cd bed && make cuda"
     run_test "Go Unit Tests (GPU)" "go test -tags gpu -v ./..."
@@ -74,7 +74,7 @@ if [ "$USE_GPU" = "true" ]; then
     run_test "Build Bed Binary (GPU)" "cd bed && go build -tags gpu -o /tmp/bed-gpu-test ."
     run_test "GPU Integration Test" "cd bed && make test"
 else
-    echo -e "${YELLOW}⏭️  Skipping GPU tests (GPU not available)${NC}"
+    echo -e "${YELLOW}⏭  Skipping GPU tests (GPU not available)${NC}"
 fi
 
 # 5. Code Quality Tests
@@ -85,12 +85,12 @@ run_test "Go Vet" "go vet ./..."
 if command -v golangci-lint &> /dev/null; then
     run_test "GolangCI Lint" "golangci-lint run --timeout=5m ./..."
 else
-    echo -e "${YELLOW}⏭️  Skipping golangci-lint (not installed)${NC}"
+    echo -e "${YELLOW}⏭  Skipping golangci-lint (not installed)${NC}"
 fi
 
 # 6. Binary Functionality Tests
 echo ""
-echo -e "${BLUE}🔧 Binary Functionality Tests${NC}"
+echo -e "${BLUE} Binary Functionality Tests${NC}"
 echo "----------------------------------------"
 
 # Create test workspace
@@ -133,13 +133,13 @@ run_test "Go Benchmarks" "go test -bench=. -benchtime=1s ./... | head -50"
 if command -v gosec &> /dev/null; then
     run_test "Security Scan (gosec)" "gosec -quiet ./..."
 else
-    echo -e "${YELLOW}⏭️  Skipping security scan (gosec not installed)${NC}"
+    echo -e "${YELLOW}⏭  Skipping security scan (gosec not installed)${NC}"
 fi
 
 # 9. C++ Tests (if any CUDA files exist)
 if [ "$USE_GPU" = "true" ] && [ -f "bed/cuda_unique_topk.cu" ]; then
     echo ""
-    echo -e "${BLUE}🔧 C++ CUDA Tests${NC}"
+    echo -e "${BLUE} C++ CUDA Tests${NC}"
     echo "----------------------------------------"
 
     cd bed
@@ -161,7 +161,7 @@ echo "----------------------------------------"
 if [ -d "model" ] && [ -f "model/model.safetensors" ]; then
     run_test "Model Loading Test" "go test -tags integration -run TestModelLoading ./... || true"
 else
-    echo -e "${YELLOW}⏭️  Skipping model tests (model files not found)${NC}"
+    echo -e "${YELLOW}⏭  Skipping model tests (model files not found)${NC}"
 fi
 
 # Cleanup
@@ -190,9 +190,9 @@ echo -e "${BLUE}═════════════════════�
 
 # Exit with error if any tests failed
 if [ $TESTS_FAILED -gt 0 ]; then
-    echo -e "${RED}❌ Some tests failed!${NC}"
+    echo -e "${RED} Some tests failed!${NC}"
     exit 1
 else
-    echo -e "${GREEN}✅ All tests passed!${NC}"
+    echo -e "${GREEN} All tests passed!${NC}"
     exit 0
 fi

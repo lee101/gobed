@@ -1,6 +1,6 @@
 # Gobed Batch Processing Performance Results
 
-## 🚀 Outstanding Performance Achievements
+##  Outstanding Performance Achievements
 
 ### Current CPU-Optimized Results
 Our batch-optimized CPU implementation achieves **24,115 items/sec** with optimal configuration!
@@ -31,7 +31,7 @@ With our optimized batch processing at **24,115 items/sec**:
 | **10M documents** | ~6.9 minutes | Enterprise-scale |
 | **100M documents** | ~69 minutes | Research datasets |
 
-## 🔧 Optimization Techniques Applied
+##  Optimization Techniques Applied
 
 1. **Optimal Batch Sizing**: 64 items per batch for best memory locality
 2. **Worker Pool Management**: 8 workers for RTX 3080 + i7-10750H system
@@ -39,7 +39,7 @@ With our optimized batch processing at **24,115 items/sec**:
 4. **Parallel Batching**: Concurrent processing of multiple batches
 5. **Load Balancing**: Even distribution of work across workers
 
-## 🎯 Key Findings
+##  Key Findings
 
 - **Sweet Spot**: Batch size 64 with 8 workers
 - **Memory Efficiency**: Lower memory usage than larger batches
@@ -47,7 +47,7 @@ With our optimized batch processing at **24,115 items/sec**:
 - **Scalability**: Linear scaling up to optimal worker count
 - **Consistency**: Stable performance across different text lengths
 
-## 🔮 GPU Acceleration Potential
+##  GPU Acceleration Potential
 
 Current implementation is CPU-only. With proper GPU acceleration:
 - **Expected GPU speedup**: 5-10x (typical for CUDA tensor operations)
@@ -55,7 +55,7 @@ Current implementation is CPU-only. With proper GPU acceleration:
 - **Target batch sizes**: 1024-4096 for GPU efficiency
 - **Memory requirement**: ~16GB VRAM for largest batches
 
-## 📊 Comparison with Other Solutions
+##  Comparison with Other Solutions
 
 | Solution | Performance | Language | GPU Support |
 |----------|-------------|----------|-------------|
@@ -64,13 +64,13 @@ Current implementation is CPU-only. With proper GPU acceleration:
 | Hugging Face Transformers | ~5,000 items/sec | Python | Yes |
 | OpenAI API | ~2,000 items/sec | API | N/A |
 
-## 🏆 Performance Summary
+##  Performance Summary
 
-✅ **6x speedup** over single-threaded processing  
-✅ **3x faster** than typical Python implementations  
-✅ **Native Go performance** with zero Python overhead  
-✅ **Memory efficient** batch processing  
-✅ **Production ready** with error handling  
-✅ **Horizontal scaling** potential across multiple machines  
+ **6x speedup** over single-threaded processing  
+ **3x faster** than typical Python implementations  
+ **Native Go performance** with zero Python overhead  
+ **Memory efficient** batch processing  
+ **Production ready** with error handling  
+ **Horizontal scaling** potential across multiple machines  
 
 The optimized implementation transforms large-scale embedding generation from hours to minutes, making real-time and batch processing highly efficient for production workloads.

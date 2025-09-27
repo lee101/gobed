@@ -117,7 +117,7 @@ func printBanner() {
 }
 
 func printConfig(config gobed.ServerConfig) {
-	fmt.Println("\n📋 Configuration:")
+	fmt.Println("\n Configuration:")
 	fmt.Println("═══════════════════════════════════════")
 	fmt.Printf("  Port:              %d\n", config.Port)
 	fmt.Printf("  Shared Index Path: %s\n", config.SharedIndexPath)
@@ -142,13 +142,13 @@ func printEndpoints(config gobed.ServerConfig) {
 
 	// Index endpoints (if not read-only)
 	if !config.ReadOnly {
-		fmt.Println("\n📝 Indexing Endpoints:")
+		fmt.Println("\n Indexing Endpoints:")
 		fmt.Printf("  POST %s/index         - Index documents\n", baseURL)
 		fmt.Printf("  POST %s/batch_index   - Batch index documents\n", baseURL)
 	}
 
 	// Monitoring endpoints
-	fmt.Println("\n📊 Monitoring Endpoints:")
+	fmt.Println("\n Monitoring Endpoints:")
 	fmt.Printf("  GET  %s/health        - Health check\n", baseURL)
 
 	if config.EnableMetrics {
@@ -163,7 +163,7 @@ func printEndpoints(config gobed.ServerConfig) {
 	fmt.Println("\n📖 Example Requests:")
 	fmt.Println("═══════════════════════════════════════")
 
-	fmt.Println("\n1️⃣ Search for documents:")
+	fmt.Println("\n1⃣ Search for documents:")
 	fmt.Println(`curl -X POST http://localhost:` + fmt.Sprint(config.Port) + `/search \
   -H "Content-Type: application/json" \
   -d '{
@@ -172,7 +172,7 @@ func printEndpoints(config gobed.ServerConfig) {
   }'`)
 
 	if !config.ReadOnly {
-		fmt.Println("\n2️⃣ Index new documents:")
+		fmt.Println("\n2⃣ Index new documents:")
 		fmt.Println(`curl -X POST http://localhost:` + fmt.Sprint(config.Port) + `/index \
   -H "Content-Type: application/json" \
   -d '{
@@ -183,10 +183,10 @@ func printEndpoints(config gobed.ServerConfig) {
   }'`)
 	}
 
-	fmt.Println("\n3️⃣ Check server health:")
+	fmt.Println("\n3⃣ Check server health:")
 	fmt.Printf("curl http://localhost:%d/health\n", config.Port)
 
-	fmt.Println("\n4️⃣ Get performance metrics:")
+	fmt.Println("\n4⃣ Get performance metrics:")
 	fmt.Printf("curl http://localhost:%d/metrics\n", config.Port)
 
 	fmt.Println("\n═══════════════════════════════════════")

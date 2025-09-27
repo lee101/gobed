@@ -16,11 +16,11 @@ import (
 )
 
 func main() {
-	fmt.Println("🔍 Deep GPU Investigation - LibTorch CUDA Analysis")
+	fmt.Println(" Deep GPU Investigation - LibTorch CUDA Analysis")
 	fmt.Println(strings.Repeat("=", 60))
 
 	// Basic system info
-	fmt.Printf("📊 System Information:\n")
+	fmt.Printf(" System Information:\n")
 	fmt.Printf("   Go: %s\n", runtime.Version())
 	fmt.Printf("   GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
 	
@@ -29,7 +29,7 @@ func main() {
 	fmt.Printf("   LibTorch: %s\n", version)
 
 	// CUDA investigation
-	fmt.Printf("\n🎯 CUDA Investigation:\n")
+	fmt.Printf("\n CUDA Investigation:\n")
 	cudaAvailable := C.torch_cuda_is_available() != 0
 	deviceCount := int(C.torch_cuda_device_count())
 	
@@ -37,7 +37,7 @@ func main() {
 	fmt.Printf("   Device Count: %d\n", deviceCount)
 
 	if !cudaAvailable {
-		fmt.Println("❌ CUDA not available - investigating why...")
+		fmt.Println(" CUDA not available - investigating why...")
 		// Continue anyway to test our manual CUDA operations
 	}
 
@@ -61,7 +61,7 @@ func main() {
 		testConfiguration(config.deviceID, config.vecDim, config.vecCount)
 	}
 
-	fmt.Println("\n✅ Investigation complete!")
+	fmt.Println("\n Investigation complete!")
 }
 
 func testConfiguration(deviceID, vecDim, vecCount int) {
@@ -76,11 +76,11 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 		device_id:        C.int(deviceID),
 	}
 
-	fmt.Printf("   📝 Config: dim=%d, vectors=%d, device=%d\n", vecDim, vecCount, deviceID)
+	fmt.Printf("    Config: dim=%d, vectors=%d, device=%d\n", vecDim, vecCount, deviceID)
 
 	handle := C.torch_indexer_create(cConfig)
 	if handle == nil {
-		fmt.Println("   ❌ Failed to create indexer")
+		fmt.Println("    Failed to create indexer")
 		return
 	}
 	defer C.torch_indexer_destroy(handle)
@@ -103,10 +103,10 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 	trainTime := time.Since(trainStart)
 
 	if result == 0 {
-		fmt.Println("   ❌ Training failed")
+		fmt.Println("    Training failed")
 		return
 	}
-	fmt.Printf("   ✅ Training: %v\n", trainTime)
+	fmt.Printf("    Training: %v\n", trainTime)
 
 	// Indexing phase
 	fmt.Printf("   📚 Indexing %d vectors...\n", vecCount)
@@ -121,15 +121,15 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 	indexTime := time.Since(indexStart)
 
 	if result == 0 {
-		fmt.Println("   ❌ Indexing failed")
+		fmt.Println("    Indexing failed")
 		return
 	}
 
 	indexRate := float64(vecCount) / indexTime.Seconds()
-	fmt.Printf("   ✅ Indexing: %v (%.0f vec/sec)\n", indexTime, indexRate)
+	fmt.Printf("    Indexing: %v (%.0f vec/sec)\n", indexTime, indexRate)
 
 	// Search phase
-	fmt.Printf("   🔍 Testing search performance...\n")
+	fmt.Printf("    Testing search performance...\n")
 	
 	numQueries := 100
 	queryStart := time.Now()
@@ -155,14 +155,14 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 	avgSearchTime := searchTime.Nanoseconds() / int64(numQueries) / 1000 // microseconds
 	qps := float64(numQueries) / searchTime.Seconds()
 	
-	fmt.Printf("   ✅ Search: %d queries in %v (%.0f μs/query, %.0f QPS)\n", 
+	fmt.Printf("    Search: %d queries in %v (%.0f μs/query, %.0f QPS)\n", 
 		numQueries, searchTime, float64(avgSearchTime), qps)
 
 	// Get detailed stats
 	stats := C.torch_indexer_get_stats(handle)
-	fmt.Printf("   📊 Memory: %.1f MB GPU, %d vectors indexed\n", 
+	fmt.Printf("    Memory: %.1f MB GPU, %d vectors indexed\n", 
 		float64(stats.gpu_memory_mb), int(stats.num_vectors))
-	fmt.Printf("   🎯 GPU Usage: %v\n", stats.gpu_memory_mb > 0)
+	fmt.Printf("    GPU Usage: %v\n", stats.gpu_memory_mb > 0)
 }
 
 func generateTestVectors(count, dim int) []int8 {

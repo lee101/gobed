@@ -22,9 +22,9 @@ func NewTorchSearchClient(modelPath string) (*TorchSearchClient, error) {
 	device := gotch.CPU
 	if gotch.CudaIfAvailable() {
 		device = gotch.CUDA(0)
-		fmt.Println("🎯 Using CUDA device")
+		fmt.Println(" Using CUDA device")
 	} else {
-		fmt.Println("⚠️  CUDA not available, using CPU")
+		fmt.Println("  CUDA not available, using CPU")
 	}
 
 	// Load the TorchScript module
@@ -38,7 +38,7 @@ func NewTorchSearchClient(modelPath string) (*TorchSearchClient, error) {
 		device: device,
 	}
 
-	fmt.Printf("✅ Loaded TorchScript search module from: %s\n", modelPath)
+	fmt.Printf(" Loaded TorchScript search module from: %s\n", modelPath)
 	return client, nil
 }
 

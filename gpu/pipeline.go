@@ -141,11 +141,11 @@ func (p *Pipeline) IndexTexts(texts []string) error {
 
 	// Clear CPU memory if GPU-only mode is enabled
 	if p.config.GPUOnlyMode {
-		fmt.Printf("🗑️  Clearing CPU embeddings (GPU-only mode)\n")
+		fmt.Printf("🗑  Clearing CPU embeddings (GPU-only mode)\n")
 		// Clear the database slice but keep texts for search results
 		p.database = nil
 		// Note: Removed force GC as it causes pauses
-		fmt.Printf("✅ CPU memory freed, using only GPU storage\n")
+		fmt.Printf(" CPU memory freed, using only GPU storage\n")
 	}
 
 	return nil

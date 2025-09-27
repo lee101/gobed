@@ -102,27 +102,27 @@ def main():
                 diff = abs(py_first_5[i] - go_data["first_5"][i])
                 if diff > 0.01:  # 0.01 tolerance
                     values_match = False
-                    print(f"\n❌ '{sentence}' - Value mismatch at index {i}:")
+                    print(f"\n '{sentence}' - Value mismatch at index {i}:")
                     print(f"   Python: {py_first_5[i]:.4f}, Go: {go_data['first_5'][i]:.4f}")
             
             # Check if norm matches
             norm_diff = abs(py_norm - go_data["norm"])
             if norm_diff > 0.1:  # 0.1 tolerance for norm
-                print(f"\n❌ '{sentence}' - Norm mismatch:")
+                print(f"\n '{sentence}' - Norm mismatch:")
                 print(f"   Python: {py_norm:.4f}, Go: {go_data['norm']:.4f}")
                 all_match = False
             elif values_match:
-                print(f"\n✅ '{sentence}' - MATCHES!")
+                print(f"\n '{sentence}' - MATCHES!")
                 print(f"   First 5 values match: {py_first_5[:5].round(4).tolist()}")
                 print(f"   Norm matches: Python={py_norm:.4f}, Go={go_data['norm']:.4f}")
     
     if all_match:
         print("\n" + "="*60)
-        print("✅ SUCCESS: Go implementation matches Python model!")
+        print(" SUCCESS: Go implementation matches Python model!")
         print("="*60)
     else:
         print("\n" + "="*60)
-        print("⚠️  Some differences found - check tolerance settings")
+        print("  Some differences found - check tolerance settings")
         print("="*60)
     
     # Save embeddings for reference

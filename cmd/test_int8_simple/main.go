@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 Testing Int8 512-dim Model with Int16 Tokenizer")
+	fmt.Println(" Testing Int8 512-dim Model with Int16 Tokenizer")
 	fmt.Println("=" * 60)
 
 	// Load the int8 model
@@ -20,7 +20,7 @@ func main() {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	loadTime := time.Since(start)
-	fmt.Printf("✅ Model loaded in %v\n\n", loadTime)
+	fmt.Printf(" Model loaded in %v\n\n", loadTime)
 
 	// Test texts
 	testTexts := []string{
@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// Test embedding generation
-	fmt.Println("🔧 Testing embedding generation...")
+	fmt.Println(" Testing embedding generation...")
 	for i, text := range testTexts {
 		start := time.Now()
 		embedding, err := model.Embed(text)
@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// Test tokenization
-	fmt.Println("📝 Testing tokenization...")
+	fmt.Println(" Testing tokenization...")
 	for _, text := range testTexts[:3] {
 		tokens := model.SimpleTokenize(text)
 		fmt.Printf("  Text: %q\n", text)
@@ -94,7 +94,7 @@ func main() {
 	}
 
 	// Test similarity computation
-	fmt.Println("🎯 Testing similarity computation...")
+	fmt.Println(" Testing similarity computation...")
 	testPairs := []struct {
 		text1, text2 string
 	}{
@@ -119,7 +119,7 @@ func main() {
 	}
 
 	// Performance benchmark
-	fmt.Println("\n⏱️  Performance benchmark...")
+	fmt.Println("\n  Performance benchmark...")
 	numIterations := 1000
 	testText := "machine learning algorithms for neural networks"
 
@@ -175,6 +175,6 @@ func main() {
 	fmt.Printf("    Average latency: %v\n", simAvgLatency)
 	fmt.Printf("    Throughput: %.0f similarities/sec\n", simThroughput)
 
-	fmt.Println("\n✅ Int8 model test complete!")
-	fmt.Printf("🎉 Key metrics: %.0f emb/sec, %v avg latency, 15MB memory\n", throughput, avgLatency)
+	fmt.Println("\n Int8 model test complete!")
+	fmt.Printf(" Key metrics: %.0f emb/sec, %v avg latency, 15MB memory\n", throughput, avgLatency)
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🔍 Checking libtorch installation and GPU support..."
+echo " Checking libtorch installation and GPU support..."
 echo "=================================================="
 
 # Check if nvidia-smi is available

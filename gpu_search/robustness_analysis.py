@@ -29,7 +29,7 @@ class RobustnessAnalyzer:
         
     def check_cuda_environment(self):
         """Check CUDA environment and compatibility"""
-        print("\n🔍 CUDA Environment Analysis")
+        print("\n CUDA Environment Analysis")
         print("=" * 60)
         
         # Check CUDA availability
@@ -41,10 +41,10 @@ class RobustnessAnalyzer:
         device_props = torch.cuda.get_device_properties(0)
         cuda_version = torch.version.cuda
         
-        print(f"✅ GPU: {device_props.name}")
-        print(f"✅ CUDA Version: {cuda_version}")
-        print(f"✅ Compute Capability: {device_props.major}.{device_props.minor}")
-        print(f"✅ Memory: {device_props.total_memory / 1e9:.1f} GB")
+        print(f" GPU: {device_props.name}")
+        print(f" CUDA Version: {cuda_version}")
+        print(f" Compute Capability: {device_props.major}.{device_props.minor}")
+        print(f" Memory: {device_props.total_memory / 1e9:.1f} GB")
         
         # Check for __dp4a support (required for INT8 operations)
         dp4a_support = (device_props.major > 6) or (device_props.major == 6 and device_props.minor >= 1)
@@ -52,7 +52,7 @@ class RobustnessAnalyzer:
             self.issues.append(f"GPU lacks __dp4a support (CC {device_props.major}.{device_props.minor} < 6.1)")
             self.recommendations.append("Use GPU with compute capability >= 6.1 for INT8 operations")
         else:
-            print(f"✅ __dp4a INT8 support: Available")
+            print(f" __dp4a INT8 support: Available")
             
         # Check CUDA/PyTorch compatibility
         if cuda_version:
@@ -64,7 +64,7 @@ class RobustnessAnalyzer:
         
     def test_error_handling(self):
         """Test error handling for various edge cases"""
-        print("\n🛡️ Error Handling Tests")
+        print("\n Error Handling Tests")
         print("=" * 60)
         
         test_cases = []
@@ -127,9 +127,9 @@ class RobustnessAnalyzer:
             test_cases.append(("Non-contiguous", True, "Correctly rejected"))
             
         # Print results
-        print("\n📊 Error Handling Results:")
+        print("\n Error Handling Results:")
         for test_name, passed, details in test_cases:
-            status = "✅" if passed else "❌"
+            status = "" if passed else ""
             print(f"  {status} {test_name}: {details}")
             
         failed_tests = [t for t, p, _ in test_cases if not p]
@@ -138,7 +138,7 @@ class RobustnessAnalyzer:
             
     def test_memory_patterns(self):
         """Test for memory leaks and inefficient patterns"""
-        print("\n💾 Memory Pattern Analysis")
+        print("\n Memory Pattern Analysis")
         print("=" * 60)
         
         # Get initial memory state
@@ -179,7 +179,7 @@ class RobustnessAnalyzer:
             self.issues.append(f"Potential memory leak detected: {memory_growth / 1e6:.1f} MB growth")
             self.recommendations.append("Review CUDA kernel memory management")
         else:
-            print("✅ No significant memory leaks detected")
+            print(" No significant memory leaks detected")
             
     def test_concurrent_operations(self):
         """Test thread safety and concurrent operations"""
@@ -217,8 +217,8 @@ class RobustnessAnalyzer:
             
         # Check results
         if errors.empty():
-            print(f"✅ All {num_threads} threads completed successfully")
-            print(f"✅ Total operations: {results.qsize()}")
+            print(f" All {num_threads} threads completed successfully")
+            print(f" Total operations: {results.qsize()}")
         else:
             while not errors.empty():
                 thread_id, error = errors.get()
@@ -226,7 +226,7 @@ class RobustnessAnalyzer:
                 
     def profile_performance(self):
         """Profile GPU performance characteristics"""
-        print("\n⚡ Performance Profiling")
+        print("\n Performance Profiling")
         print("=" * 60)
         
         sizes = [100, 1000, 10000, 100000, 1000000]
@@ -267,7 +267,7 @@ class RobustnessAnalyzer:
                     
     def check_nvidia_tools(self):
         """Check available NVIDIA profiling tools"""
-        print("\n🔧 NVIDIA Tool Availability")
+        print("\n NVIDIA Tool Availability")
         print("=" * 60)
         
         tools = {
@@ -285,12 +285,12 @@ class RobustnessAnalyzer:
             try:
                 result = subprocess.run(['which', tool], capture_output=True, text=True)
                 if result.returncode == 0:
-                    print(f"✅ {tool:20s} - {description}")
+                    print(f" {tool:20s} - {description}")
                     available_tools.append(tool)
                 else:
-                    print(f"❌ {tool:20s} - {description}")
+                    print(f" {tool:20s} - {description}")
             except:
-                print(f"❌ {tool:20s} - {description}")
+                print(f" {tool:20s} - {description}")
                 
         if 'nsys' in available_tools:
             self.recommendations.append("Use 'nsys profile python your_script.py' for system-wide profiling")
@@ -304,18 +304,18 @@ class RobustnessAnalyzer:
     def generate_report(self):
         """Generate comprehensive robustness report"""
         print("\n" + "=" * 60)
-        print("📋 ROBUSTNESS ANALYSIS REPORT")
+        print(" ROBUSTNESS ANALYSIS REPORT")
         print("=" * 60)
         
         if self.issues:
-            print("\n❌ Issues Found:")
+            print("\n Issues Found:")
             for issue in self.issues:
                 print(f"  • {issue}")
         else:
-            print("\n✅ No critical issues found")
+            print("\n No critical issues found")
             
         if self.recommendations:
-            print("\n💡 Recommendations:")
+            print("\n Recommendations:")
             for rec in self.recommendations:
                 print(f"  • {rec}")
                 
@@ -335,11 +335,11 @@ class RobustnessAnalyzer:
         
     def run_full_analysis(self):
         """Run complete robustness analysis"""
-        print("\n🚀 Starting Comprehensive Robustness Analysis")
+        print("\n Starting Comprehensive Robustness Analysis")
         print("=" * 60)
         
         if not self.check_cuda_environment():
-            print("❌ CUDA environment check failed - aborting")
+            print(" CUDA environment check failed - aborting")
             return
             
         self.test_error_handling()
@@ -355,12 +355,12 @@ def main():
     analyzer.run_full_analysis()
     
     # Additional valgrind command suggestion
-    print("\n📝 For CPU memory leak detection with valgrind:")
+    print("\n For CPU memory leak detection with valgrind:")
     print("   valgrind --leak-check=full --show-leak-kinds=all \\")
     print("            --track-origins=yes --verbose \\")
     print("            python your_script.py")
     
-    print("\n📝 For GPU memory checking:")
+    print("\n For GPU memory checking:")
     print("   compute-sanitizer --tool memcheck python your_script.py")
     print("   compute-sanitizer --tool racecheck python your_script.py")
     print("   compute-sanitizer --tool initcheck python your_script.py")

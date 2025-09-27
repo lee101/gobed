@@ -11,7 +11,7 @@ from typing import Tuple
 # Load the LibTorch-free library
 lib_path = os.path.join(os.path.dirname(__file__), 'cuda_ops/build/libgobed_ann_ops.so')
 if not os.path.exists(lib_path):
-    print(f"❌ Library not found: {lib_path}")
+    print(f" Library not found: {lib_path}")
     sys.exit(1)
 
 lib = ctypes.CDLL(lib_path)
@@ -157,7 +157,7 @@ def main():
     ]
 
     for N, B, description in configs:
-        print(f"📊 {description}")
+        print(f" {description}")
         print("-" * 50)
 
         try:
@@ -196,12 +196,12 @@ def main():
             print(f"  Speedup:       {speedup:.1f}x")
             print(f"  GPU Throughput: {gpu_throughput:.0f} ops/ms")
             print(f"  CPU Throughput: {cpu_throughput:.0f} ops/ms")
-            print(f"  Correctness:   {'✅ PASS' if matches else '❌ FAIL'}")
+            print(f"  Correctness:   {' PASS' if matches else ' FAIL'}")
             print(f"  Max Diff:      {diff}")
             print()
 
         except Exception as e:
-            print(f"  ❌ Error: {e}")
+            print(f"   Error: {e}")
             print()
 
 if __name__ == "__main__":

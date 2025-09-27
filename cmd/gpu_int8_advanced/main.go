@@ -57,14 +57,14 @@ type AdvancedINT8Indexer struct {
 
 // NewAdvancedINT8Indexer creates an optimized INT8 indexer
 func NewAdvancedINT8Indexer(embedDim int64, maxVectors int) (*AdvancedINT8Indexer, error) {
-	log.Printf("🚀 Initializing Advanced INT8 GPU Indexer...")
+	log.Printf(" Initializing Advanced INT8 GPU Indexer...")
 
 	device := gotch.CPU
 	useTensorCores := false
 
 	if gotch.CudaIfAvailable() {
 		device = gotch.CudaIfAvailable()
-		log.Printf("✅ CUDA device detected")
+		log.Printf(" CUDA device detected")
 
 		// Check for Tensor Core support (Volta/Turing/Ampere)
 		// This would require actual CUDA capability checking
@@ -72,7 +72,7 @@ func NewAdvancedINT8Indexer(embedDim int64, maxVectors int) (*AdvancedINT8Indexe
 		cudaVersion := gotch.CudaDeviceCount()
 		if cudaVersion > 0 {
 			useTensorCores = true
-			log.Printf("⚡ Tensor Cores available for INT8 acceleration")
+			log.Printf(" Tensor Cores available for INT8 acceleration")
 		}
 	}
 
@@ -95,7 +95,7 @@ func NewAdvancedINT8Indexer(embedDim int64, maxVectors int) (*AdvancedINT8Indexe
 		accumulator:    ts.MustZeros([]int64{int64(maxVectors)}, gotch.Int32, device),
 	}
 
-	log.Printf("📊 Indexer initialized: %dx%d INT8 matrix", maxVectors, embedDim)
+	log.Printf(" Indexer initialized: %dx%d INT8 matrix", maxVectors, embedDim)
 
 	return indexer, nil
 }
@@ -247,7 +247,7 @@ func (idx *AdvancedINT8Indexer) AddVectorsOptimized(vectors [][]float32) error {
 	totalTime := time.Since(startQuantize)
 	throughput := float64(len(vectors)) / totalTime.Seconds()
 
-	log.Printf("✅ Added %d vectors: Quantize=%.1fms, Upload=%.1fms, Total=%.1fms (%.0f vec/s)",
+	log.Printf(" Added %d vectors: Quantize=%.1fms, Upload=%.1fms, Total=%.1fms (%.0f vec/s)",
 		len(vectors),
 		float64(idx.quantizeTime.Nanoseconds())/1e6,
 		float64(uploadTime.Nanoseconds())/1e6,
@@ -507,7 +507,7 @@ func (idx *AdvancedINT8Indexer) BatchSearchOptimized(queries [][]float32, k int)
 	batchTime := time.Since(startBatch)
 	throughput := float64(len(queries)) / batchTime.Seconds()
 
-	log.Printf("⚡ Batch INT8 search: %d queries in %.2fms (%.0f qps)",
+	log.Printf(" Batch INT8 search: %d queries in %.2fms (%.0f qps)",
 		len(queries), float64(batchTime.Nanoseconds())/1e6, throughput)
 
 	return results, scores, nil
@@ -552,13 +552,13 @@ func (idx *AdvancedINT8Indexer) Close() {
 		idx.gemmKernel.accumulator.MustDrop()
 	}
 
-	log.Printf("🧹 Advanced INT8 indexer resources released")
+	log.Printf(" Advanced INT8 indexer resources released")
 }
 
 // Benchmark functions
 func runComprehensiveBenchmark() {
 	fmt.Println("================================================================================")
-	fmt.Println("⚡ ADVANCED INT8 GPU INDEXING BENCHMARK")
+	fmt.Println(" ADVANCED INT8 GPU INDEXING BENCHMARK")
 	fmt.Println("================================================================================")
 
 	// Test configurations
@@ -576,14 +576,14 @@ func runComprehensiveBenchmark() {
 
 	for _, cfg := range configs {
 		fmt.Printf("\n%s\n", strings.Repeat("=", 80))
-		fmt.Printf("📊 Configuration: %d vectors, %d dim, %d batch\n",
+		fmt.Printf(" Configuration: %d vectors, %d dim, %d batch\n",
 			cfg.numVectors, cfg.dim, cfg.batchSize)
 		fmt.Printf("%s\n", strings.Repeat("=", 80))
 
 		// Create indexer
 		indexer, err := NewAdvancedINT8Indexer(int64(cfg.dim), cfg.numVectors)
 		if err != nil {
-			log.Printf("❌ Failed to create indexer: %v", err)
+			log.Printf(" Failed to create indexer: %v", err)
 			continue
 		}
 
@@ -592,7 +592,7 @@ func runComprehensiveBenchmark() {
 		queries := generateTestVectors(cfg.numQueries, cfg.dim)
 
 		// Benchmark indexing
-		fmt.Printf("\n📈 Indexing Performance:\n")
+		fmt.Printf("\n Indexing Performance:\n")
 		for i := 0; i < cfg.numVectors; i += cfg.batchSize {
 			end := i + cfg.batchSize
 			if end > cfg.numVectors {
@@ -602,20 +602,20 @@ func runComprehensiveBenchmark() {
 			batch := vectors[i:end]
 			err := indexer.AddVectorsOptimized(batch)
 			if err != nil {
-				log.Printf("❌ Failed to add batch: %v", err)
+				log.Printf(" Failed to add batch: %v", err)
 				break
 			}
 		}
 
 		// Benchmark search
-		fmt.Printf("\n🔍 Search Performance:\n")
+		fmt.Printf("\n Search Performance:\n")
 
 		// Single query
 		singleStart := time.Now()
 		for i := 0; i < 100 && i < len(queries); i++ {
 			_, _, err := indexer.SearchOptimized(queries[i], 10)
 			if err != nil {
-				log.Printf("❌ Search failed: %v", err)
+				log.Printf(" Search failed: %v", err)
 				break
 			}
 		}
@@ -637,7 +637,7 @@ func runComprehensiveBenchmark() {
 			batchTime := time.Since(batchStart)
 
 			if err != nil {
-				log.Printf("❌ Batch search failed: %v", err)
+				log.Printf(" Batch search failed: %v", err)
 				continue
 			}
 
@@ -648,7 +648,7 @@ func runComprehensiveBenchmark() {
 
 		// Print statistics
 		stats := indexer.GetStatistics()
-		fmt.Printf("\n📊 Statistics:\n")
+		fmt.Printf("\n Statistics:\n")
 		for key, value := range stats {
 			fmt.Printf("   %s: %v\n", key, value)
 		}
@@ -690,7 +690,7 @@ func main() {
 	runComprehensiveBenchmark()
 
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("✅ BENCHMARK COMPLETED\n")
+	fmt.Printf(" BENCHMARK COMPLETED\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 	fmt.Printf("Key Optimizations Demonstrated:\n")
 	fmt.Printf("  • Symmetric INT8 quantization for better accuracy\n")

@@ -109,7 +109,7 @@ class LibTorchSearchEngine(nn.Module):
         }
         self.stats_lock = threading.Lock()
         
-        print(f"🔍 Initialized LibTorchSearchEngine")
+        print(f" Initialized LibTorchSearchEngine")
         print(f"   Device: {self.device}")
         print(f"   Max batch size: {config.max_batch_size}")
         print(f"   Worker threads: {config.num_worker_threads}")
@@ -128,7 +128,7 @@ class LibTorchSearchEngine(nn.Module):
             worker.start()
             self.workers.append(worker)
         
-        print(f"🚀 Started {len(self.workers)} search worker threads")
+        print(f" Started {len(self.workers)} search worker threads")
     
     def stop_workers(self):
         """Stop background worker threads"""
@@ -357,11 +357,11 @@ class LibTorchSearchEngine(nn.Module):
         """Clear search cache"""
         if self.cache:
             self.cache.clear()
-            print("🗑️  Search cache cleared")
+            print("🗑  Search cache cleared")
     
     def warm_up(self, num_queries: int = 100):
         """Warm up the search engine with random queries"""
-        print(f"🔥 Warming up search engine with {num_queries} queries...")
+        print(f" Warming up search engine with {num_queries} queries...")
         
         # Generate random queries
         query_dim = self.indexer.config.vector_dim
@@ -386,7 +386,7 @@ class SearchBenchmark:
     
     def run_throughput_test(self, num_queries: int = 1000, k: int = 10):
         """Test search throughput"""
-        print(f"\n🚀 Throughput test: {num_queries} queries, k={k}")
+        print(f"\n Throughput test: {num_queries} queries, k={k}")
         
         # Generate test queries
         query_dim = self.search_engine.indexer.config.vector_dim
@@ -425,7 +425,7 @@ class SearchBenchmark:
     
     def run_latency_test(self, num_queries: int = 100):
         """Test search latency distribution"""
-        print(f"\n⏱️  Latency test: {num_queries} queries")
+        print(f"\n  Latency test: {num_queries} queries")
         
         query_dim = self.search_engine.indexer.config.vector_dim
         queries = torch.randint(-128, 127, (num_queries, query_dim),
@@ -448,7 +448,7 @@ class SearchBenchmark:
     
     def run_accuracy_test(self, num_queries: int = 50):
         """Test search accuracy by comparing with brute force"""
-        print(f"\n🎯 Accuracy test: {num_queries} queries")
+        print(f"\n Accuracy test: {num_queries} queries")
         
         indexer = self.search_engine.indexer
         query_dim = indexer.config.vector_dim
@@ -487,7 +487,7 @@ class SearchBenchmark:
 
 def main():
     """Main benchmark and test function"""
-    print("🔥 LibTorch Search Engine Test")
+    print(" LibTorch Search Engine Test")
     print("=" * 40)
     
     # Import and create indexer
@@ -515,7 +515,7 @@ def main():
     )
     
     # Create and train indexer
-    print("🔧 Setting up indexer...")
+    print(" Setting up indexer...")
     indexer = LibTorchIndexer(index_config)
     
     # Create test data
@@ -527,7 +527,7 @@ def main():
     indexer.add_vectors(index_vectors)
     
     # Create search engine
-    print("\n🔍 Setting up search engine...")
+    print("\n Setting up search engine...")
     search_engine = LibTorchSearchEngine(indexer, search_config)
     search_engine.start_workers()
     
@@ -542,7 +542,7 @@ def main():
         benchmark.run_accuracy_test(20)
         
         # Print final statistics
-        print("\n📊 Final Statistics:")
+        print("\n Final Statistics:")
         stats = search_engine.get_stats()
         for key, value in stats.items():
             if isinstance(value, float):
@@ -553,7 +553,7 @@ def main():
     finally:
         search_engine.stop_workers()
     
-    print("\n✅ LibTorch search engine test completed!")
+    print("\n LibTorch search engine test completed!")
 
 if __name__ == "__main__":
     # Set up logging
@@ -562,9 +562,9 @@ if __name__ == "__main__":
     # Set CUDA device
     if torch.cuda.is_available():
         torch.cuda.set_device(0)
-        print(f"🎯 Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f" Using GPU: {torch.cuda.get_device_name(0)}")
     else:
-        print("❌ CUDA not available")
+        print(" CUDA not available")
         exit(1)
     
     main()

@@ -1,19 +1,19 @@
-# 🚀 Gobed GPU Search Implementation
+#  Gobed GPU Search Implementation
 
 ## Overview
 
 GPU-accelerated similarity search for Gobed embeddings using CUDA and PyTorch. Achieves **sub-millisecond latency** on RTX 3080.
 
-## ✅ Performance Results
+##  Performance Results
 
 ### Measured on RTX 3080 Laptop GPU (16.9 GB VRAM)
 
 | Database Size | Single Query | Batch-32 | Memory | Target Met |
 |--------------|-------------|----------|--------|------------|
-| 10K vectors | **0.56ms** | 57K QPS | 14 MB | ✅ < 1ms |
-| 50K vectors | **0.79ms** | 33K QPS | 36 MB | ✅ < 1ms |  
-| 100K vectors | **1.42ms** | 19K QPS | 68 MB | ✅ ~1ms |
-| 500K vectors | **6.72ms** | 4K QPS | 279 MB | ✅ < 10ms |
+| 10K vectors | **0.56ms** | 57K QPS | 14 MB |  < 1ms |
+| 50K vectors | **0.79ms** | 33K QPS | 36 MB |  < 1ms |  
+| 100K vectors | **1.42ms** | 19K QPS | 68 MB |  ~1ms |
+| 500K vectors | **6.72ms** | 4K QPS | 279 MB |  < 10ms |
 
 ## Architecture
 
@@ -209,9 +209,9 @@ python3 simple_test.py
 ## Performance Summary
 
 The GPU implementation successfully achieves the target of **~1ms latency** for similarity search:
-- ✅ 0.56ms for 10K vectors (1,782 QPS)
-- ✅ 0.79ms for 50K vectors (1,266 QPS)  
-- ✅ 1.42ms for 100K vectors (703 QPS)
-- ✅ 57K QPS with batch-32 on 10K vectors
+-  0.56ms for 10K vectors (1,782 QPS)
+-  0.79ms for 50K vectors (1,266 QPS)  
+-  1.42ms for 100K vectors (703 QPS)
+-  57K QPS with batch-32 on 10K vectors
 
 This represents a **10-100x speedup** over CPU for large-scale similarity search!

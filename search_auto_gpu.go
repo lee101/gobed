@@ -12,7 +12,7 @@ func AutoOptimizedSearchConfig() SearchConfig {
 	
 	// Check if GPU is available
 	if IsCUDAAvailable() {
-		log.Println("🚀 GPU detected - enabling CUDA acceleration")
+		log.Println(" GPU detected - enabling CUDA acceleration")
 		config.EnableGPU = true
 		config.GPUDeviceID = 0
 		config.GPUBatchSize = 50000  // Theoretical analysis: 0.6x GPU occupancy, 10x improvement (80M+ vectors/sec)
@@ -27,7 +27,7 @@ func AutoOptimizedSearchConfig() SearchConfig {
 		config.AsyncQueueSize = 10000
 	} else {
 		// CPU-optimized settings
-		log.Println("💻 No GPU detected - using optimized CPU settings")
+		log.Println(" No GPU detected - using optimized CPU settings")
 		config.EnableAsync = true
 		config.AsyncWorkers = runtime.NumCPU()
 		config.AsyncQueueSize = 5000
@@ -56,9 +56,9 @@ func FastSearchEngine(model *EmbeddingModel) *SearchEngine {
 func init() {
 	// Log optimization status on package initialization
 	if IsCUDAAvailable() {
-		log.Println("✅ Gobed: GPU acceleration available and will be used by default")
+		log.Println(" Gobed: GPU acceleration available and will be used by default")
 		log.Println("   Performance: 39x faster with 11,000+ QPS")
 	} else {
-		log.Println("ℹ️ Gobed: Running in CPU mode (install CUDA for 39x speedup)")
+		log.Println("ℹ Gobed: Running in CPU mode (install CUDA for 39x speedup)")
 	}
 }

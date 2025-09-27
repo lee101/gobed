@@ -8,45 +8,45 @@ This directory contains the CI/CD pipeline configuration for the gobed project.
 **Trigger:** Push to main/develop, Pull requests
 **Purpose:** Main build and test pipeline
 
-- ✅ Multi-OS build (Ubuntu, macOS)
-- ✅ Multi-Go version testing (1.20, 1.21)
-- ✅ Unit tests with race detection
-- ✅ Code coverage reporting to Codecov
-- ✅ Security scanning with gosec
-- ✅ Vulnerability checking with govulncheck
-- ✅ Integration tests (when model files available)
-- ✅ Docker build verification
+-  Multi-OS build (Ubuntu, macOS)
+-  Multi-Go version testing (1.20, 1.21)
+-  Unit tests with race detection
+-  Code coverage reporting to Codecov
+-  Security scanning with gosec
+-  Vulnerability checking with govulncheck
+-  Integration tests (when model files available)
+-  Docker build verification
 
 ### 2. **Code Quality** (`quality.yml`)
 **Trigger:** Pull requests
 **Purpose:** Comprehensive code quality checks
 
-- 📝 Format checking (gofmt, goimports)
-- 🔍 Static analysis (staticcheck, ineffassign)
+-  Format checking (gofmt, goimports)
+-  Static analysis (staticcheck, ineffassign)
 - 📖 Spell checking (misspell)
 - 🔄 Cyclomatic complexity analysis
 - 👥 Duplicate code detection
-- 📊 Generates quality summary report
+-  Generates quality summary report
 
 ### 3. **Benchmarks** (`benchmark.yml`)
 **Trigger:** Push to main, Daily schedule
 **Purpose:** Performance tracking and regression detection
 
-- 🚀 CPU performance benchmarks
-- 💾 Memory usage benchmarks
-- 🔍 Search performance testing
-- ⚡ Parallel processing benchmarks
-- 📈 Historical performance tracking
-- ⚠️ Regression alerts (150% threshold)
+-  CPU performance benchmarks
+-  Memory usage benchmarks
+-  Search performance testing
+-  Parallel processing benchmarks
+-  Historical performance tracking
+-  Regression alerts (150% threshold)
 
 ### 4. **Release** (`release.yml`)
 **Trigger:** Version tags (v*), Manual dispatch
 **Purpose:** Automated release process
 
-- 📦 Multi-platform binary builds (Linux, macOS, Windows)
+-  Multi-platform binary builds (Linux, macOS, Windows)
 - 🐳 Docker image creation and push
-- 📝 Automatic changelog generation
-- 🏷️ GitHub release creation
+-  Automatic changelog generation
+- 🏷 GitHub release creation
 - 📚 Go module publishing to pkg.go.dev
 
 ## Additional Configuration
@@ -55,7 +55,7 @@ This directory contains the CI/CD pipeline configuration for the gobed project.
 - 🔄 Weekly Go module updates
 - 🔄 Weekly GitHub Actions updates
 - 🔒 Daily security updates
-- 🤖 Automatic PR creation for updates
+-  Automatic PR creation for updates
 
 ### golangci-lint (`.golangci.yml`)
 Comprehensive linting configuration with:

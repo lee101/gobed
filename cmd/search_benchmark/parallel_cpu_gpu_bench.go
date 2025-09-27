@@ -47,11 +47,11 @@ func main() {
 		printComparison(size, sequentialTime, asyncTime, parallelResults, gpuTime)
 	}
 
-	fmt.Println("\n✅ Benchmark completed!")
+	fmt.Println("\n Benchmark completed!")
 }
 
 func benchmarkSequential(model *gobed.EmbeddingModel, docs []string) time.Duration {
-	fmt.Println("\n📊 Sequential Indexing (Baseline)")
+	fmt.Println("\n Sequential Indexing (Baseline)")
 	fmt.Println("---------------------------------")
 
 	engine := gobed.NewSearchEngine(model)
@@ -61,7 +61,7 @@ func benchmarkSequential(model *gobed.EmbeddingModel, docs []string) time.Durati
 	elapsed := time.Since(start)
 
 	if err != nil {
-		fmt.Printf("❌ Error: %v\n", err)
+		fmt.Printf(" Error: %v\n", err)
 		return 0
 	}
 
@@ -72,7 +72,7 @@ func benchmarkSequential(model *gobed.EmbeddingModel, docs []string) time.Durati
 }
 
 func benchmarkAsync(model *gobed.EmbeddingModel, docs []string) time.Duration {
-	fmt.Println("\n⚡ Async Indexing (4 workers)")
+	fmt.Println("\n Async Indexing (4 workers)")
 	fmt.Println("------------------------------")
 
 	config := gobed.AsyncSearchConfig()
@@ -86,7 +86,7 @@ func benchmarkAsync(model *gobed.EmbeddingModel, docs []string) time.Duration {
 	elapsed := time.Since(start)
 
 	if result.Error != nil {
-		fmt.Printf("❌ Error: %v\n", result.Error)
+		fmt.Printf(" Error: %v\n", result.Error)
 		return 0
 	}
 
@@ -97,7 +97,7 @@ func benchmarkAsync(model *gobed.EmbeddingModel, docs []string) time.Duration {
 }
 
 func benchmarkCPUParallel(model *gobed.EmbeddingModel, docs []string) map[int]time.Duration {
-	fmt.Println("\n🔧 CPU Parallel Indexing")
+	fmt.Println("\n CPU Parallel Indexing")
 	fmt.Println("------------------------")
 
 	results := make(map[int]time.Duration)
@@ -152,14 +152,14 @@ func indexParallelCPU(engine *gobed.SearchEngine, docs []string, numWorkers int)
 }
 
 func benchmarkGPU(model *gobed.EmbeddingModel, docs []string) time.Duration {
-	fmt.Println("\n🚀 GPU Indexing (Simulated)")
+	fmt.Println("\n GPU Indexing (Simulated)")
 	fmt.Println("---------------------------")
 
 	// Check if GPU would be available
 	gpuAvailable := runtime.GOOS != "darwin"
 
 	if !gpuAvailable {
-		fmt.Println("⚠️  GPU not available on this system")
+		fmt.Println("  GPU not available on this system")
 		return 0
 	}
 
@@ -190,7 +190,7 @@ func benchmarkGPU(model *gobed.EmbeddingModel, docs []string) time.Duration {
 }
 
 func printComparison(size int, sequential, async time.Duration, parallel map[int]time.Duration, gpu time.Duration) {
-	fmt.Printf("\n📈 Performance Comparison (%d documents)\n", size)
+	fmt.Printf("\n Performance Comparison (%d documents)\n", size)
 	fmt.Println("=========================================")
 
 	fmt.Println("\n| Method              | Time        | Speedup | Docs/sec |")
@@ -224,7 +224,7 @@ func printComparison(size int, sequential, async time.Duration, parallel map[int
 	}
 
 	// Find best performer
-	fmt.Println("\n🏆 Best Performance:")
+	fmt.Println("\n Best Performance:")
 
 	best := sequential
 	bestMethod := "Sequential"

@@ -242,7 +242,7 @@ func TestEdgeCases(t *testing.T) {
 		{"tab", "\t", false},
 		{"punctuation_only", "...", false},
 		{"exclamation", "!!!", false},
-		{"emoji", "😀🎉", false},
+		{"emoji", "😀", false},
 		{"chinese", "你好世界", false},
 		{"russian", "Здравствуй мир", false},
 		{"arabic", "مرحبا بالعالم", false},

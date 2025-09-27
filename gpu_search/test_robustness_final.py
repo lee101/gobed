@@ -30,12 +30,12 @@ class RobustnessChecker:
             "passed": passed,
             "details": details
         })
-        status = "✅" if passed else "❌"
+        status = "" if passed else ""
         print(f"{status} {name}: {details}")
         
     def test_error_handling(self):
         """Test error handling robustness"""
-        print("\n🛡️ Testing Error Handling")
+        print("\n Testing Error Handling")
         print("-" * 50)
         
         # Test 1: Wrong dtype
@@ -77,7 +77,7 @@ class RobustnessChecker:
             
     def test_memory_stability(self):
         """Test for memory leaks"""
-        print("\n💾 Testing Memory Stability")
+        print("\n Testing Memory Stability")
         print("-" * 50)
         
         torch.cuda.empty_cache()
@@ -131,7 +131,7 @@ class RobustnessChecker:
                 
     def test_edge_values(self):
         """Test extreme values"""
-        print("\n🔍 Testing Edge Values")
+        print("\n Testing Edge Values")
         print("-" * 50)
         
         # Maximum values
@@ -165,7 +165,7 @@ class RobustnessChecker:
                      
     def test_batch_operations(self):
         """Test batch query operations"""
-        print("\n📦 Testing Batch Operations")
+        print("\n Testing Batch Operations")
         print("-" * 50)
         
         try:
@@ -187,7 +187,7 @@ class RobustnessChecker:
             
     def check_tools(self):
         """Check available profiling tools"""
-        print("\n🔧 Checking Profiling Tools")
+        print("\n Checking Profiling Tools")
         print("-" * 50)
         
         tools = {
@@ -203,9 +203,9 @@ class RobustnessChecker:
             result = subprocess.run(['which', tool], capture_output=True, text=True)
             if result.returncode == 0:
                 available.append(tool)
-                print(f"✅ {tool:20} - {desc}")
+                print(f" {tool:20} - {desc}")
             else:
-                print(f"❌ {tool:20} - {desc}")
+                print(f" {tool:20} - {desc}")
                 
         if 'compute-sanitizer' not in available:
             self.results["recommendations"].append("Install CUDA toolkit for compute-sanitizer")
@@ -217,7 +217,7 @@ class RobustnessChecker:
     def generate_report(self):
         """Generate final report"""
         print("\n" + "=" * 60)
-        print("📊 ROBUSTNESS REPORT")
+        print(" ROBUSTNESS REPORT")
         print("=" * 60)
         
         # Count results
@@ -227,19 +227,19 @@ class RobustnessChecker:
         print(f"\nTest Results: {passed}/{total} passed")
         
         if self.results["issues"]:
-            print("\n❌ Issues Found:")
+            print("\n Issues Found:")
             for issue in self.results["issues"]:
                 print(f"  • {issue}")
         else:
-            print("\n✅ No critical issues found!")
+            print("\n No critical issues found!")
             
         if self.results["recommendations"]:
-            print("\n💡 Recommendations:")
+            print("\n Recommendations:")
             for rec in self.results["recommendations"]:
                 print(f"  • {rec}")
                 
         # Add general recommendations
-        print("\n📝 Best Practices:")
+        print("\n Best Practices:")
         print("  • Run compute-sanitizer --tool memcheck regularly")
         print("  • Use nsys profile for performance analysis")
         print("  • Monitor GPU memory usage in production")
@@ -255,11 +255,11 @@ class RobustnessChecker:
         
     def run_all_tests(self):
         """Run complete test suite"""
-        print("\n🚀 GPU SEARCH ROBUSTNESS ANALYSIS")
+        print("\n GPU SEARCH ROBUSTNESS ANALYSIS")
         print("=" * 60)
         
         # Check environment
-        print("\n📋 Environment:")
+        print("\n Environment:")
         print(f"  PyTorch: {torch.__version__}")
         print(f"  CUDA: {torch.version.cuda}")
         print(f"  GPU: {torch.cuda.get_device_properties(0).name}")
@@ -279,9 +279,9 @@ class RobustnessChecker:
         all_passed = self.generate_report()
         
         if all_passed:
-            print("\n🎉 System is robust and production-ready!")
+            print("\n System is robust and production-ready!")
         else:
-            print("\n⚠️ Some tests failed - review issues above")
+            print("\n Some tests failed - review issues above")
             
         return 0 if all_passed else 1
 

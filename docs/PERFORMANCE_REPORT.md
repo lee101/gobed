@@ -7,7 +7,7 @@ Gobed now delivers exceptional performance through three major optimizations:
 2. **Shared Memory**: Zero-copy cross-process search with 49% memory savings  
 3. **Smart Caching**: Embedding cache reduces duplicate computations by 95%
 
-## 🎯 Key Performance Metrics
+##  Key Performance Metrics
 
 ### Indexing Performance
 | Method | Documents/sec | Improvement |
@@ -30,7 +30,7 @@ Gobed now delivers exceptional performance through three major optimizations:
 | Standard (duplicate) | 4.88 MB | 19.52 MB | - |
 | Shared Memory | 9.92 MB | 9.92 MB | **49%** |
 
-## 📊 Comprehensive Test Results
+##  Comprehensive Test Results
 
 ### Small Dataset (100 documents)
 ```
@@ -82,7 +82,7 @@ Gobed now delivers exceptional performance through three major optimizations:
 
 ## 🔬 Test Coverage
 
-### Unit Tests Passed ✅
+### Unit Tests Passed 
 - **Shared Memory Tests**
   - CreateAndClose
   - AddAndSearch
@@ -100,7 +100,7 @@ Gobed now delivers exceptional performance through three major optimizations:
   - ErrorHandling
   - WorkerScaling (1-8 workers tested)
 
-### Performance Tests ✅
+### Performance Tests 
 - **Shared Memory Performance**
   - Indexing: 5,441 docs/sec
   - Search: 407µs latency, 2,451 QPS
@@ -111,13 +111,13 @@ Gobed now delivers exceptional performance through three major optimizations:
   - Mixed workload: Sustained throughput under load
   - Worker scaling: Optimal at 8 workers
 
-### Stress Tests ✅
+### Stress Tests 
 - 1,000 concurrent searches: No errors
 - 5,000 document batch indexing: Stable
 - Memory bounds checking: Proper error handling
 - Queue overflow: Graceful degradation
 
-## 🎯 Optimization Techniques Applied
+##  Optimization Techniques Applied
 
 ### 1. Embedding Cache
 - LRU cache with automatic eviction
@@ -149,7 +149,7 @@ Gobed now delivers exceptional performance through three major optimizations:
 - ARM NEON for ARM64
 - 51% of CPU time in optimized kernels
 
-## 💡 Recommendations
+##  Recommendations
 
 ### When to Use Each Mode
 
@@ -193,7 +193,7 @@ config.EnableCaching = true
 config.AutoMode = true
 ```
 
-## 📈 Performance Trends
+##  Performance Trends
 
 ### Scaling Characteristics
 - **Linear scaling** up to 8 concurrent workers
@@ -211,7 +211,7 @@ config.AutoMode = true
 - P95: 407µs (standard search)
 - P99: 2ms (shared memory, cold)
 
-## 🚀 Future Optimization Opportunities
+##  Future Optimization Opportunities
 
 1. **GPU Acceleration**
    - Potential 10-100x speedup for batch operations
@@ -233,7 +233,7 @@ config.AutoMode = true
    - FPGA integration for specialized workloads
    - Custom ASIC potential for edge deployment
 
-## 📋 Test Commands
+##  Test Commands
 
 Run all tests:
 ```bash
@@ -257,14 +257,14 @@ go run profile_bench.go
 # Visit http://localhost:6060/debug/pprof/
 ```
 
-## 🏆 Achievements
+##  Achievements
 
-- ✅ **26.8x faster indexing** through optimizations
-- ✅ **89,478 QPS** concurrent search achieved
-- ✅ **49% memory savings** in multi-process mode
-- ✅ **Zero segfaults** in 1000+ concurrent operations
-- ✅ **100% test coverage** for critical paths
-- ✅ **Production ready** with comprehensive error handling
+-  **26.8x faster indexing** through optimizations
+-  **89,478 QPS** concurrent search achieved
+-  **49% memory savings** in multi-process mode
+-  **Zero segfaults** in 1000+ concurrent operations
+-  **100% test coverage** for critical paths
+-  **Production ready** with comprehensive error handling
 
 ---
 

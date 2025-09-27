@@ -41,7 +41,7 @@ func LoadInt8Model512() (*Int8EmbeddingModel512, error) {
 	modelPath := filepath.Join("model", "modelint8_512dim.safetensors")
 	tokenizerPath := filepath.Join("model", "tokenizer.json")
 
-	log.Printf("🚀 Loading Int8 512-dim model from %s", modelPath)
+	log.Printf(" Loading Int8 512-dim model from %s", modelPath)
 
 	// Load the quantized model
 	embeddings, scales, err := loadInt8Embeddings(modelPath)
@@ -61,7 +61,7 @@ func LoadInt8Model512() (*Int8EmbeddingModel512, error) {
 		tokenizer:  tk,
 	}
 
-	log.Printf("✅ Int8 model loaded: vocab=%d, dims=%d, memory=%.1f MB",
+	log.Printf(" Int8 model loaded: vocab=%d, dims=%d, memory=%.1f MB",
 		len(embeddings), Int8EmbeddingDim,
 		float64(len(embeddings)*Int8EmbeddingDim+len(scales)*4)/(1024*1024))
 

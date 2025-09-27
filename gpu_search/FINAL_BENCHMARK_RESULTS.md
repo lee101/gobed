@@ -1,10 +1,10 @@
 # GPU Optimization Benchmark - Final Results
 
-## 🎯 Executive Summary
+##  Executive Summary
 
 After comprehensive testing, the GPU server shows **limited improvement** from larger batch sizes and parallel processing. Current performance is **~576 texts/sec**, which is actually **slower than your original 699-717 texts/sec**.
 
-## 📊 Actual Performance Results
+##  Actual Performance Results
 
 ### GPU Server Direct Testing:
 ```
@@ -22,14 +22,14 @@ Batch 2048:  1332 texts/sec
 Batch 4096:  1214 texts/sec (worst)
 ```
 
-## 🔍 Key Findings
+##  Key Findings
 
 1. **Smaller batches perform better** (256 vs 4096)
 2. **Sequential processing often faster** than parallel for GPU server
 3. **Current Go implementation (699-717 texts/sec) is already well-optimized**
 4. **GPU server bottleneck** is the limiting factor, not Go processing
 
-## 💡 Revised Optimization Strategy
+##  Revised Optimization Strategy
 
 Instead of larger batches and parallel processing, focus on:
 
@@ -47,7 +47,7 @@ Instead of larger batches and parallel processing, focus on:
 - PyTorch overhead or suboptimal CUDA kernels
 - Consider direct LibTorch integration (when compilation issues resolved)
 
-## 🚀 Immediate Action Items
+##  Immediate Action Items
 
 1. **Keep current Go implementation** - it's already optimized
 2. **Investigate GPU server performance**:
@@ -58,15 +58,15 @@ Instead of larger batches and parallel processing, focus on:
 3. **Profile the Python GPU server** for bottlenecks
 4. **Consider direct CUDA/LibTorch** instead of HTTP GPU server
 
-## 📈 Performance Comparison
+##  Performance Comparison
 
 | Approach | Throughput | Status |
 |----------|------------|---------|
-| **Your Current Go** | **699-717 texts/sec** | ✅ **Best** |
-| GPU Server (optimal) | 576 texts/sec | ❌ Slower |
-| GPU Server (4096 batch) | 542 texts/sec | ❌ Worst |
+| **Your Current Go** | **699-717 texts/sec** |  **Best** |
+| GPU Server (optimal) | 576 texts/sec |  Slower |
+| GPU Server (4096 batch) | 542 texts/sec |  Worst |
 
-## 🎯 Conclusion
+##  Conclusion
 
 **Your current Go implementation is already well-optimized.** The bottleneck is the GPU server, not your Go code. 
 

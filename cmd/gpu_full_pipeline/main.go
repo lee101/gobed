@@ -39,9 +39,9 @@ func NewGPUEmbeddingModel(vocabSize, embedDim, maxSeqLen int64, useInt8 bool) (*
 	device := gotch.CPU
 	if gotch.CudaIfAvailable() {
 		device = gotch.CudaIfAvailable()
-		log.Printf("✅ Using CUDA GPU for embeddings")
+		log.Printf(" Using CUDA GPU for embeddings")
 	} else {
-		log.Printf("⚠️  No CUDA device found, using CPU")
+		log.Printf("  No CUDA device found, using CPU")
 	}
 
 	// Create embedding layer
@@ -69,7 +69,7 @@ func NewGPUEmbeddingModel(vocabSize, embedDim, maxSeqLen int64, useInt8 bool) (*
 		model.quantizeEmbeddings()
 	}
 
-	log.Printf("📊 Model initialized: vocab=%d, dim=%d, maxSeq=%d, INT8=%v",
+	log.Printf(" Model initialized: vocab=%d, dim=%d, maxSeq=%d, INT8=%v",
 		vocabSize, embedDim, maxSeqLen, useInt8)
 
 	return model, nil
@@ -89,7 +89,7 @@ func (m *GPUEmbeddingModel) allocateBuffers() {
 	// Pooled output buffer
 	m.pooledBuffer = ts.MustZeros([]int64{1, m.embedDim}, gotch.Float, m.device)
 
-	log.Printf("📦 Pre-allocated GPU buffers for batch processing")
+	log.Printf(" Pre-allocated GPU buffers for batch processing")
 }
 
 // quantizeEmbeddings converts embedding weights to INT8
@@ -111,7 +111,7 @@ func (m *GPUEmbeddingModel) quantizeEmbeddings() {
 	m.embedLayerInt8 = normalized.MustToKind(gotch.Int8, false)
 	normalized.MustDrop()
 
-	log.Printf("✅ Quantized embeddings to INT8 (scale=%.6f)", m.embedScale)
+	log.Printf(" Quantized embeddings to INT8 (scale=%.6f)", m.embedScale)
 }
 
 // EmbedTokensGPU performs token->embedding lookup entirely on GPU
@@ -411,7 +411,7 @@ func (idx *GPUSearchIndex) buildIVF() {
 	assignments.MustDrop()
 	activeVectors.MustDrop()
 
-	log.Printf("✅ IVF index built with %d inverted lists", len(idx.invertedLists))
+	log.Printf(" IVF index built with %d inverted lists", len(idx.invertedLists))
 }
 
 // SearchBruteForce performs exact GPU brute-force search
@@ -576,7 +576,7 @@ func (idx *GPUSearchIndex) GetStats() map[string]interface{} {
 // Benchmark functions
 func benchmarkEmbeddingPipeline() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("⚡ GPU EMBEDDING PIPELINE BENCHMARK\n")
+	fmt.Printf(" GPU EMBEDDING PIPELINE BENCHMARK\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	vocabSize := int64(250002)
@@ -593,11 +593,11 @@ func benchmarkEmbeddingPipeline() {
 	}
 
 	for _, cfg := range configs {
-		fmt.Printf("\n📊 Testing %s configuration...\n", cfg.name)
+		fmt.Printf("\n Testing %s configuration...\n", cfg.name)
 
 		model, err := NewGPUEmbeddingModel(vocabSize, embedDim, maxSeqLen, cfg.useInt8)
 		if err != nil {
-			log.Printf("❌ Failed to create model: %v", err)
+			log.Printf(" Failed to create model: %v", err)
 			continue
 		}
 
@@ -614,14 +614,14 @@ func benchmarkEmbeddingPipeline() {
 		}
 
 		// Benchmark single sequence
-		fmt.Printf("\n⚡ Single sequence embedding:\n")
+		fmt.Printf("\n Single sequence embedding:\n")
 		singleTimes := make([]time.Duration, 100)
 		for i := 0; i < 100; i++ {
 			start := time.Now()
 			_, err := model.EmbedTokensGPU(sequences[i])
 			singleTimes[i] = time.Since(start)
 			if err != nil {
-				log.Printf("❌ Embedding failed: %v", err)
+				log.Printf(" Embedding failed: %v", err)
 			}
 		}
 
@@ -635,7 +635,7 @@ func benchmarkEmbeddingPipeline() {
 		fmt.Printf("   Throughput: %.0f seq/sec\n", 1.0/avgSingle.Seconds())
 
 		// Benchmark batch processing
-		fmt.Printf("\n🚀 Batch embedding:\n")
+		fmt.Printf("\n Batch embedding:\n")
 		batchSizes := []int{10, 50, 100}
 
 		for _, bs := range batchSizes {
@@ -645,7 +645,7 @@ func benchmarkEmbeddingPipeline() {
 			elapsed := time.Since(start)
 
 			if err != nil {
-				log.Printf("❌ Batch embedding failed: %v", err)
+				log.Printf(" Batch embedding failed: %v", err)
 				continue
 			}
 
@@ -660,7 +660,7 @@ func benchmarkEmbeddingPipeline() {
 
 func benchmarkSearchAlgorithms() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("🔍 GPU SEARCH ALGORITHMS BENCHMARK\n")
+	fmt.Printf(" GPU SEARCH ALGORITHMS BENCHMARK\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	dim := int64(384)
@@ -701,7 +701,7 @@ func benchmarkSearchAlgorithms() {
 	}
 
 	// Test brute-force search
-	fmt.Printf("\n📊 Brute-force GPU search:\n")
+	fmt.Printf("\n Brute-force GPU search:\n")
 	bruteIndex := NewGPUSearchIndex(dim, numVectors, false)
 
 	// Add vectors in batches
@@ -724,7 +724,7 @@ func benchmarkSearchAlgorithms() {
 	for i := 0; i < 100; i++ {
 		_, _, err := bruteIndex.SearchBruteForce(queries[i], k)
 		if err != nil {
-			log.Printf("❌ Search failed: %v", err)
+			log.Printf(" Search failed: %v", err)
 		}
 	}
 	bruteTime := time.Since(start)
@@ -734,7 +734,7 @@ func benchmarkSearchAlgorithms() {
 	fmt.Printf("   Throughput: %.0f queries/sec\n", 100.0/bruteTime.Seconds())
 
 	// Test IVF search
-	fmt.Printf("\n📊 IVF GPU search:\n")
+	fmt.Printf("\n IVF GPU search:\n")
 	ivfIndex := NewGPUSearchIndex(dim, numVectors, true)
 
 	// Add vectors
@@ -754,7 +754,7 @@ func benchmarkSearchAlgorithms() {
 		for i := 0; i < 100; i++ {
 			_, _, err := ivfIndex.SearchIVF(queries[i], k, nprobe)
 			if err != nil {
-				log.Printf("❌ IVF search failed: %v", err)
+				log.Printf(" IVF search failed: %v", err)
 			}
 		}
 		ivfTime := time.Since(start)
@@ -767,7 +767,7 @@ func benchmarkSearchAlgorithms() {
 	}
 
 	// Print statistics
-	fmt.Printf("\n📊 Index Statistics:\n")
+	fmt.Printf("\n Index Statistics:\n")
 	bruteStats := bruteIndex.GetStats()
 	for key, value := range bruteStats {
 		fmt.Printf("   Brute-force %s: %v\n", key, value)
@@ -781,7 +781,7 @@ func benchmarkSearchAlgorithms() {
 
 func benchmarkEndToEnd() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("🚀 END-TO-END GPU PIPELINE BENCHMARK\n")
+	fmt.Printf(" END-TO-END GPU PIPELINE BENCHMARK\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	// Create embedding model
@@ -824,23 +824,23 @@ func benchmarkEndToEnd() {
 		batch := documents[i:end]
 		embeddings, err := embedModel.BatchEmbedGPU(batch)
 		if err != nil {
-			log.Printf("❌ Batch embedding failed: %v", err)
+			log.Printf(" Batch embedding failed: %v", err)
 			continue
 		}
 
 		// Add to search index
 		err = searchIndex.AddVectors(embeddings)
 		if err != nil {
-			log.Printf("❌ Failed to add vectors: %v", err)
+			log.Printf(" Failed to add vectors: %v", err)
 		}
 	}
 
 	indexTime := time.Since(indexStart)
-	fmt.Printf("✅ Indexed in %.2fs (%.0f docs/sec)\n",
+	fmt.Printf(" Indexed in %.2fs (%.0f docs/sec)\n",
 		indexTime.Seconds(), float64(numDocs)/indexTime.Seconds())
 
 	// Search benchmark
-	fmt.Printf("\n🔍 Running search queries...\n")
+	fmt.Printf("\n Running search queries...\n")
 	numQueries := 100
 	queryDocs := documents[:numQueries]
 
@@ -849,30 +849,30 @@ func benchmarkEndToEnd() {
 		// Embed query
 		queryEmbed, err := embedModel.EmbedTokensGPU(query)
 		if err != nil {
-			log.Printf("❌ Query embedding failed: %v", err)
+			log.Printf(" Query embedding failed: %v", err)
 			continue
 		}
 
 		// Search
 		_, _, err = searchIndex.SearchIVF(queryEmbed, 10, 5)
 		if err != nil {
-			log.Printf("❌ Search failed: %v", err)
+			log.Printf(" Search failed: %v", err)
 		}
 	}
 
 	searchTime := time.Since(searchStart)
-	fmt.Printf("✅ %d queries in %.2fms (%.0f qps)\n",
+	fmt.Printf(" %d queries in %.2fms (%.0f qps)\n",
 		numQueries, float64(searchTime.Nanoseconds())/1e6,
 		float64(numQueries)/searchTime.Seconds())
 
 	// End-to-end latency
 	e2eLatency := float64(searchTime.Nanoseconds()) / float64(numQueries) / 1e6
-	fmt.Printf("📊 End-to-end latency: %.2fms per query\n", e2eLatency)
+	fmt.Printf(" End-to-end latency: %.2fms per query\n", e2eLatency)
 }
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("⚡ FULL GPU PIPELINE BENCHMARK - TOKEN EMBEDDING + SEARCH")
+	fmt.Println(" FULL GPU PIPELINE BENCHMARK - TOKEN EMBEDDING + SEARCH")
 	fmt.Println("================================================================================")
 	fmt.Printf("System: %d CPUs, CUDA: %v\n", runtime.NumCPU(), gotch.CudaIfAvailable())
 	if gotch.CudaIfAvailable() {
@@ -890,7 +890,7 @@ func main() {
 
 	// Summary
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("📊 SUMMARY\n")
+	fmt.Printf(" SUMMARY\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 	fmt.Printf("\nKey Findings:\n")
 	fmt.Printf("  • Token->Embedding lookup is just indexing, not matrix multiplication\n")
@@ -904,5 +904,5 @@ func main() {
 	fmt.Printf("  • Batch processing for maximum GPU utilization\n")
 	fmt.Printf("  • INT8 quantization for memory efficiency\n")
 	fmt.Printf("  • Fused operations to minimize kernel launches\n")
-	fmt.Printf("\n✅ Full GPU pipeline ready for production!\n")
+	fmt.Printf("\n Full GPU pipeline ready for production!\n")
 }

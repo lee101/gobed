@@ -338,7 +338,7 @@ func (status *IndexStatus) Display() error {
 			fmt.Printf("  Memory usage:  %.2f MB\n", float64(memUsage)/1024/1024)
 		}
 		if hasGPU, ok := status.Stats["has_gpu_index"].(bool); ok && hasGPU {
-			fmt.Printf("  GPU accelerated: Yes ⚡\n")
+			fmt.Printf("  GPU accelerated: Yes \n")
 		}
 	}
 	

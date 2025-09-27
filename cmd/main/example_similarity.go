@@ -8,13 +8,13 @@ import (
 
 func runSimilarityExample() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("🚀 Text Embedding Similarity & Distance Examples")
+	fmt.Println(" Text Embedding Similarity & Distance Examples")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Load model
 	model, err := LoadModel()
 	if err != nil {
-		fmt.Printf("❌ Error: %v\n", err)
+		fmt.Printf(" Error: %v\n", err)
 		return
 	}
 
@@ -33,7 +33,7 @@ func runSimilarityExample() {
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 SIMILARITY BETWEEN RELATED TEXTS")
+	fmt.Println(" SIMILARITY BETWEEN RELATED TEXTS")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Test similar texts
@@ -62,11 +62,11 @@ func runSimilarityExample() {
 
 	if len(relatedSims) > 0 {
 		avg := average(relatedSims)
-		fmt.Printf("\n📊 Average similarity for related texts: %.4f\n", avg)
+		fmt.Printf("\n Average similarity for related texts: %.4f\n", avg)
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 SIMILARITY BETWEEN UNRELATED TEXTS")
+	fmt.Println(" SIMILARITY BETWEEN UNRELATED TEXTS")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Test unrelated texts
@@ -95,12 +95,12 @@ func runSimilarityExample() {
 
 	if len(unrelatedSims) > 0 {
 		avg := average(unrelatedSims)
-		fmt.Printf("\n📊 Average similarity for unrelated texts: %.4f\n", avg)
+		fmt.Printf("\n Average similarity for unrelated texts: %.4f\n", avg)
 	}
 
 	// Find most similar text
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("🔍 FINDING MOST SIMILAR TEXTS")
+	fmt.Println(" FINDING MOST SIMILAR TEXTS")
 	fmt.Println(strings.Repeat("=", 80))
 
 	queryText := "Hello world"
@@ -123,7 +123,7 @@ func runSimilarityExample() {
 
 	// Summary statistics
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📈 SUMMARY STATISTICS")
+	fmt.Println(" SUMMARY STATISTICS")
 	fmt.Println(strings.Repeat("=", 80))
 
 	if len(relatedSims) > 0 && len(unrelatedSims) > 0 {
@@ -131,22 +131,22 @@ func runSimilarityExample() {
 		avgUnrelated := average(unrelatedSims)
 		separation := avgRelated - avgUnrelated
 
-		fmt.Printf("\n📊 Related texts average similarity:   %.4f\n", avgRelated)
-		fmt.Printf("📊 Unrelated texts average similarity: %.4f\n", avgUnrelated)
-		fmt.Printf("📊 Separation (difference):            %.4f\n", separation)
+		fmt.Printf("\n Related texts average similarity:   %.4f\n", avgRelated)
+		fmt.Printf(" Unrelated texts average similarity: %.4f\n", avgUnrelated)
+		fmt.Printf(" Separation (difference):            %.4f\n", separation)
 
 		if separation > 0.2 {
-			fmt.Println("\n✅ Good separation! The model clearly distinguishes related vs unrelated texts.")
+			fmt.Println("\n Good separation! The model clearly distinguishes related vs unrelated texts.")
 		} else if separation > 0.1 {
-			fmt.Println("\n⚠️  Moderate separation. The model somewhat distinguishes related vs unrelated.")
+			fmt.Println("\n  Moderate separation. The model somewhat distinguishes related vs unrelated.")
 		} else {
-			fmt.Println("\n❌ Poor separation. The model struggles to distinguish related vs unrelated.")
+			fmt.Println("\n Poor separation. The model struggles to distinguish related vs unrelated.")
 		}
 	}
 
 	// Performance benchmark
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("⚡ PERFORMANCE BENCHMARK")
+	fmt.Println(" PERFORMANCE BENCHMARK")
 	fmt.Println(strings.Repeat("=", 80))
 
 	if len(texts) > 0 {
@@ -174,7 +174,7 @@ func runSimilarityExample() {
 		fmt.Printf("Throughput: %.0f embeddings/sec\n", throughput)
 	}
 
-	fmt.Println("\n✅ Example completed!")
+	fmt.Println("\n Example completed!")
 }
 
 func average(values []float32) float32 {

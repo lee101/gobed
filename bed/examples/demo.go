@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🛏️  Bed Semantic Search Demo")
+	fmt.Println("🛏  Bed Semantic Search Demo")
 	fmt.Println("============================")
 	
 	// Create a temporary directory with sample code files
@@ -28,7 +28,7 @@ func main() {
 	defer os.Chdir(originalDir)
 	
 	// Demo 1: Index the sample codebase
-	fmt.Println("🔍 Demo 1: Building semantic index...")
+	fmt.Println(" Demo 1: Building semantic index...")
 	if err := demoIndexing(); err != nil {
 		log.Printf("Indexing demo failed: %v", err)
 	}
@@ -55,12 +55,12 @@ func main() {
 	fmt.Println("\n" + "="*50)
 	
 	// Demo 3: Show index status
-	fmt.Println("📊 Demo 3: Index statistics...")
+	fmt.Println(" Demo 3: Index statistics...")
 	if err := demoStatus(); err != nil {
 		log.Printf("Status demo failed: %v", err)
 	}
 	
-	fmt.Println("\n🎉 Demo completed! Try running 'bed' commands manually.")
+	fmt.Println("\n Demo completed! Try running 'bed' commands manually.")
 }
 
 func createSampleCodebase() (string, error) {

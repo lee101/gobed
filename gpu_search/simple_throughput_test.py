@@ -17,7 +17,7 @@ def test_current_vs_optimized():
     
     device = torch.device("cuda")
     
-    print("🚀 THROUGHPUT COMPARISON: Current vs Optimized")
+    print(" THROUGHPUT COMPARISON: Current vs Optimized")
     print("=" * 60)
     
     # Test data
@@ -73,7 +73,7 @@ def test_current_vs_optimized():
     
     for batch_size in batch_sizes:
         try:
-            print(f"\n📊 Testing batch size: {batch_size:,}")
+            print(f"\n Testing batch size: {batch_size:,}")
             
             avg_time, throughput = embed_batch(batch_size)
             
@@ -90,15 +90,15 @@ def test_current_vs_optimized():
             torch.cuda.empty_cache()
             
         except torch.cuda.OutOfMemoryError:
-            print(f"   ❌ OOM at batch size {batch_size}")
+            print(f"    OOM at batch size {batch_size}")
             break
         except Exception as e:
-            print(f"   ❌ Error: {e}")
+            print(f"    Error: {e}")
             break
     
     # Analysis
     print("\n" + "=" * 60)
-    print("📈 THROUGHPUT ANALYSIS")
+    print(" THROUGHPUT ANALYSIS")
     print("=" * 60)
     
     if len(results) >= 2:
@@ -120,7 +120,7 @@ def test_current_vs_optimized():
         print(f"Optimized:               {optimized_time:.1f}s")
         print(f"Time saved:              {current_time - optimized_time:.1f}s")
         
-        print(f"\n🎯 RECOMMENDATION:")
+        print(f"\n RECOMMENDATION:")
         print(f"   Use batch size: {best_result['batch_size']:,}")
         print(f"   Expected speedup: {improvement:.1f}x")
         print(f"   GPU utilization: {'HIGH' if best_result['batch_size'] >= 1024 else 'MEDIUM'}")
@@ -140,7 +140,7 @@ def test_parallel_vs_sequential():
     batch_size = 1024
     
     # Sequential processing (current approach)
-    print("📝 Testing sequential processing...")
+    print(" Testing sequential processing...")
     
     start = time.perf_counter()
     for i in range(num_batches):
@@ -158,7 +158,7 @@ def test_parallel_vs_sequential():
     print(f"   Throughput: {sequential_throughput:.0f} texts/sec")
     
     # Parallel processing simulation
-    print("\n📝 Testing parallel processing...")
+    print("\n Testing parallel processing...")
     
     start = time.perf_counter()
     
@@ -174,7 +174,7 @@ def test_parallel_vs_sequential():
     print(f"   Throughput: {parallel_throughput:.0f} texts/sec")
     
     improvement = parallel_throughput / sequential_throughput
-    print(f"\n🚀 Parallel improvement: {improvement:.1f}x faster")
+    print(f"\n Parallel improvement: {improvement:.1f}x faster")
 
 
 if __name__ == "__main__":
@@ -186,13 +186,13 @@ if __name__ == "__main__":
     test_parallel_vs_sequential()
     
     print("\n" + "=" * 60)
-    print("💡 OPTIMIZATION RECOMMENDATIONS")
+    print(" OPTIMIZATION RECOMMENDATIONS")
     print("=" * 60)
     print("1. Increase batch size from 256 to 2048-4096")
     print("2. Use parallel processing instead of sequential")
     print("3. Pre-allocate GPU memory")
     print("4. Use streaming/pipelining")
     print("5. Implement custom CUDA kernels for search")
-    print("\n🎯 Expected overall improvement: 5-10x faster")
+    print("\n Expected overall improvement: 5-10x faster")
     print("   Current: ~700 texts/sec")
     print("   Optimized: 3,500-7,000 texts/sec")

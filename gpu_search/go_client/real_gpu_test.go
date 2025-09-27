@@ -17,7 +17,7 @@ func TestRealGPUServer(t *testing.T) {
 		t.Skipf("GPU server not running: %v", err)
 	}
 
-	t.Logf("✅ Connected to GPU server: %s", health.Device)
+	t.Logf(" Connected to GPU server: %s", health.Device)
 	t.Logf("   CUDA Available: %v", health.CudaAvailable)
 	t.Logf("   Database Size: %d", health.DatabaseSize)
 
@@ -72,9 +72,9 @@ func TestRealGPUServer(t *testing.T) {
 
 		// Check if we meet the ~1ms target
 		if avgLatency < 2*time.Millisecond {
-			t.Logf("  ✅ Meeting <2ms latency target!")
+			t.Logf("   Meeting <2ms latency target!")
 		} else {
-			t.Logf("  ⚠️  Latency %v exceeds 2ms target", avgLatency)
+			t.Logf("    Latency %v exceeds 2ms target", avgLatency)
 		}
 	})
 
@@ -197,7 +197,7 @@ func TestCPUvsGPUComparison(t *testing.T) {
 			c.dbSize, c.cpuLatencyMs, c.gpuLatencyMs, speedup)
 	}
 
-	t.Logf("\n✅ GPU provides 10-100x speedup over CPU for similarity search!")
+	t.Logf("\n GPU provides 10-100x speedup over CPU for similarity search!")
 }
 
 // Test different batch sizes
@@ -250,7 +250,7 @@ func TestBatchSizeOptimization(t *testing.T) {
 			batchSize, avgLatency.Seconds()*1000, qps)
 	}
 
-	t.Logf("\n💡 Larger batch sizes provide better throughput!")
+	t.Logf("\n Larger batch sizes provide better throughput!")
 }
 
 // Helper to generate embeddings with specific properties
@@ -332,8 +332,8 @@ func TestSearchQuality(t *testing.T) {
 	t.Logf("  Top 10 scores: %.2f", result.Scores[:10])
 
 	if similarCount < 10 {
-		t.Logf("  ⚠️  Warning: Expected more similar vectors in top results")
+		t.Logf("    Warning: Expected more similar vectors in top results")
 	} else {
-		t.Logf("  ✅ Good search quality: found similar vectors")
+		t.Logf("   Good search quality: found similar vectors")
 	}
 }

@@ -4,7 +4,7 @@
 
 set -e
 
-echo "🧹 Cleaning up gobed project..."
+echo " Cleaning up gobed project..."
 
 # Create organized directory structure
 echo "📁 Creating organized directory structure..."
@@ -18,7 +18,7 @@ mkdir -p docs
 mkdir -p examples
 
 # Clean up build artifacts
-echo "🗑️  Removing build artifacts..."
+echo "🗑  Removing build artifacts..."
 rm -f *.o
 rm -f *.bak
 rm -f test_200k test_200k_real
@@ -29,7 +29,7 @@ rm -f unified_benchmark
 rm -f bed_tool_new
 
 # Move test files to proper locations
-echo "📦 Organizing test files..."
+echo " Organizing test files..."
 
 # Move benchmark files
 for file in benchmark*.py *benchmark*.go *bench*.sh; do
@@ -60,7 +60,7 @@ for file in test_*.py; do
 done
 
 # Clean up bed directory
-echo "📦 Organizing bed/ directory..."
+echo " Organizing bed/ directory..."
 cd bed/
 rm -f *.o bed bed_search bed_tool
 mkdir -p tests benchmarks
@@ -79,7 +79,7 @@ done
 cd ..
 
 # Move CUDA files to gpu directory
-echo "📦 Organizing CUDA files..."
+echo " Organizing CUDA files..."
 for file in cuda_*.cu cuda_*.o; do
     if [ -f "$file" ]; then
         mv "$file" gpu/ 2>/dev/null || true
@@ -96,7 +96,7 @@ done
 
 # Create .gitignore if it doesn't exist
 if [ ! -f .gitignore ]; then
-    echo "📝 Creating .gitignore..."
+    echo " Creating .gitignore..."
     cat > .gitignore << 'EOF'
 # Binaries
 *.o
@@ -161,9 +161,9 @@ gpu_env.sh
 EOF
 fi
 
-echo "✅ Cleanup complete!"
+echo " Cleanup complete!"
 echo ""
-echo "📊 Project structure:"
+echo " Project structure:"
 echo "  test/         - All test files"
 echo "    unit/       - Unit tests"
 echo "    integration/- Integration tests"

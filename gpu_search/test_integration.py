@@ -20,12 +20,12 @@ def main():
     
     # Print stats
     stats = backend.get_stats()
-    print(f"\n📊 Backend Stats:")
+    print(f"\n Backend Stats:")
     for key, value in stats.items():
         print(f"   {key}: {value}")
     
     # Create test data
-    print("\n📝 Creating test data...")
+    print("\n Creating test data...")
     test_texts = [
         "Artificial intelligence is transforming technology",
         "Machine learning models understand human language",
@@ -40,7 +40,7 @@ def main():
     ] * 100  # 1000 texts total
     
     # Index texts
-    print(f"\n🚀 Indexing {len(test_texts)} texts on GPU...")
+    print(f"\n Indexing {len(test_texts)} texts on GPU...")
     start = time.perf_counter()
     index_stats = backend.index_texts(test_texts)
     index_time = time.perf_counter() - start
@@ -50,7 +50,7 @@ def main():
     print(f"   GPU memory: {index_stats['memory_mb']:.1f} MB")
     
     # Test single search
-    print("\n🔍 Testing single search...")
+    print("\n Testing single search...")
     query = "artificial intelligence and machine learning"
     
     start = time.perf_counter()
@@ -64,7 +64,7 @@ def main():
         print(f"     {i+1}. [{score:.3f}] {text[:50]}...")
     
     # Test batch search
-    print("\n🚀 Testing batch search...")
+    print("\n Testing batch search...")
     queries = [
         "artificial intelligence",
         "climate change",
@@ -83,7 +83,7 @@ def main():
     print(f"   Throughput: {len(queries)/batch_time:.0f} QPS")
     
     # Benchmark
-    print("\n⚡ Running performance benchmark...")
+    print("\n Running performance benchmark...")
     
     # Single query benchmark
     num_single = 100
@@ -113,9 +113,9 @@ def main():
     print(f"     Throughput: {total_queries/batch_bench_time:.0f} QPS")
     
     print("\n" + "=" * 80)
-    print("✅ GPU INTEGRATION TEST COMPLETE!")
+    print(" GPU INTEGRATION TEST COMPLETE!")
     print("=" * 80)
-    print("\n🎯 Key Achievements:")
+    print("\n Key Achievements:")
     print("  • Custom CUDA kernels with __dp4a for INT8 operations")
     print("  • Everything stays on GPU - zero CPU-GPU transfers")
     print("  • 5-10x speedup over PyTorch baseline")

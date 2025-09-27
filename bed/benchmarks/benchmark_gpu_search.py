@@ -118,7 +118,7 @@ class SearchBenchmark:
     def benchmark_configuration(self, config: SearchConfig, corpus_dir: str,
                                queries: List[str], name: str) -> BenchmarkResult:
         """Benchmark a specific configuration"""
-        print(f"\n📊 Benchmarking: {name}")
+        print(f"\n Benchmarking: {name}")
         print(f"   Config: chunks={config.chunk_size}, ivf={config.ivf_clusters}, "
               f"probe={config.probe_lists}, batch={config.batch_size}")
 
@@ -127,11 +127,11 @@ class SearchBenchmark:
 
         # Benchmark indexing
         index_time = self.benchmark_indexing(searcher, corpus_dir)
-        print(f"   ✅ Indexed {searcher.num_chunks} chunks in {index_time:.2f}s")
+        print(f"    Indexed {searcher.num_chunks} chunks in {index_time:.2f}s")
 
         # Benchmark search
         search_stats = self.benchmark_search(searcher, queries)
-        print(f"   ✅ Search QPS: {search_stats['qps']:.0f}, "
+        print(f"    Search QPS: {search_stats['qps']:.0f}, "
               f"P50: {search_stats['latency_p50']:.2f}ms")
 
         # Get memory usage
@@ -356,15 +356,15 @@ class SearchBenchmark:
         best_latency = min(self.results, key=lambda r: r.latency_p50)
         best_memory = min(self.results, key=lambda r: r.memory_mb)
 
-        print(f"\n🏆 Best QPS: {best_qps.name}")
+        print(f"\n Best QPS: {best_qps.name}")
         print(f"   - QPS: {best_qps.qps:.0f}")
         print(f"   - P50 Latency: {best_qps.latency_p50:.2f}ms")
 
-        print(f"\n🏆 Best Latency: {best_latency.name}")
+        print(f"\n Best Latency: {best_latency.name}")
         print(f"   - P50 Latency: {best_latency.latency_p50:.2f}ms")
         print(f"   - QPS: {best_latency.qps:.0f}")
 
-        print(f"\n🏆 Best Memory: {best_memory.name}")
+        print(f"\n Best Memory: {best_memory.name}")
         print(f"   - Memory: {best_memory.memory_mb:.2f}MB")
         print(f"   - QPS: {best_memory.qps:.0f}")
 
@@ -372,7 +372,7 @@ class SearchBenchmark:
         avg_qps = np.mean([r.qps for r in self.results])
         avg_latency = np.mean([r.latency_p50 for r in self.results])
 
-        print(f"\n📊 Overall Statistics:")
+        print(f"\n Overall Statistics:")
         print(f"   - Average QPS: {avg_qps:.0f}")
         print(f"   - Average P50 Latency: {avg_latency:.2f}ms")
         print(f"   - Configurations tested: {len(self.results)}")

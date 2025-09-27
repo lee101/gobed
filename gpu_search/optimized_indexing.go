@@ -14,8 +14,8 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 		return nil
 	}
 
-	log.Printf("🚀 Starting parallel GPU indexing of %d texts", len(texts))
-	log.Printf("📦 Chunk size: %d (optimized for GPU)", chunkSize)
+	log.Printf(" Starting parallel GPU indexing of %d texts", len(texts))
+	log.Printf(" Chunk size: %d (optimized for GPU)", chunkSize)
 
 	start := time.Now()
 
@@ -29,7 +29,7 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 		chunks = append(chunks, texts[i:end])
 	}
 
-	log.Printf("📊 Created %d chunks (avg: %d texts/chunk)", len(chunks), len(texts)/len(chunks))
+	log.Printf(" Created %d chunks (avg: %d texts/chunk)", len(chunks), len(texts)/len(chunks))
 
 	// Parallel processing with controlled concurrency
 	const maxConcurrent = 8 // Adjust based on GPU memory
@@ -49,7 +49,7 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 				elapsed := time.Since(start)
 				rate := float64(completed*chunkSize) / elapsed.Seconds()
 
-				log.Printf("📈 Progress: %.1f%% (%d/%d chunks, %.0f texts/sec)",
+				log.Printf(" Progress: %.1f%% (%d/%d chunks, %.0f texts/sec)",
 					percent, completed, len(chunks), rate)
 			}
 		}
@@ -89,7 +89,7 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 
 			// Report chunk completion (optional detailed logging)
 			if len(chunks) <= 20 { // Only log details for smaller jobs
-				log.Printf("✅ Chunk %d: %d texts in %v (%.0f texts/sec)",
+				log.Printf(" Chunk %d: %d texts in %v (%.0f texts/sec)",
 					chunkNum+1, len(chunkTexts), chunkTime, chunkRate)
 			}
 
@@ -120,7 +120,7 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 	totalTime := time.Since(start)
 	totalThroughput := float64(len(texts)) / totalTime.Seconds()
 
-	log.Printf("✅ Parallel indexing complete!")
+	log.Printf(" Parallel indexing complete!")
 	log.Printf("   Total texts: %d", len(texts))
 	log.Printf("   Total time: %v", totalTime)
 	log.Printf("   Throughput: %.0f texts/sec", totalThroughput)
@@ -129,11 +129,11 @@ func IndexTextsParallel(pipeline interface{}, texts []string, chunkSize int) err
 
 	// Performance analysis
 	if totalThroughput > 3000 {
-		log.Printf("🚀 Excellent performance! GPU well utilized.")
+		log.Printf(" Excellent performance! GPU well utilized.")
 	} else if totalThroughput > 1500 {
-		log.Printf("✅ Good performance. Consider larger batches for even better GPU utilization.")
+		log.Printf(" Good performance. Consider larger batches for even better GPU utilization.")
 	} else {
-		log.Printf("⚠️  Performance below expectations. Check GPU utilization and batch sizes.")
+		log.Printf("  Performance below expectations. Check GPU utilization and batch sizes.")
 	}
 
 	return nil
@@ -206,7 +206,7 @@ func main() {
 		log.Fatalf("Failed to create GPU pipeline: %v", err)
 	}
 
-	log.Printf("🚀 Optimized GPU Pipeline initialized")
+	log.Printf(" Optimized GPU Pipeline initialized")
 	log.Printf("   Batch size: %d", optConfig.BatchSize)
 	log.Printf("   Chunk size: %d", optConfig.ChunkSize)
 	log.Printf("   Max concurrent: %d", optConfig.MaxConcurrent)
@@ -218,7 +218,7 @@ func main() {
 	}
 
 	// OPTIMIZED INDEXING - Replace your IndexTexts call with this:
-	log.Println("🚀 Starting optimized indexing...")
+	log.Println(" Starting optimized indexing...")
 	start := time.Now()
 
 	if err := IndexTextsParallel(pipeline, texts, optConfig.ChunkSize); err != nil {
@@ -228,7 +228,7 @@ func main() {
 	indexTime := time.Since(start)
 	throughput := float64(len(texts)) / indexTime.Seconds()
 
-	log.Printf("✅ Indexing complete: %.0f texts/sec (%.1fx improvement)",
+	log.Printf(" Indexing complete: %.0f texts/sec (%.1fx improvement)",
 		throughput, throughput/700) // Compare to current ~700 texts/sec
 
 	// ... rest of your code ...

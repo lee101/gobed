@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	fmt.Println("⚡ Quick Gobed Performance Test")
+	fmt.Println(" Quick Gobed Performance Test")
 	fmt.Println("===============================")
 
 	// Load model
@@ -22,7 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("✅ Done (%v)\n", time.Since(start))
+	fmt.Printf(" Done (%v)\n", time.Since(start))
 
 	// Test data
 	texts := []string{
@@ -70,7 +70,7 @@ func main() {
 	}
 
 	// Estimate large-scale performance
-	fmt.Println("\n📈 Large Scale Estimates:")
+	fmt.Println("\n Large Scale Estimates:")
 	bestPerf := float64(8000) // Estimated items/sec based on parallel performance
 
 	scales := []int{10000, 100000, 1000000}

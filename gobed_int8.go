@@ -212,12 +212,12 @@ func LoadModelInt8(useInt8 bool) (*EmbeddingModelInt8, error) {
 
 	if useInt8 {
 		// Quantize weights to INT8
-		fmt.Println("⚡ Quantizing weights to INT8...")
+		fmt.Println(" Quantizing weights to INT8...")
 		model.quantizeWeights()
 	}
 
 	loadTime := time.Since(start)
-	fmt.Printf("✅ Model loaded in %v (vocab: %d, dims: %d, INT8: %v)\n",
+	fmt.Printf(" Model loaded in %v (vocab: %d, dims: %d, INT8: %v)\n",
 		loadTime, vocabSize, embedDim, useInt8)
 	return model, nil
 }
@@ -245,7 +245,7 @@ func (m *EmbeddingModelInt8) quantizeWeights() {
 	m.scale = (maxVal - minVal) / 255.0
 	m.zeroPoint = int8(-128 - int(minVal/m.scale))
 
-	fmt.Printf("📊 Quantization params: scale=%.6f, zero_point=%d, range=[%.3f, %.3f]\n",
+	fmt.Printf(" Quantization params: scale=%.6f, zero_point=%d, range=[%.3f, %.3f]\n",
 		m.scale, m.zeroPoint, minVal, maxVal)
 
 	// Allocate INT8 weights

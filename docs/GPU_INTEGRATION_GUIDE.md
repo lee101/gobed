@@ -1,4 +1,4 @@
-# 🚀 Gobed GPU Integration Guide
+#  Gobed GPU Integration Guide
 
 Complete guide for GPU-accelerated text embedding and similarity search with Gobed.
 

@@ -25,10 +25,10 @@ def download_real_model():
             local_files_only=False
         )
         
-        print(f"✅ Model downloaded to: {model_path}")
+        print(f" Model downloaded to: {model_path}")
         
         # List contents to see what we have
-        print("\n📦 Model contents:")
+        print("\n Model contents:")
         for root, dirs, files in os.walk(model_path):
             level = root.replace(model_path, '').count(os.sep)
             indent = ' ' * 2 * level
@@ -47,7 +47,7 @@ def download_real_model():
                     safetensors_files.append((rel_path, full_path))
                     
         if safetensors_files:
-            print(f"\n🎯 Found {len(safetensors_files)} safetensors files:")
+            print(f"\n Found {len(safetensors_files)} safetensors files:")
             for rel_path, full_path in safetensors_files:
                 size = os.path.getsize(full_path) / (1024*1024)  # MB
                 print(f"   {rel_path} ({size:.2f} MB)")
@@ -67,20 +67,20 @@ def download_real_model():
                 dest_path = "./model/real_model.safetensors"
                 os.makedirs("./model", exist_ok=True)
                 shutil.copy2(main_safetensors, dest_path)
-                print(f"✅ Copied main safetensors to: {dest_path}")
+                print(f" Copied main safetensors to: {dest_path}")
                 
                 return dest_path, model_path
         else:
-            print("❌ No safetensors files found!")
+            print(" No safetensors files found!")
             return None, model_path
             
     except Exception as e:
-        print(f"❌ Error downloading model: {e}")
+        print(f" Error downloading model: {e}")
         return None, None
 
 def extract_tokenizer_info(model_path):
     """Extract tokenizer information from the downloaded model."""
-    print(f"\n🔍 Extracting tokenizer information...")
+    print(f"\n Extracting tokenizer information...")
     
     try:
         # Load with sentence-transformers to get the tokenizer
@@ -96,7 +96,7 @@ def extract_tokenizer_info(model_path):
             "Hello world"
         ]
         
-        print(f"📝 Tokenizer info:")
+        print(f" Tokenizer info:")
         print(f"   Vocab size: {len(tokenizer.get_vocab()) if hasattr(tokenizer, 'get_vocab') else 'Unknown'}")
         print(f"   Model max length: {getattr(tokenizer, 'model_max_length', 512)}")
         
@@ -120,11 +120,11 @@ def extract_tokenizer_info(model_path):
         with open(tokens_path, 'w') as f:
             json.dump(reference_tokens, f, indent=2)
         
-        print(f"✅ Saved reference tokens to: {tokens_path}")
+        print(f" Saved reference tokens to: {tokens_path}")
         
         # Test encoding to get expected embeddings
         embeddings = model.encode(test_sentences)
-        print(f"📊 Generated embeddings shape: {embeddings.shape}")
+        print(f" Generated embeddings shape: {embeddings.shape}")
         print(f"   Sample embedding for '{test_sentences[0]}': [{embeddings[0][0]:.3f}, {embeddings[0][1]:.3f}, {embeddings[0][2]:.3f}, {embeddings[0][3]:.3f}, {embeddings[0][4]:.3f}]")
         
         # Save expected embeddings
@@ -135,17 +135,17 @@ def extract_tokenizer_info(model_path):
             for sentence in test_sentences:
                 f.write(f"{sentence}\n")
                 
-        print(f"✅ Saved expected embeddings for Go comparison")
+        print(f" Saved expected embeddings for Go comparison")
         
         return reference_tokens, embeddings
         
     except Exception as e:
-        print(f"❌ Error extracting tokenizer info: {e}")
+        print(f" Error extracting tokenizer info: {e}")
         return None, None
 
 def main():
     print("=" * 80)
-    print("🚀 DOWNLOADING REAL MODEL WEIGHTS")
+    print(" DOWNLOADING REAL MODEL WEIGHTS")
     print("=" * 80)
     print("Model: sentence-transformers/static-retrieval-mrl-en-v1")
     print("Purpose: Get exact same weights that Python uses")
@@ -155,7 +155,7 @@ def main():
     safetensors_path, model_path = download_real_model()
     
     if safetensors_path and model_path:
-        print(f"\n🎉 Successfully downloaded real model!")
+        print(f"\n Successfully downloaded real model!")
         print(f"   Safetensors: {safetensors_path}")
         print(f"   Model path: {model_path}")
         
@@ -163,15 +163,15 @@ def main():
         reference_tokens, embeddings = extract_tokenizer_info(model_path)
         
         if reference_tokens and embeddings is not None:
-            print(f"\n✅ Setup complete! Ready for Go implementation.")
-            print(f"📋 Next steps:")
+            print(f"\n Setup complete! Ready for Go implementation.")
+            print(f" Next steps:")
             print(f"   1. Load {safetensors_path} in Go")
             print(f"   2. Use reference tokens from ./model/real_reference_tokens.json") 
             print(f"   3. Compare with expected embeddings")
         else:
-            print(f"\n⚠️  Model downloaded but tokenizer extraction failed")
+            print(f"\n  Model downloaded but tokenizer extraction failed")
     else:
-        print(f"\n❌ Failed to download model")
+        print(f"\n Failed to download model")
     
     print("=" * 80)
 

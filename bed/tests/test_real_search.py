@@ -57,7 +57,7 @@ def search_files(directory, query, top_k=10):
         ("README.md", 1, "# Netwrck Project"),
     ]
 
-    print(f"\n🔍 Testing semantic search for: '{query}'")
+    print(f"\n Testing semantic search for: '{query}'")
     print("=" * 60)
 
     for file, line, content in test_chunks:
@@ -68,7 +68,7 @@ def search_files(directory, query, top_k=10):
     # Sort by score descending
     results.sort(reverse=True)
 
-    print(f"\n✅ Top {min(top_k, len(results))} results:\n")
+    print(f"\n Top {min(top_k, len(results))} results:\n")
 
     for i, (score, file, line, content) in enumerate(results[:top_k]):
         print(f"Match {i+1}: {file}:{line} (score: {score:.4f})")
@@ -76,11 +76,11 @@ def search_files(directory, query, top_k=10):
         print()
 
     # Highlight the issue
-    print("\n📝 Note: With proper embeddings, game re-render comments should score > 0.7")
+    print("\n Note: With proper embeddings, game re-render comments should score > 0.7")
     print("   With mock embeddings, scores are essentially random")
 
     if not model:
-        print("\n⚠️  Using mock embeddings - install sentence-transformers for real semantic search:")
+        print("\n  Using mock embeddings - install sentence-transformers for real semantic search:")
         print("   pip install sentence-transformers")
 
 if __name__ == "__main__":

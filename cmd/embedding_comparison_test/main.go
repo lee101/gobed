@@ -64,7 +64,7 @@ func testEmbeddingConsistency(model *gobed.EmbeddingModel) {
 			times[j] = elapsed
 
 			if err != nil {
-				log.Printf("❌ Failed to generate embedding %d: %v", j+1, err)
+				log.Printf(" Failed to generate embedding %d: %v", j+1, err)
 				continue
 			}
 
@@ -72,7 +72,7 @@ func testEmbeddingConsistency(model *gobed.EmbeddingModel) {
 		}
 
 		if len(embeddings) < 2 {
-			fmt.Printf("❌ Not enough embeddings generated for comparison\n\n")
+			fmt.Printf(" Not enough embeddings generated for comparison\n\n")
 			continue
 		}
 
@@ -102,9 +102,9 @@ func testEmbeddingConsistency(model *gobed.EmbeddingModel) {
 		fmt.Printf("   Avg time: %.2fms\n", float64(avgTime.Nanoseconds())/1e6)
 
 		if allSame {
-			fmt.Printf("   ✅ All embeddings identical (similarity > 0.9999)\n")
+			fmt.Printf("    All embeddings identical (similarity > 0.9999)\n")
 		} else {
-			fmt.Printf("   ⚠️  Embeddings vary (similarities: ")
+			fmt.Printf("     Embeddings vary (similarities: ")
 			for j, sim := range similarities {
 				fmt.Printf("%.6f", sim)
 				if j < len(similarities)-1 {
@@ -165,11 +165,11 @@ func testInt8Quantization(model *gobed.EmbeddingModel) {
 	fmt.Printf("   Similarity: %.6f\n", similarity)
 
 	if similarity > 0.95 {
-		fmt.Printf("   ✅ High fidelity quantization (> 0.95)\n")
+		fmt.Printf("    High fidelity quantization (> 0.95)\n")
 	} else if similarity > 0.90 {
-		fmt.Printf("   ✅ Good quantization (> 0.90)\n")
+		fmt.Printf("    Good quantization (> 0.90)\n")
 	} else {
-		fmt.Printf("   ⚠️  Low fidelity quantization (< 0.90)\n")
+		fmt.Printf("     Low fidelity quantization (< 0.90)\n")
 	}
 
 	// Show sample values
@@ -184,7 +184,7 @@ func testInt8Quantization(model *gobed.EmbeddingModel) {
 
 // benchmarkEmbeddingGeneration benchmarks embedding generation performance
 func benchmarkEmbeddingGeneration(model *gobed.EmbeddingModel) {
-	fmt.Println("⚡ Benchmarking Embedding Generation")
+	fmt.Println(" Benchmarking Embedding Generation")
 	fmt.Println("====================================")
 
 	// Create test documents
@@ -273,7 +273,7 @@ func testIndexingWorkflow(model *gobed.EmbeddingModel) {
 		log.Fatalf("Failed to add documents: %v", err)
 	}
 
-	fmt.Printf("✅ Indexed %d documents in %.2fms\n", len(docs), float64(indexTime.Nanoseconds())/1e6)
+	fmt.Printf(" Indexed %d documents in %.2fms\n", len(docs), float64(indexTime.Nanoseconds())/1e6)
 	fmt.Printf("   Index size: %d\n", index.Size())
 
 	// Test search
@@ -292,7 +292,7 @@ func testIndexingWorkflow(model *gobed.EmbeddingModel) {
 		searchTime := time.Since(start)
 
 		if err != nil {
-			log.Printf("❌ Search failed for query %d: %v", i+1, err)
+			log.Printf(" Search failed for query %d: %v", i+1, err)
 			continue
 		}
 
@@ -310,20 +310,20 @@ func testIndexingWorkflow(model *gobed.EmbeddingModel) {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🔍 GOBED EMBEDDING COMPARISON AND VALIDATION TEST")
+	fmt.Println(" GOBED EMBEDDING COMPARISON AND VALIDATION TEST")
 	fmt.Println("================================================================================")
 	fmt.Println("Testing embedding consistency, quantization accuracy, and indexing workflow")
 	fmt.Println()
 
 	// Load model
-	fmt.Printf("📦 Loading embedding model...\n")
+	fmt.Printf(" Loading embedding model...\n")
 	model, err := gobed.LoadModel()
 	if err != nil {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	defer model.Close()
 
-	fmt.Printf("✅ Model loaded successfully\n\n")
+	fmt.Printf(" Model loaded successfully\n\n")
 
 	// Run tests
 	testEmbeddingConsistency(model)
@@ -333,7 +333,7 @@ func main() {
 
 	// Summary
 	fmt.Println("================================================================================")
-	fmt.Println("✅ EMBEDDING VALIDATION COMPLETED")
+	fmt.Println(" EMBEDDING VALIDATION COMPLETED")
 	fmt.Println("================================================================================")
 	fmt.Println("Key validations performed:")
 	fmt.Println("  • Embedding consistency across multiple generations")

@@ -1,17 +1,17 @@
-# Bed - Blazing Fast Semantic Search Tool 🛏️
+# Bed - Blazing Fast Semantic Search Tool 🛏
 
 A high-performance semantic search tool built on GPU-accelerated embeddings, designed as the fastest alternative to ripgrep for semantic code search.
 
 ## Features
 
-- 🚀 **GPU-Accelerated**: Leverages CUDA for 15x+ speedup on RTX series GPUs
-- ⚡ **Async Indexing**: 26.8x faster indexing with worker pools
+-  **GPU-Accelerated**: Leverages CUDA for 15x+ speedup on RTX series GPUs
+-  **Async Indexing**: 26.8x faster indexing with worker pools
 - 🧠 **Semantic Search**: Find code by meaning, not just text patterns
-- 🔍 **Line-Level Results**: Shows exact line matches with context
+-  **Line-Level Results**: Shows exact line matches with context
 - 📁 **Smart Filtering**: Respects .bedignore and .gitignore patterns
-- 💾 **Persistent Indexes**: Save and load embeddings for instant startup
+-  **Persistent Indexes**: Save and load embeddings for instant startup
 - 🎨 **Colored Output**: Beautiful ripgrep-style colored results
-- 📈 **Progress Indicators**: Real-time indexing progress with ETA
+-  **Progress Indicators**: Real-time indexing progress with ETA
 
 ## Quick Start
 
@@ -74,4 +74,4 @@ bed "authentication middleware" --threshold 0.85
 bed "search query" --force-index
 ```
 
-Built with ❤️ and blazing fast Go + CUDA.
+Built with ❤ and blazing fast Go + CUDA.

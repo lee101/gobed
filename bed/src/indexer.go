@@ -346,7 +346,7 @@ func (idx *Indexer) displayStatistics() {
 	// Display GPU statistics if available
 	if idx.embedder.IsGPUAvailable() {
 		gpuStats := idx.embedder.Stats()
-		fmt.Printf("  GPU accelerated: Yes ⚡\n")
+		fmt.Printf("  GPU accelerated: Yes \n")
 		if gpuRate, ok := gpuStats["processing_rate"]; ok {
 			fmt.Printf("  GPU processing:  %s\n", gpuRate)
 		}

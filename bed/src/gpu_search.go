@@ -129,7 +129,7 @@ func NewGPUSearchIndex(config SearchConfig) (*GPUSearchIndex, error) {
 		return nil, fmt.Errorf("failed to initialize CUDA index")
 	}
 
-	log.Printf("🚀 Initialized GPU search index (dim=%d, max_vectors=%d)",
+	log.Printf(" Initialized GPU search index (dim=%d, max_vectors=%d)",
 		config.EmbeddingDim, config.MaxVectors)
 
 	return &GPUSearchIndex{
@@ -303,7 +303,7 @@ func (idx *GPUSearchIndex) IndexDirectory(ctx context.Context, dir string, exten
 		extensions = []string{".go", ".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".rs", ".md", ".txt"}
 	}
 
-	log.Printf("🔍 Indexing directory: %s", dir)
+	log.Printf(" Indexing directory: %s", dir)
 
 	// Find all files
 	var files []string
@@ -392,7 +392,7 @@ func (idx *GPUSearchIndex) IndexDirectory(ctx context.Context, dir string, exten
 	idx.indexTime = time.Since(startTime)
 	atomic.StoreInt32(&idx.numVectors, int32(len(idx.chunks)))
 
-	log.Printf("✅ Indexed %d chunks from %d files in %.2fs",
+	log.Printf(" Indexed %d chunks from %d files in %.2fs",
 		len(idx.chunks), len(idx.fileIndex), idx.indexTime.Seconds())
 
 	return nil
@@ -454,7 +454,7 @@ func (idx *GPUSearchIndex) trainIVF() error {
 
 	if result == 0 {
 		idx.ivfTrained = true
-		log.Printf("✅ Trained IVF index with %d clusters", idx.config.IVFClusters)
+		log.Printf(" Trained IVF index with %d clusters", idx.config.IVFClusters)
 	}
 
 	return nil
@@ -667,7 +667,7 @@ func (idx *GPUSearchIndex) SaveIndex(path string) error {
 		return err
 	}
 
-	log.Printf("💾 Saved index to %s (%d chunks)", path, len(idx.chunks))
+	log.Printf(" Saved index to %s (%d chunks)", path, len(idx.chunks))
 	return nil
 }
 

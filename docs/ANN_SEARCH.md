@@ -4,13 +4,13 @@ Gobed now includes a state-of-the-art Approximate Nearest Neighbor (ANN) search 
 
 ## Features
 
-### 🚀 Performance
+###  Performance
 - **SIMD Optimized**: AVX-512 VNNI on x86, ARM SDOT on ARM64
 - **< 1ms latency** for searches up to 1M vectors
 - **Memory efficient**: INT8 quantization + Product Quantization
 - **Throughput**: 2000+ QPS on a single core for 100k vectors
 
-### 🏗️ Architecture
+### 🏗 Architecture
 - **Small Scale (≤50k)**: SIMD-Flat exact search
 - **Large Scale (>50k)**: IVF-HNSW-PQ with reranking
   - IVF (Inverted File) for partitioning
@@ -18,7 +18,7 @@ Gobed now includes a state-of-the-art Approximate Nearest Neighbor (ANN) search 
   - Product Quantization for memory compression
   - SIMD reranking for accuracy
 
-### 🔧 Flexibility
+###  Flexibility
 - Automatic index selection based on dataset size
 - Configurable trade-offs between speed, memory, and recall
 - Seamless integration with gobed embeddings

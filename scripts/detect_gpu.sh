@@ -11,13 +11,13 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}🔍 GPU Environment Detection${NC}"
+echo -e "${GREEN} GPU Environment Detection${NC}"
 
 # Auto-detect CUDA version from nvidia-smi
 if command -v nvidia-smi &> /dev/null; then
     CUDA_VERSION=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+\.[0-9]+' | head -1)
     if [ -z "$CUDA_VERSION" ]; then
-        echo -e "${YELLOW}⚠️  nvidia-smi found but couldn't detect CUDA version${NC}"
+        echo -e "${YELLOW}  nvidia-smi found but couldn't detect CUDA version${NC}"
         CUDA_VERSION=""
     else
         CUDA_MAJOR=$(echo $CUDA_VERSION | cut -d. -f1)
@@ -30,7 +30,7 @@ if command -v nvidia-smi &> /dev/null; then
         nvidia-smi -L | head -3
     fi
 else
-    echo -e "${YELLOW}⚠️  nvidia-smi not found - GPU support disabled${NC}"
+    echo -e "${YELLOW}  nvidia-smi not found - GPU support disabled${NC}"
     CUDA_VERSION=""
 fi
 
@@ -62,7 +62,7 @@ fi
 
 # Auto-select GCC based on CUDA version
 if [ -n "$CUDA_VERSION" ]; then
-    echo -e "${GREEN}🔧 Configuring compiler for CUDA ${CUDA_VERSION}${NC}"
+    echo -e "${GREEN} Configuring compiler for CUDA ${CUDA_VERSION}${NC}"
 
     # CUDA compatibility matrix
     # CUDA 12.0-12.2: GCC 12
@@ -111,7 +111,7 @@ if command -v go &> /dev/null; then
     echo -e "${GREEN}✓ Found Go: ${GO_VERSION}${NC}"
     GO_PATH=$(which go)
 else
-    echo -e "${YELLOW}⚠️  Go not found, checking common locations${NC}"
+    echo -e "${YELLOW}  Go not found, checking common locations${NC}"
     if [ -f "/usr/local/go/bin/go" ]; then
         GO_PATH="/usr/local/go/bin"
         GO_VERSION=$($GO_PATH/go version | grep -oP 'go[0-9]+\.[0-9]+(\.[0-9]+)?')
@@ -187,10 +187,10 @@ export DATABASE_URL="postgresql://lee:netwrck2024@localhost/netwrck_ai_character
 # Helper function to build with GPU support
 build_with_gpu() {
     if [ "$USE_GPU" = "true" ]; then
-        echo "🚀 Building with GPU support..."
+        echo " Building with GPU support..."
         go build $GPU_TAGS "$@"
     else
-        echo "🖥️  Building CPU-only version..."
+        echo "🖥  Building CPU-only version..."
         go build "$@"
     fi
 }
@@ -198,10 +198,10 @@ build_with_gpu() {
 # Helper function to run tests with GPU
 test_with_gpu() {
     if [ "$USE_GPU" = "true" ]; then
-        echo "🚀 Running tests with GPU support..."
+        echo " Running tests with GPU support..."
         go test $GPU_TAGS "$@"
     else
-        echo "🖥️  Running CPU-only tests..."
+        echo "🖥  Running CPU-only tests..."
         go test "$@"
     fi
 }
@@ -223,7 +223,7 @@ if [ -n "$CUDA_PATH" ]; then
     echo -e "  GPU Mode:    ${GREEN}✓${NC} Enabled"
 else
     echo -e "  CUDA:        ${YELLOW}✗${NC} Not available"
-    echo -e "  Compiler:    ${YELLOW}⚠${NC} ${CUDA_GCC}"
+    echo -e "  Compiler:    ${YELLOW}${NC} ${CUDA_GCC}"
     echo -e "  GPU Mode:    ${YELLOW}✗${NC} Disabled (CPU-only)"
 fi
 
@@ -270,7 +270,7 @@ CUDA_EOF
             rm -f /tmp/cuda_test
         fi
     else
-        echo -e "${YELLOW}⚠️  CUDA compilation test failed - check compiler compatibility${NC}"
+        echo -e "${YELLOW}  CUDA compilation test failed - check compiler compatibility${NC}"
     fi
     rm -f /tmp/cuda_test.cu
 fi

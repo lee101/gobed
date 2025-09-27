@@ -316,7 +316,7 @@ func (m *SimpleInt8Model512) Similarity(text1, text2 string) (float32, error) {
 }
 
 func main() {
-	fmt.Println("🚀 Complete Int8 Model Test with Int16 Tokenizer")
+	fmt.Println(" Complete Int8 Model Test with Int16 Tokenizer")
 	fmt.Println("=" * 60)
 
 	// Load model
@@ -326,9 +326,9 @@ func main() {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	loadTime := time.Since(start)
-	fmt.Printf("✅ Model loaded in %v\n", loadTime)
-	fmt.Printf("📊 Vocab size: %d, Embedding dims: %d\n", len(model.vocab), Int8EmbeddingDim)
-	fmt.Printf("💾 Memory: ~15MB model + %d tokens in vocab\n\n", len(model.vocab))
+	fmt.Printf(" Model loaded in %v\n", loadTime)
+	fmt.Printf(" Vocab size: %d, Embedding dims: %d\n", len(model.vocab), Int8EmbeddingDim)
+	fmt.Printf(" Memory: ~15MB model + %d tokens in vocab\n\n", len(model.vocab))
 
 	// Test texts
 	testTexts := []string{
@@ -340,14 +340,14 @@ func main() {
 	}
 
 	// Test tokenization
-	fmt.Println("📝 Testing Int16 Tokenization:")
+	fmt.Println(" Testing Int16 Tokenization:")
 	for _, text := range testTexts {
 		tokens := model.SimpleTokenize(text)
 		fmt.Printf("  %q -> %v (count: %d)\n", text, tokens, len(tokens))
 	}
 
 	// Test embedding generation
-	fmt.Println("\n🔧 Testing Float32 Embedding Generation:")
+	fmt.Println("\n Testing Float32 Embedding Generation:")
 	var totalEmbedTime time.Duration
 	for _, text := range testTexts {
 		start := time.Now()
@@ -395,7 +395,7 @@ func main() {
 	fmt.Printf("  Average: %v per int8 embedding\n", avgInt8Time)
 
 	// Test similarity
-	fmt.Println("\n🎯 Testing Similarity Computation:")
+	fmt.Println("\n Testing Similarity Computation:")
 	testPairs := []struct{ text1, text2 string }{
 		{"machine learning", "machine learning"},
 		{"deep learning", "neural networks"},
@@ -422,7 +422,7 @@ func main() {
 	fmt.Printf("  Average: %v per similarity\n", avgSimTime)
 
 	// Performance benchmark
-	fmt.Println("\n⏱️  Performance Benchmark (1000 iterations):")
+	fmt.Println("\n  Performance Benchmark (1000 iterations):")
 	benchText := "machine learning algorithms for neural networks"
 	numIter := 1000
 
@@ -466,21 +466,21 @@ func main() {
 	simLatency := simBenchTime / time.Duration(numIter/2)
 	simThroughput := float64(numIter/2) / simBenchTime.Seconds()
 
-	fmt.Printf("📊 Benchmark Results:\n")
+	fmt.Printf(" Benchmark Results:\n")
 	fmt.Printf("  Float32 Embedding: %v avg, %.0f/sec\n", embedLatency, embedThroughput)
 	fmt.Printf("  Int8 Embedding:    %v avg, %.0f/sec\n", int8Latency, int8Throughput)
 	fmt.Printf("  Similarity:        %v avg, %.0f/sec\n", simLatency, simThroughput)
 
-	fmt.Printf("\n🎉 Performance Summary:\n")
+	fmt.Printf("\n Performance Summary:\n")
 	fmt.Printf("  Model size: 15MB (vs 119MB original = 7.9x smaller)\n")
 	fmt.Printf("  Embedding throughput: %.0f/sec\n", embedThroughput)
 	fmt.Printf("  Average latency: %v (target: <1ms) ", embedLatency)
 	if embedLatency < time.Millisecond {
-		fmt.Printf("✅ TARGET MET!\n")
+		fmt.Printf(" TARGET MET!\n")
 	} else {
-		fmt.Printf("❌ Above target\n")
+		fmt.Printf(" Above target\n")
 	}
 
-	fmt.Println("\n✅ Complete int8 model test finished successfully!")
-	fmt.Printf("🚀 Ready for production with int16 tokenizer and int8 embeddings!\n")
+	fmt.Println("\n Complete int8 model test finished successfully!")
+	fmt.Printf(" Ready for production with int16 tokenizer and int8 embeddings!\n")
 }

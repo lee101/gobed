@@ -19,7 +19,7 @@ if torch.cuda.is_available():
 try:
     print("\nLoading CUDA ops library...")
     torch.ops.load_library('/home/lee/code/gobed/gpu_search/cuda_ops/build/libgobed_ann_ops.so')
-    print("✅ Library loaded successfully")
+    print(" Library loaded successfully")
     
     # List available ops
     print("\nAvailable operations:")
@@ -42,7 +42,7 @@ try:
     
     # Run operation
     result = torch.ops.gobed_ann.i8dot512_scores(q, db)
-    print(f"✅ Result shape: {result.shape}, dtype: {result.dtype}")
+    print(f" Result shape: {result.shape}, dtype: {result.dtype}")
     
     # Test error handling
     print("\nTesting error handling...")
@@ -50,12 +50,12 @@ try:
         # Wrong dtype
         q_float = torch.randn(512, device=device)
         result = torch.ops.gobed_ann.i8dot512_scores(q_float, db)
-        print("❌ Should have raised error for wrong dtype")
+        print(" Should have raised error for wrong dtype")
     except Exception as e:
-        print(f"✅ Correctly rejected wrong dtype: {type(e).__name__}")
+        print(f" Correctly rejected wrong dtype: {type(e).__name__}")
     
-    print("\n✅ All basic tests passed!")
+    print("\n All basic tests passed!")
     
 except Exception as e:
-    print(f"\n❌ Error: {e}")
+    print(f"\n Error: {e}")
     traceback.print_exc()
