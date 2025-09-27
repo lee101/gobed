@@ -3,7 +3,7 @@
 # Test script for searching ai.txt with real embeddings
 set -e
 
-echo "🔨 Building bed_real with CUDA support..."
+echo " Building bed_real with CUDA support..."
 cd /home/lee/code/gobed/bed
 
 # Build CUDA library

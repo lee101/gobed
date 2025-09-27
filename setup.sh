@@ -78,7 +78,7 @@ fi
 echo ""
 
 # Test Go build
-echo "🔨 Testing Go build..."
+echo " Testing Go build..."
 go build -o /tmp/gobed_test cmd/demo/main.go
 rm /tmp/gobed_test
 echo " Go build successful"

@@ -197,7 +197,7 @@ fi
 
 # 6. Build CUDA components
 echo
-echo "🔨 Building CUDA components..."
+echo " Building CUDA components..."
 cd gpu_search/cuda_ops
 
 if [ ! -d "build" ]; then

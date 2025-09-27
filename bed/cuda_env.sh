@@ -63,12 +63,12 @@ if [ -n "$CUDA_PATH" ]; then
     export CUDA_ENABLED=true
     export GPU_ENABLED=true
     export GPU_ARCH="-arch=sm_86"  # RTX 3090 architecture
-    echo "🚀 CUDA ${CUDA_VERSION} environment ready"
+    echo " CUDA ${CUDA_VERSION} environment ready"
 else
     export USE_GPU=false
     export CUDA_ENABLED=false
     export GPU_ENABLED=false
-    echo "⚠️  CUDA not available, CPU mode only"
+    echo "  CUDA not available, CPU mode only"
 fi
 
 # Export all variables for use in other scripts

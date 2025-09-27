@@ -5,7 +5,7 @@ echo " Building and running Gobed bulk embedding benchmark..."
 echo ""
 
 # Build the benchmark
-echo "🔨 Building benchmark..."
+echo " Building benchmark..."
 go build -o bulk_benchmark ./cmd/bulk_benchmark
 echo " Built successfully"
 echo ""

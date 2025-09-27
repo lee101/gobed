@@ -1,17 +1,5 @@
 package main
 
-// GPU-accelerated semantic search for the bed tool
-// This is the main entry point that properly returns unique top-k matches
-
-// #cgo LDFLAGS: -L. -L/usr/local/cuda/lib64 -lcudart -lcublas -lcuda_unique_topk
-// #include <stdlib.h>
-// extern void* create_unique_topk_search(int max_docs, int dim, int max_k);
-// extern void destroy_unique_topk_search(void* handle);
-// extern void add_documents_topk(void* handle, const signed char* docs, int num_docs, int dim);
-// extern int search_topk_unique(void* handle, const signed char* query, int dim, int k,
-//                              int* out_indices, float* out_scores);
-import "C"
-
 import (
 	"bufio"
 	"flag"
@@ -21,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/fatih/color"
 	"github.com/lee101/gobed"
@@ -41,11 +28,6 @@ type Document struct {
 	Embedding []int8
 }
 
-type SearchResult struct {
-	Document *Document
-	Score    float32
-}
-
 func main() {
 	// Parse command line flags
 	var (
@@ -55,10 +37,12 @@ func main() {
 		debug       = flag.Bool("debug", false, "Enable debug output")
 		maxFiles    = flag.Int("max-files", 0, "Maximum files to index (0=unlimited)")
 		filePattern = flag.String("pattern", "", "File pattern to match (e.g., '*.go')")
+		forceGPU    = flag.Bool("gpu", false, "Force GPU usage")
+		forceCPU    = flag.Bool("cpu", false, "Force CPU usage")
 	)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "bed - GPU-accelerated semantic search\n\n")
+		fmt.Fprintf(os.Stderr, "bed - High-performance semantic search\n\n")
 		fmt.Fprintf(os.Stderr, "Usage: bed [options] <query>\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
@@ -67,6 +51,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  bed -dir /path/to/dir \"query\"       # Search specific directory\n")
 		fmt.Fprintf(os.Stderr, "  bed -k 20 \"find matches\"            # Show top 20 results\n")
 		fmt.Fprintf(os.Stderr, "  bed -pattern \"*.txt\" \"search text\"  # Search only .txt files\n")
+		fmt.Fprintf(os.Stderr, "  bed -gpu \"search with GPU\"          # Force GPU usage\n")
 	}
 
 	flag.Parse()
@@ -110,22 +95,10 @@ func main() {
 		log.Printf("Indexed %d documents", len(documents))
 	}
 
-	// Create GPU search index
+	// Create search engine (auto-detects GPU)
 	const dim = 384
-	gpuSearch := C.create_unique_topk_search(
-		C.int(len(documents)+100),
-		C.int(dim),
-		C.int(100), // max_k
-	)
-	if gpuSearch == nil {
-		log.Fatal("Failed to create GPU search index")
-	}
-	defer C.destroy_unique_topk_search(gpuSearch)
-
-	// Add documents to GPU index
-	if *debug {
-		log.Println("Adding documents to GPU index...")
-	}
+	engine := CreateSearchEngine(len(documents), dim, *forceGPU, *forceCPU, *debug)
+	defer engine.Destroy()
 
 	// Flatten embeddings
 	flatEmbeddings := make([]int8, len(documents)*dim)
@@ -133,12 +106,11 @@ func main() {
 		copy(flatEmbeddings[i*dim:], doc.Embedding)
 	}
 
-	C.add_documents_topk(
-		gpuSearch,
-		(*C.schar)(unsafe.Pointer(&flatEmbeddings[0])),
-		C.int(len(documents)),
-		C.int(dim),
-	)
+	// Add documents to search engine
+	if *debug {
+		log.Printf("Adding documents to %s engine...", engine.GetMode())
+	}
+	engine.AddDocuments(flatEmbeddings, len(documents), dim)
 
 	// Encode search query
 	queryEmbedding, err := encodeQuery(*searchQuery, model)
@@ -146,26 +118,14 @@ func main() {
 		log.Fatalf("Failed to encode query: %v", err)
 	}
 
-	// Perform GPU search
-	indices := make([]int32, *topK)
-	scores := make([]float32, *topK)
-
+	// Perform search
 	startSearch := time.Now()
-
-	numResults := int(C.search_topk_unique(
-		gpuSearch,
-		(*C.schar)(unsafe.Pointer(&queryEmbedding[0])),
-		C.int(dim),
-		C.int(*topK),
-		(*C.int)(unsafe.Pointer(&indices[0])),
-		(*C.float)(unsafe.Pointer(&scores[0])),
-	))
-
+	indices, scores, numResults := engine.Search(queryEmbedding, *topK)
 	searchTime := time.Since(startSearch)
 
 	// Display results
-	fmt.Printf("\n %s\n", *searchQuery)
-	fmt.Printf(" %.3fms | %d results\n\n", float64(searchTime.Microseconds())/1000.0, numResults)
+	fmt.Printf("\n🔍 %s [%s]\n", *searchQuery, engine.GetMode())
+	fmt.Printf("⚡ %.3fms | %d results\n\n", float64(searchTime.Microseconds())/1000.0, numResults)
 
 	for i := 0; i < numResults; i++ {
 		idx := indices[i]
@@ -175,17 +135,6 @@ func main() {
 
 		doc := documents[idx]
 		score := scores[i]
-
-		// Check if query appears in content
-		contains := strings.Contains(
-			strings.ToLower(doc.Content),
-			strings.ToLower(*searchQuery),
-		)
-
-		marker := "  "
-		if contains {
-			marker = ""
-		}
 
 		// Format output
 		relPath := doc.FilePath
@@ -201,18 +150,15 @@ func main() {
 			content = content[:77] + "..."
 		}
 
-		if contains {
+		// Check if query appears in content
+		if strings.Contains(strings.ToLower(doc.Content), strings.ToLower(*searchQuery)) {
 			content = highlightQuery(content, *searchQuery)
-			fmt.Printf("%s%s:%d (%.3f)\n  %s\n\n",
-				marker, relPath, doc.LineNum, score, content)
+			fmt.Printf("✅ %s:%d (%.3f)\n  %s\n\n",
+				relPath, doc.LineNum, score, content)
 		} else {
 			fmt.Printf("%s:%d (%.3f)\n  %s\n\n",
 				relPath, doc.LineNum, score, content)
 		}
-	}
-
-	if *debug {
-		fmt.Printf("Search completed in %.2fms\n", float64(searchTime.Microseconds())/1000.0)
 	}
 }
 

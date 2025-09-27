@@ -30,7 +30,7 @@ build_test() {
     local output_suffix="$5"
 
     echo ""
-    echo -e "${BLUE}🔨 Building: ${build_name}${NC}"
+    echo -e "${BLUE} Building: ${build_name}${NC}"
     echo "----------------------------------------"
 
     local build_dir="/tmp/gobed-builds/${build_name}"

@@ -75,7 +75,7 @@ fi
 
 # 2. Build Performance Tests
 echo ""
-echo -e "${YELLOW}🔨 Build Performance Tests${NC}"
+echo -e "${YELLOW} Build Performance Tests${NC}"
 
 perf_test "Clean Build CPU" "make clean && go build -o /tmp/gobed-perf-cpu ./cmd/demo" ""
 

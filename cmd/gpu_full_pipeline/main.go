@@ -368,7 +368,7 @@ func (idx *GPUSearchIndex) AddVectors(vectors [][]float32) error {
 
 // buildIVF builds the inverted file index
 func (idx *GPUSearchIndex) buildIVF() {
-	log.Printf("🔨 Building IVF index with %d centroids...", idx.numCentroids)
+	log.Printf(" Building IVF index with %d centroids...", idx.numCentroids)
 
 	// Get active vectors
 	activeVectors := idx.vectors.MustNarrow(0, 0, int64(idx.numVectors), false)

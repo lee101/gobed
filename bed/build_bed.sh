@@ -2,7 +2,7 @@
 
 set -e
 
-echo "🔨 Building BED search tool..."
+echo " Building BED search tool..."
 
 # Auto-detect CUDA version from nvidia-smi
 GPU_AVAILABLE=false
@@ -78,7 +78,7 @@ if [ "$GPU_AVAILABLE" = true ]; then
 
     # Try to build GPU libraries if they exist
     if [ -d "../gpu_fast" ]; then
-        echo "🔨 Building GPU libraries..."
+        echo " Building GPU libraries..."
         (cd ../gpu_fast && make -j4 >/dev/null 2>&1) || {
             echo "  GPU library build failed, continuing with CPU mode"
             GPU_AVAILABLE=false
@@ -95,13 +95,13 @@ fi
 
 # Build the binary - use bed_cuda.go which has our working implementation
 if [ "$GPU_AVAILABLE" = true ] && [ -n "$GPU_TAGS" ]; then
-    echo "🔨 Compiling with GPU support..."
+    echo " Compiling with GPU support..."
     go build $GPU_TAGS -o bed bed_cuda.go || {
         echo "  GPU build failed, falling back to CPU build"
         go build -o bed bed_cuda.go
     }
 else
-    echo "🔨 Compiling CPU version..."
+    echo " Compiling CPU version..."
     go build -o bed bed_cuda.go
 fi
 

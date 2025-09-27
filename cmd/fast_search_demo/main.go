@@ -38,7 +38,7 @@ func main() {
 		fmt.Printf("📁 Found existing index, loading...\n")
 		runWithExistingIndex(indexer, indexPath)
 	} else {
-		fmt.Printf("🔨 Building new index for 243K vectors...\n")
+		fmt.Printf(" Building new index for 243K vectors...\n")
 		runFullIndexBuild(indexer, indexPath)
 	}
 }

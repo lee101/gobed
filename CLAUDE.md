@@ -1,0 +1,1 @@
+- no emoji or superflous language, stoic concise, clear minded ultrathink

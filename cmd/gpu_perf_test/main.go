@@ -13,18 +13,18 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 GPU Performance Test - Custom CUDA + Int8 Model")
+	fmt.Println(" GPU Performance Test - Custom CUDA + Int8 Model")
 	fmt.Println("==================================================")
 
 	// Load the embedding model
-	fmt.Println("📦 Loading EmbeddingModel...")
+	fmt.Println(" Loading EmbeddingModel...")
 	start := time.Now()
 	model, err := gobed.LoadModel()
 	if err != nil {
 		log.Fatalf("Failed to load EmbeddingModel: %v", err)
 	}
 	loadTime := time.Since(start)
-	fmt.Printf("✅ Model loaded in %.2fms\n", float64(loadTime.Microseconds())/1000.0)
+	fmt.Printf(" Model loaded in %.2fms\n", float64(loadTime.Microseconds())/1000.0)
 
 	// Create GPU search engine
 	fmt.Println("🏗  Creating GPU search engine...")
@@ -32,7 +32,7 @@ func main() {
 	engine := gobed.NewGPUSearchEngine(model)
 	defer engine.Close()
 	engineTime := time.Since(start)
-	fmt.Printf("✅ GPU engine created in %.2fms\n", float64(engineTime.Microseconds())/1000.0)
+	fmt.Printf(" GPU engine created in %.2fms\n", float64(engineTime.Microseconds())/1000.0)
 
 	// Load and index ai.txt data
 	fmt.Println("📁 Loading ai.txt data...")
@@ -43,7 +43,7 @@ func main() {
 	fmt.Printf("📄 Loaded %d documents\n", len(documents))
 
 	// Index documents
-	fmt.Println("🔍 Indexing documents on GPU...")
+	fmt.Println(" Indexing documents on GPU...")
 	start = time.Now()
 	ids := make([]int, len(documents))
 	for i := range documents {
@@ -55,7 +55,7 @@ func main() {
 		log.Fatalf("Failed to index documents: %v", err)
 	}
 	indexTime := time.Since(start)
-	fmt.Printf("✅ Indexed %d documents in %.2fs (%.1f docs/sec)\n",
+	fmt.Printf(" Indexed %d documents in %.2fs (%.1f docs/sec)\n",
 		len(documents), indexTime.Seconds(), float64(len(documents))/indexTime.Seconds())
 
 	// Test queries focusing on AI/ML terms
@@ -72,7 +72,7 @@ func main() {
 		"time series forecasting",
 	}
 
-	fmt.Println("\n🎯 Running GPU Search Performance Tests")
+	fmt.Println("\n Running GPU Search Performance Tests")
 	fmt.Println("========================================")
 	fmt.Printf("%-25s %10s %8s %12s\n", "Query", "Time(ms)", "Results", "QPS")
 	fmt.Println(strings.Repeat("-", 60))
@@ -104,7 +104,7 @@ func main() {
 
 		// Show top 3 results for first query as example
 		if successCount == 0 && len(results) > 0 {
-			fmt.Printf("\n📋 Sample results for '%s':\n", query)
+			fmt.Printf("\n Sample results for '%s':\n", query)
 			for i, result := range results {
 				if i >= 3 { break }
 				docText := documents[result.ID]
@@ -132,7 +132,7 @@ func main() {
 		avgQPS := 1000.0 / (float64(avgTime.Microseconds()) / 1000.0)
 
 		fmt.Println(strings.Repeat("-", 60))
-		fmt.Println("\n📊 Performance Summary")
+		fmt.Println("\n Performance Summary")
 		fmt.Println("======================")
 		fmt.Printf("Average:     %.2fms (%.0f QPS)\n", float64(avgTime.Microseconds())/1000.0, avgQPS)
 		fmt.Printf("Fastest:     %.2fms\n", float64(minTime.Microseconds())/1000.0)
@@ -140,28 +140,28 @@ func main() {
 		fmt.Printf("Successful:  %d/%d queries\n", successCount, len(testQueries))
 
 		// Performance targets
-		fmt.Println("\n🎯 Performance Analysis")
+		fmt.Println("\n Performance Analysis")
 		fmt.Println("=======================")
 		targetTime := 100.0 // Target <100ms
 		avgTimeMs := float64(avgTime.Microseconds()) / 1000.0
 
 		if avgTimeMs < targetTime {
 			improvement := targetTime / avgTimeMs
-			fmt.Printf("✅ EXCELLENT: %.1fx faster than 100ms target!\n", improvement)
+			fmt.Printf(" EXCELLENT: %.1fx faster than 100ms target!\n", improvement)
 		} else {
 			slowdown := avgTimeMs / targetTime
-			fmt.Printf("⚠️  NEEDS OPTIMIZATION: %.1fx slower than 100ms target\n", slowdown)
+			fmt.Printf("  NEEDS OPTIMIZATION: %.1fx slower than 100ms target\n", slowdown)
 		}
 
-		fmt.Printf("🏆 Target QPS (100ms): %.0f\n", 1000.0/targetTime)
-		fmt.Printf("📈 Actual QPS:        %.0f\n", avgQPS)
+		fmt.Printf(" Target QPS (100ms): %.0f\n", 1000.0/targetTime)
+		fmt.Printf(" Actual QPS:        %.0f\n", avgQPS)
 
 		// Memory usage (if available)
-		fmt.Println("\n💾 System Info")
+		fmt.Println("\n System Info")
 		fmt.Println("===============")
 		fmt.Printf("📄 Documents indexed: %d\n", len(documents))
 		fmt.Printf("🧠 Model: EmbeddingModel (GPU-optimized)\n")
-		fmt.Printf("⚡ GPU: Custom CUDA implementation\n")
+		fmt.Printf(" GPU: Custom CUDA implementation\n")
 	}
 
 	fmt.Println("\n🏁 GPU Performance Test Complete!")

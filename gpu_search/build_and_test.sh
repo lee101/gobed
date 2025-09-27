@@ -26,7 +26,7 @@ if [ ! -f go.mod ]; then
 fi
 
 # 4. Build Go client
-echo -e "\n🔨 Building Go client..."
+echo -e "\n Building Go client..."
 source ~/.secretbashrc 2>/dev/null || true
 export LD_LIBRARY_PATH=$LIBTORCH/lib:/usr/local/lib:$LD_LIBRARY_PATH
 
