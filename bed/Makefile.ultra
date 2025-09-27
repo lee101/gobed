@@ -1,0 +1,42 @@
+# Ultra-optimized bed build configuration
+
+NVCC = nvcc
+CUDA_FLAGS = -O3 -arch=sm_86 -std=c++17 \
+	-gencode=arch=compute_86,code=sm_86 \
+	--use_fast_math \
+	--ptxas-options=-v \
+	-Xcompiler -fopenmp \
+	-Xcompiler -march=native \
+	-Xcompiler -mtune=native \
+	-Xcompiler -ffast-math \
+	-Xcompiler -funroll-loops \
+	-Xcompiler -fprefetch-loop-arrays \
+	-Xptxas -dlcm=ca \
+	-Xptxas -dscm=cs \
+	-lineinfo
+
+CUDA_LIBS = -lcudart -lcublas -lcublasLt -lcurand -L/usr/local/cuda/lib64
+
+GO_FLAGS = -ldflags="-s -w" -tags cuda
+
+.PHONY: all clean benchmark profile
+
+all: libcuda_ultra_fast.so bed_ultra
+
+libcuda_ultra_fast.so: cuda_ultra_fast.cu
+	$(NVCC) $(CUDA_FLAGS) -shared -Xcompiler -fPIC -o $@ $< $(CUDA_LIBS)
+
+bed_ultra: libcuda_ultra_fast.so bed_ultra_performance.go
+	go build $(GO_FLAGS) -o $@ bed_ultra_performance.go
+
+benchmark: all
+	./bed_ultra -dir . -k 10 "search query"
+
+profile: all
+	nvprof --print-gpu-trace ./bed_ultra -dir . -k 10 "test"
+
+nsys-profile: all
+	nsys profile --stats=true --output=bed_ultra_profile ./bed_ultra -dir . -k 10 "test"
+
+clean:
+	rm -f libcuda_ultra_fast.so bed_ultra *.o *.nsys-rep

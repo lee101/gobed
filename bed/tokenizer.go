@@ -47,41 +47,19 @@ func LoadTokenizer(path string) (*FastTokenizer, error) {
 	}, nil
 }
 
-// Tokenize with zero allocations using int16 tokens, auto-truncates to model limits
+// Tokenize with zero allocations using int16 tokens
 func (ft *FastTokenizer) Tokenize(text string) []int16 {
 	if text == "" {
 		return []int16{100} // UNK token
 	}
 
-	// Truncate input if too long (1500 chars max for chunking)
-	if len(text) > 1500 {
-		text = text[:1500]
-	}
-
 	text = strings.ToLower(text)
-
-	// Clean special characters silently (keep only alphanumeric, spaces, basic punctuation)
-	cleaned := strings.Builder{}
-	for _, r := range text {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') ||
-		   r == ' ' || r == '-' || r == '.' || r == '_' {
-			cleaned.WriteRune(r)
-		}
-	}
-	text = cleaned.String()
-
 	words := strings.Fields(text)
 
-	// Pre-allocate with estimated capacity, max 512 tokens
-	maxTokens := 512
-	tokens := make([]int16, 0, min(len(words)*2, maxTokens))
+	// Pre-allocate with estimated capacity
+	tokens := make([]int16, 0, len(words)*2)
 
 	for _, word := range words {
-		// Stop if we hit token limit
-		if len(tokens) >= maxTokens {
-			break
-		}
-
 		// Direct vocab lookup first (fastest path)
 		if id, exists := ft.vocab[word]; exists {
 			tokens = append(tokens, id)
@@ -90,7 +68,7 @@ func (ft *FastTokenizer) Tokenize(text string) []int16 {
 
 		// Subword tokenization fallback
 		tokenized := false
-		for i := 0; i < len(word) && !tokenized && len(tokens) < maxTokens; i++ {
+		for i := 0; i < len(word) && !tokenized; i++ {
 			for j := min(len(word), i+ft.maxLen); j > i; j-- {
 				piece := word[i:j]
 				if id, exists := ft.vocab[piece]; exists {
@@ -103,7 +81,14 @@ func (ft *FastTokenizer) Tokenize(text string) []int16 {
 			}
 		}
 
-		// Skip unknown words silently (no UNK tokens for cleaner results)
+		if !tokenized {
+			// Fallback to UNK
+			if unkId, exists := ft.vocab["[UNK]"]; exists {
+				tokens = append(tokens, unkId)
+			} else {
+				tokens = append(tokens, 100)
+			}
+		}
 	}
 
 	if len(tokens) == 0 {

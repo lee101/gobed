@@ -28,6 +28,7 @@ type GPUIndexer struct {
 	isReady      bool
 	embeddings   []float32
 	numVectors   int
+	actualMemoryUsage uint64 // Track actual indexer memory usage
 }
 
 // IndexConfig configures the GPU indexer
@@ -272,8 +273,32 @@ func (g *GPUIndexer) Search(query []int8, queryScale float32, k int) ([]int32, [
 	return g.SearchWithEmbedding(query, queryScale, k)
 }
 
-// GetMemoryUsage returns current GPU memory usage
+// GetMemoryUsage returns actual indexer memory usage (not total GPU memory)
 func (g *GPUIndexer) GetMemoryUsage() uint64 {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	// Calculate actual memory used by this indexer
+	// Int8 vectors: numVectors * vectorDim * 1 byte
+	vectorMemory := uint64(g.numVectors * g.vectorDim)
+
+	// Scales: numVectors * 4 bytes (float32)
+	scaleMemory := uint64(g.numVectors * 4)
+
+	// Embeddings table: vocabSize * embedDim * 4 bytes (if loaded)
+	embeddingMemory := uint64(0)
+	if len(g.embeddings) > 0 {
+		embeddingMemory = uint64(len(g.embeddings) * 4)
+	}
+
+	totalMemory := vectorMemory + scaleMemory + embeddingMemory
+	g.actualMemoryUsage = totalMemory
+
+	return totalMemory
+}
+
+// GetTotalGPUMemoryUsage returns total GPU memory usage (for debugging)
+func (g *GPUIndexer) GetTotalGPUMemoryUsage() uint64 {
 	return GetCUDAMemoryUsage()
 }
 

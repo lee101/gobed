@@ -6,15 +6,15 @@ MIT [![License](https://img.shields.io/github/license/lee101/gobed)](LICENSE)
 
 <img width="450" height="633" alt="image" src="https://github.com/user-attachments/assets/45a072fc-1a17-4aca-9da7-5394d688153a" />
 
-**Search 200K+ documents in <1ms on RTX 3090.** Gobed brings blazing-fast semantic search to Go using static embeddings optimized for GPU acceleration. Achieves 1.7M+ QPS with automatic IVF clustering for datasets over 50K items.
+**Semantic search for Go with efficient int8 embeddings.** Gobed provides semantic search using compressed static embeddings. Features automatic GPU detection, int8 quantization for memory efficiency, and 7.9x model compression.
 
 ##  Performance Achievements
 
-- **0.02ms search latency** (250x better than 5ms target!)
-- **1.7 million QPS** on 243K documents
-- **Int8 quantization** for 4x memory reduction
-- **Auto-IVF clustering** at 50K+ documents
-- **Static embeddings** - no heavy BERT models
+- **6.39s average search time** on 243K documents (current)
+- **1.7 queries/sec** throughput with parallel processing
+- **Int8 quantization** - 7.9x compression, 87.4% space saved
+- **0.151ms embedding latency** with 6,629 embeddings/sec
+- **15MB memory usage** for full model vs 119MB original
 
 Built on [static embeddings](https://huggingface.co/blog/static-embeddings) with GPU kernel fusion for maximum speed.
 

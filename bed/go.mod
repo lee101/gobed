@@ -5,15 +5,18 @@ go 1.23.0
 toolchain go1.24.6
 
 require (
-	github.com/fatih/color v1.16.0
+	github.com/daulet/tokenizers v1.23.0
+	github.com/edsrzf/mmap-go v1.2.0
+	github.com/fatih/color v1.18.0
 	github.com/fsnotify/fsnotify v1.7.0
+	github.com/klauspost/compress v1.18.0
 	github.com/lee101/gobed v0.0.0
 	github.com/schollz/progressbar/v3 v3.14.1
 	github.com/spf13/cobra v1.8.0
+	golang.org/x/sync v0.14.0
 )
 
 require (
-	github.com/daulet/tokenizers v1.23.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
