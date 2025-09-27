@@ -7,7 +7,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 var (

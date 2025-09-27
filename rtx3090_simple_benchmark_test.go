@@ -16,7 +16,7 @@ func BenchmarkRTX3090SimpleIndexing(b *testing.B) {
 		b.Fatalf("Failed to load model: %v", err)
 	}
 
-	fmt.Printf("\n RTX 3090 Simple GPU Indexing Benchmark\n")
+	fmt.Printf("\nRTX 3090 Simple GPU Indexing Benchmark\n")
 	fmt.Printf("   GPU: NVIDIA RTX 3090 (24GB VRAM)\n")
 	fmt.Printf("   CPU Cores: %d\n\n", runtime.NumCPU())
 
@@ -85,7 +85,7 @@ func BenchmarkRTX3090ConcurrentEmbedding(b *testing.B) {
 		b.Fatalf("Failed to load model: %v", err)
 	}
 
-	fmt.Printf("\n RTX 3090 Concurrent Embedding Benchmark\n")
+	fmt.Printf("\nRTX 3090 Concurrent Embedding Benchmark\n")
 
 	workerCounts := []int{1, 2, 4, 8, 16, 32}
 	docCount := 1000
@@ -140,7 +140,7 @@ func BenchmarkRTX3090BatchProcessing(b *testing.B) {
 		b.Fatalf("Failed to load model: %v", err)
 	}
 
-	fmt.Printf("\n RTX 3090 Batch Processing Benchmark\n")
+	fmt.Printf("\nRTX 3090 Batch Processing Benchmark\n")
 
 	// Test different batch sizes optimized for 24GB VRAM
 	batchSizes := []int{1, 10, 50, 100, 250, 500, 1000, 2000}

@@ -1,6 +1,6 @@
 package gobed
 
-import "github.com/lee101/gobed/ann/search"
+import "github.com/lee101/gobed/pkg/ann/search"
 
 // SearchPreset represents predefined search configurations
 type SearchPreset int

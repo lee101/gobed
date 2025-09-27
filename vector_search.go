@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lee101/gobed/ann/search"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/search"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // EmbedInt8Result represents an int8 quantized embedding

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // BenchmarkGPUBulkIndexing benchmarks the new GPU bulk indexing system

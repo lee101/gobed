@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/search"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/search"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // BenchmarkMaxFlatSize tests different MaxFlatSize values to find optimal performance

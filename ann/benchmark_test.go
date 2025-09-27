@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/flat"
-	"github.com/lee101/gobed/ann/search"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/flat"
+	"github.com/lee101/gobed/pkg/ann/search"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // generateRandomVectors generates random int8 vectors for testing

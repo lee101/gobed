@@ -13,6 +13,7 @@ struct SearchContext {
     int* d_indices;
     float* d_top_scores;
     int max_vectors;
+    int num_vectors;  // Actual number of vectors added
     int dim;
     cudaStream_t stream;
 };
@@ -124,6 +125,7 @@ __global__ void cuda_topk_kernel(
 void* cuda_fast_search_create(int max_vectors, int dim) {
     SearchContext* ctx = new SearchContext();
     ctx->max_vectors = max_vectors;
+    ctx->num_vectors = 0;  // Initialize to 0
     ctx->dim = dim;
 
     // Allocate GPU memory with proper alignment
@@ -153,6 +155,9 @@ void cuda_fast_search_destroy(void* handle) {
 int cuda_fast_search_add_vectors(void* handle, const int8_t* vectors, int num_vectors) {
     SearchContext* ctx = (SearchContext*)handle;
 
+    // Store actual number of vectors
+    ctx->num_vectors = num_vectors;
+
     // Async copy for overlapped execution
     cudaMemcpyAsync(
         ctx->d_embeddings,
@@ -179,13 +184,13 @@ int cuda_fast_search_query(void* handle, const int8_t* query, int k, int* indice
 
     // Launch similarity kernel with optimal block size
     int threads_per_block = 256;
-    int blocks = (ctx->max_vectors + threads_per_block - 1) / threads_per_block;
+    int blocks = (ctx->num_vectors + threads_per_block - 1) / threads_per_block;
 
     cuda_int8_similarity_kernel<<<blocks, threads_per_block, 0, ctx->stream>>>(
         ctx->d_query,
         ctx->d_embeddings,
         ctx->d_scores,
-        ctx->max_vectors,
+        ctx->num_vectors,  // Use actual number of vectors
         ctx->dim
     );
 
@@ -194,7 +199,7 @@ int cuda_fast_search_query(void* handle, const int8_t* query, int k, int* indice
         ctx->d_scores,
         ctx->d_indices,
         ctx->d_top_scores,
-        ctx->max_vectors,
+        ctx->num_vectors,  // Use actual number of vectors
         k
     );
 

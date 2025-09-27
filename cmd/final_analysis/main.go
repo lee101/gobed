@@ -52,17 +52,17 @@ func main() {
 
 	for i, tc := range testCases {
 		fmt.Printf("\n🧪 Test %d: %s\n", i+1, tc.name)
-		fmt.Printf("    %d vectors, %dD, %d queries, device:%d\n", 
+		fmt.Printf("    %d vectors, %dD, %d queries, device:%d\n",
 			tc.vectors, tc.dim, tc.queries, tc.deviceID)
-		
+
 		result := runBenchmark(tc.vectors, tc.dim, tc.queries, tc.deviceID)
 		results[i] = result
-		
+
 		fmt.Printf("     Index: %v (%.0f vec/sec)\n", result.IndexTime, result.IndexRate)
-		fmt.Printf("    Search: %.1fμs avg (%.0f QPS)\n", 
+		fmt.Printf("    Search: %.1fμs avg (%.0f QPS)\n",
 			result.AvgSearchMicros, result.QPS)
-		fmt.Printf("    Memory: %.1fMB (%s)\n", 
-			result.MemoryMB, 
+		fmt.Printf("    Memory: %.1fMB (%s)\n",
+			result.MemoryMB,
 			map[bool]string{true: "GPU", false: "CPU"}[result.UsingGPU])
 	}
 
@@ -71,13 +71,13 @@ func main() {
 	fmt.Printf(strings.Repeat("-", 70))
 	fmt.Printf("%-20s %10s %10s %10s %8s\n", "Test", "Index/sec", "Search μs", "QPS", "Device")
 	fmt.Printf(strings.Repeat("-", 70))
-	
+
 	for i, result := range results {
 		device := "CPU"
 		if result.UsingGPU {
 			device = "GPU*"
 		}
-		fmt.Printf("%-20s %10.0f %10.1f %10.0f %8s\n", 
+		fmt.Printf("%-20s %10.0f %10.1f %10.0f %8s\n",
 			testCases[i].name[:20], result.IndexRate, result.AvgSearchMicros, result.QPS, device)
 	}
 
@@ -85,7 +85,7 @@ func main() {
 	fmt.Printf("   * GPU* = Manual CUDA memory + CPU compute (not true GPU acceleration)\n")
 	fmt.Printf("   * Performance differences show hardware characteristics\n")
 	fmt.Printf("   * Memory usage indicates successful CUDA operations\n")
-	
+
 	fmt.Printf("\n Conclusion:\n")
 	fmt.Printf("    System works correctly with good performance\n")
 	fmt.Printf("     LibTorch CUDA backend needs proper installation\n")
@@ -95,12 +95,12 @@ func main() {
 }
 
 type BenchmarkResult struct {
-	IndexTime        time.Duration
-	IndexRate        float64
-	AvgSearchMicros  float64
-	QPS              float64
-	MemoryMB         float64
-	UsingGPU         bool
+	IndexTime       time.Duration
+	IndexRate       float64
+	AvgSearchMicros float64
+	QPS             float64
+	MemoryMB        float64
+	UsingGPU        bool
 }
 
 func runBenchmark(vectors, dim, queries, deviceID int) BenchmarkResult {
@@ -111,8 +111,8 @@ func runBenchmark(vectors, dim, queries, deviceID int) BenchmarkResult {
 		codebook_size:     C.int(256),
 		ivf_clusters:      C.int(min(512, vectors/10)),
 		probe_lists:       C.int(16),
-		rerank_k:         C.int(100),
-		device_id:        C.int(deviceID),
+		rerank_k:          C.int(100),
+		device_id:         C.int(deviceID),
 	}
 
 	handle := C.torch_indexer_create(config)
@@ -145,7 +145,7 @@ func runBenchmark(vectors, dim, queries, deviceID int) BenchmarkResult {
 		C.int(dim),
 	)
 	indexTime := time.Since(indexStart)
-	
+
 	if result == 0 {
 		panic("Indexing failed")
 	}
@@ -155,11 +155,11 @@ func runBenchmark(vectors, dim, queries, deviceID int) BenchmarkResult {
 	// Search benchmark
 	searchStart := time.Now()
 	totalSearchTime := int64(0)
-	
+
 	for i := 0; i < queries; i++ {
 		queryIdx := (i * 17) % vectors
 		queryVector := data[queryIdx*dim : (queryIdx+1)*dim]
-		
+
 		singleSearchStart := time.Now()
 		searchResult := C.torch_indexer_search(
 			handle,
@@ -174,7 +174,7 @@ func runBenchmark(vectors, dim, queries, deviceID int) BenchmarkResult {
 			C.torch_search_result_free(&searchResult)
 		}
 	}
-	
+
 	totalSearchDuration := time.Since(searchStart)
 	avgSearchMicros := float64(totalSearchTime) / float64(queries) / 1000.0
 	qps := float64(queries) / totalSearchDuration.Seconds()
@@ -196,18 +196,18 @@ func runBenchmark(vectors, dim, queries, deviceID int) BenchmarkResult {
 
 func generateRealisticVectors(count, dim int) []int8 {
 	data := make([]int8, count*dim)
-	
+
 	// Generate vectors with realistic clustering patterns
 	numClusters := 10
 	clusterSize := count / numClusters
-	
+
 	for cluster := 0; cluster < numClusters; cluster++ {
 		// Generate cluster center
 		center := make([]float64, dim)
 		for j := 0; j < dim; j++ {
 			center[j] = rand.NormFloat64() * 50 // Wider distribution for cluster centers
 		}
-		
+
 		// Generate points around cluster center
 		for i := 0; i < clusterSize && cluster*clusterSize+i < count; i++ {
 			vectorIdx := cluster*clusterSize + i
@@ -224,7 +224,7 @@ func generateRealisticVectors(count, dim int) []int8 {
 			}
 		}
 	}
-	
+
 	return data
 }
 

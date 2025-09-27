@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/lee101/gobed/ann/search"
+	"github.com/lee101/gobed/pkg/ann/search"
 )
 
 func TestVerifyMaxFlatSizeDefaults(t *testing.T) {

@@ -98,11 +98,11 @@ func main() {
 	fmt.Printf("Initial indexing: %v\n", indexTime)
 	fmt.Printf("Loading from cache: %v\n", loadTime)
 	speedup := float64(indexTime) / float64(loadTime)
-	fmt.Printf(" Speedup: %.1fx faster\n", speedup)
+	fmt.Printf("Speedup: %.1fx faster\n", speedup)
 	
 	if loadTime > indexTime/2 {
-		fmt.Println("  WARNING: Cache loading seems slow, might be re-indexing!")
+		fmt.Println("WARNING: Cache loading seems slow, might be re-indexing!")
 	} else {
-		fmt.Println(" Cache is working correctly - no re-indexing detected!")
+		fmt.Println("Cache is working correctly - no re-indexing detected!")
 	}
 }

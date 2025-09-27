@@ -23,7 +23,7 @@ func main() {
 	fmt.Printf(" System Information:\n")
 	fmt.Printf("   Go: %s\n", runtime.Version())
 	fmt.Printf("   GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
-	
+
 	// LibTorch info
 	version := C.GoString(C.torch_get_version())
 	fmt.Printf("   LibTorch: %s\n", version)
@@ -32,7 +32,7 @@ func main() {
 	fmt.Printf("\n CUDA Investigation:\n")
 	cudaAvailable := C.torch_cuda_is_available() != 0
 	deviceCount := int(C.torch_cuda_device_count())
-	
+
 	fmt.Printf("   CUDA Available: %v\n", cudaAvailable)
 	fmt.Printf("   Device Count: %d\n", deviceCount)
 
@@ -57,7 +57,7 @@ func main() {
 	for i, config := range testConfigurations {
 		fmt.Printf("\n🧪 Test %d: %s\n", i+1, config.name)
 		fmt.Println(strings.Repeat("-", 40))
-		
+
 		testConfiguration(config.deviceID, config.vecDim, config.vecCount)
 	}
 
@@ -72,8 +72,8 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 		codebook_size:     C.int(256),
 		ivf_clusters:      C.int(128),
 		probe_lists:       C.int(8),
-		rerank_k:         C.int(50),
-		device_id:        C.int(deviceID),
+		rerank_k:          C.int(50),
+		device_id:         C.int(deviceID),
 	}
 
 	fmt.Printf("    Config: dim=%d, vectors=%d, device=%d\n", vecDim, vecCount, deviceID)
@@ -92,7 +92,7 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 	// Training phase
 	trainingSize := min(vecCount/10, 1000) // Use 10% for training, max 1000
 	fmt.Printf("   🎓 Training with %d vectors...\n", trainingSize)
-	
+
 	trainStart := time.Now()
 	result := C.torch_indexer_train(
 		handle,
@@ -110,7 +110,7 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 
 	// Indexing phase
 	fmt.Printf("   📚 Indexing %d vectors...\n", vecCount)
-	
+
 	indexStart := time.Now()
 	result = C.torch_indexer_add_vectors(
 		handle,
@@ -130,15 +130,15 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 
 	// Search phase
 	fmt.Printf("    Testing search performance...\n")
-	
+
 	numQueries := 100
 	queryStart := time.Now()
-	
+
 	for i := 0; i < numQueries; i++ {
 		// Use random vector from our dataset as query
 		queryIdx := (i * 17) % vecCount // Deterministic but varied
 		queryVector := testData[queryIdx*vecDim : (queryIdx+1)*vecDim]
-		
+
 		searchResult := C.torch_indexer_search(
 			handle,
 			(*C.schar)(unsafe.Pointer(&queryVector[0])),
@@ -150,36 +150,36 @@ func testConfiguration(deviceID, vecDim, vecCount int) {
 			C.torch_search_result_free(&searchResult)
 		}
 	}
-	
+
 	searchTime := time.Since(queryStart)
 	avgSearchTime := searchTime.Nanoseconds() / int64(numQueries) / 1000 // microseconds
 	qps := float64(numQueries) / searchTime.Seconds()
-	
-	fmt.Printf("    Search: %d queries in %v (%.0f μs/query, %.0f QPS)\n", 
+
+	fmt.Printf("    Search: %d queries in %v (%.0f μs/query, %.0f QPS)\n",
 		numQueries, searchTime, float64(avgSearchTime), qps)
 
 	// Get detailed stats
 	stats := C.torch_indexer_get_stats(handle)
-	fmt.Printf("    Memory: %.1f MB GPU, %d vectors indexed\n", 
+	fmt.Printf("    Memory: %.1f MB GPU, %d vectors indexed\n",
 		float64(stats.gpu_memory_mb), int(stats.num_vectors))
 	fmt.Printf("    GPU Usage: %v\n", stats.gpu_memory_mb > 0)
 }
 
 func generateTestVectors(count, dim int) []int8 {
 	data := make([]int8, count*dim)
-	
+
 	// Generate more realistic patterns
 	for i := 0; i < count; i++ {
 		// Create vector with some structure
 		basePattern := i % 10 // Create 10 different base patterns
-		
+
 		for j := 0; j < dim; j++ {
 			// Mix deterministic pattern with some randomness
 			val := (basePattern*17 + j*3 + (i/10)*7) % 256
 			data[i*dim+j] = int8(val - 128)
 		}
 	}
-	
+
 	return data
 }
 

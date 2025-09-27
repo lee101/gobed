@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	fmt.Printf(" Ultra-Fast GPU Search Demo\n")
+	fmt.Printf("Ultra-Fast GPU Search Demo\n")
 	fmt.Printf("Target: 10-20s indexing, <1ms search\n")
 	fmt.Printf("================================\n\n")
 
@@ -28,17 +28,17 @@ func main() {
 	// Create indexer
 	indexer, err := gobed.NewGPUFastSearchIndexer(config)
 	if err != nil {
-		log.Fatalf(" Failed to create fast search indexer: %v", err)
+		log.Fatalf("Failed to create fast search indexer: %v", err)
 	}
 	defer indexer.Close()
 
 	// Check if pre-built index exists
 	indexPath := config.IndexPath
 	if indexer.CheckIndexExists(indexPath) {
-		fmt.Printf("📁 Found existing index, loading...\n")
+		fmt.Printf("Found existing index, loading...\n")
 		runWithExistingIndex(indexer, indexPath)
 	} else {
-		fmt.Printf(" Building new index for 243K vectors...\n")
+		fmt.Printf("Building new index for 243K vectors...\n")
 		runFullIndexBuild(indexer, indexPath)
 	}
 }

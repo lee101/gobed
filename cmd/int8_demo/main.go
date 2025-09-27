@@ -40,7 +40,6 @@ func main() {
 	fmt.Println("using INT8 quantized embeddings with AVX-512 acceleration.")
 	fmt.Println()
 
-	// Load the model
 	fmt.Println("Loading INT8 model...")
 	start := time.Now()
 	model, err := gobed.LoadModelInt8(true)

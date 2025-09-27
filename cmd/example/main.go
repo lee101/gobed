@@ -10,11 +10,10 @@ import (
 
 func main() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println(" GOBED: Text Embedding Similarity Examples")
+	fmt.Println("GOBED: Text Embedding Similarity Examples")
 	fmt.Println(strings.Repeat("=", 80))
 
-	// Load model
-	fmt.Println("\n Loading embedding model...")
+	fmt.Println("\nLoading embedding model...")
 	model, err := gobed.LoadModel()
 	if err != nil {
 		fmt.Printf(" Error loading model: %v\n", err)

@@ -25,6 +25,7 @@ type BedSearchOptions struct {
 	Progressive    bool
 	UseGPU         bool
 	Verbose        bool
+	ColorMode      string
 }
 
 // SimpleSearchEngine provides semantic search with gobed

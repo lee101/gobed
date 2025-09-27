@@ -25,14 +25,14 @@ type BenchmarkConfig struct {
 }
 
 type BenchmarkResult struct {
-	Config         BenchmarkConfig
-	TrainTime      time.Duration
-	IndexTime      time.Duration
-	SearchTime     time.Duration
-	IndexRate      float64 // vectors/sec
-	QueryRate      float64 // queries/sec
-	MemoryUsage    float64 // MB
-	TotalTime      time.Duration
+	Config      BenchmarkConfig
+	TrainTime   time.Duration
+	IndexTime   time.Duration
+	SearchTime  time.Duration
+	IndexRate   float64 // vectors/sec
+	QueryRate   float64 // queries/sec
+	MemoryUsage float64 // MB
+	TotalTime   time.Duration
 }
 
 func main() {
@@ -136,8 +136,8 @@ func runBenchmark(config BenchmarkConfig) BenchmarkResult {
 		codebook_size:     C.int(256),
 		ivf_clusters:      C.int(1024),
 		probe_lists:       C.int(32),
-		rerank_k:         C.int(200),
-		device_id:        C.int(0),
+		rerank_k:          C.int(200),
+		device_id:         C.int(0),
 	}
 
 	handle := C.torch_indexer_create(cConfig)
@@ -194,7 +194,7 @@ func runBenchmark(config BenchmarkConfig) BenchmarkResult {
 
 	// Search benchmark
 	searchStart := time.Now()
-	
+
 	for i := 0; i < config.QueryCount; i++ {
 		searchResult := C.torch_indexer_search(
 			handle,
@@ -211,7 +211,7 @@ func runBenchmark(config BenchmarkConfig) BenchmarkResult {
 		// Free search results
 		C.torch_search_result_free(&searchResult)
 	}
-	
+
 	searchTime := time.Since(searchStart)
 	queryRate := float64(config.QueryCount) / searchTime.Seconds()
 

@@ -47,35 +47,51 @@ func init() {
 func runChunkedSearch(cmd *cobra.Command, args []string) error {
 	pattern := args[0]
 
-	// Handle ignore-case flag
+	// Use GPU-accelerated semantic search with chunked output
+	searcher, err := NewGPUChunkedSearcher()
+	if err != nil {
+		return fmt.Errorf("failed to create GPU searcher: %w", err)
+	}
+	defer searcher.Close()
+
+	// Configure search options for GPU-accelerated semantic search
+	options := BedSearchOptions{
+		Query:          pattern,
+		Limit:          20, // Show more results for semantic search
+		Context:        chunkContextChars / 40, // Convert chars to lines
+		Threshold:      0.5, // Lower threshold for broader semantic matches
+		NoIndex:        false,
+		ForceIndex:     false,
+		SearchBinaries: false,
+		Progressive:    false,
+		UseGPU:         true, // Enable GPU acceleration
+		Verbose:        !chunkNoColor,
+		ColorMode:      "auto",
+	}
+
+	// Handle ignore-case flag (less relevant for semantic search)
 	ignoreCase, _ := cmd.Flags().GetBool("ignore-case")
 	if ignoreCase {
-		chunkCaseSensitive = false
+		// Semantic search is naturally case-insensitive
+		options.Threshold = 0.4 // Lower threshold for more flexible matching
 	}
 
-	// Create chunked searcher
-	searcher, err := NewChunkedSearcher()
-	if err != nil {
-		return fmt.Errorf("failed to create searcher: %w", err)
+	// Override with custom settings
+	if chunkMaxLineLen > 0 {
+		searcher.maxLineLen = chunkMaxLineLen
+	}
+	if chunkContextChars > 0 {
+		searcher.contextChars = chunkContextChars
 	}
 
-	// Configure searcher
-	searcher.maxFileSize = chunkMaxFileSize
-	searcher.maxLineLen = chunkMaxLineLen
-	searcher.contextChars = chunkContextChars
-
-	// Perform search
-	results, err := searcher.SearchDirectory(chunkDirectory, pattern, chunkCaseSensitive)
-	if err != nil {
-		return fmt.Errorf("search failed: %w", err)
+	// Change directory if specified
+	if chunkDirectory != "." {
+		if err := searcher.engine.IndexDirectory(chunkDirectory, options); err != nil {
+			return fmt.Errorf("failed to index directory %s: %w", chunkDirectory, err)
+		}
 	}
 
-	// Determine color usage
-	useColor := !chunkNoColor && isTerminal()
-
-	// Print results
-	searcher.PrintResults(results, useColor)
-
-	return nil
+	// Perform GPU-accelerated search with chunked output
+	return searcher.SearchWithChunkedOutput(options)
 }
 

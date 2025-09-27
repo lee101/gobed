@@ -20,15 +20,14 @@ type BenchResult struct {
 
 func main() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println(" REAL-WORLD PERFORMANCE BENCHMARK")
+	fmt.Println("REAL-WORLD PERFORMANCE BENCHMARK")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// System info
-	fmt.Printf("\n System: %d cores, %s/%s, Go %s\n",
+	fmt.Printf("\nSystem: %d cores, %s/%s, Go %s\n",
 		runtime.NumCPU(), runtime.GOOS, runtime.GOARCH, runtime.Version())
 
-	// Load model
-	fmt.Println("\n🔄 Loading model...")
+	fmt.Println("\nLoading model...")
 	startLoad := time.Now()
 	model, err := gobed.LoadModel()
 	if err != nil {

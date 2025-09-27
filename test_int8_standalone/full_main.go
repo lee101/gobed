@@ -341,15 +341,18 @@ func main() {
 
 	// Test tokenization
 	fmt.Println("Testing Int16 Tokenization:")
-	for _, text := range testTexts {
+	for i, text := range testTexts {
 		tokens := model.SimpleTokenize(text)
-		fmt.Printf("  %q -> %v (count: %d)\n", text, tokens, len(tokens))
+		if i == 0 {
+			fmt.Printf("  Sample: %q -> %v (count: %d)\n", text, tokens, len(tokens))
+		}
 	}
+	fmt.Printf("  Tokenized %d test texts\n", len(testTexts))
 
 	// Test embedding generation
 	fmt.Println("\nTesting Float32 Embedding Generation:")
 	var totalEmbedTime time.Duration
-	for _, text := range testTexts {
+	for i, text := range testTexts {
 		start := time.Now()
 		embedding, err := model.Embed(text)
 		if err != nil {
@@ -359,15 +362,17 @@ func main() {
 		embedTime := time.Since(start)
 		totalEmbedTime += embedTime
 
-		fmt.Printf("  %q -> %d dims in %v\n", text, len(embedding), embedTime)
+		if i == 0 {
+			fmt.Printf("  Sample: %q -> %d dims in %v\n", text, len(embedding), embedTime)
+		}
 	}
 	avgEmbedTime := totalEmbedTime / time.Duration(len(testTexts))
-	fmt.Printf("  Average: %v per embedding\n", avgEmbedTime)
+	fmt.Printf("  Generated %d embeddings, average: %v per embedding\n", len(testTexts), avgEmbedTime)
 
 	// Test int8 embedding
-	fmt.Println("\n🔢 Testing Int8 Embedding Generation:")
+	fmt.Println("\nTesting Int8 Embedding Generation:")
 	var totalInt8Time time.Duration
-	for _, text := range testTexts {
+	for i, text := range testTexts {
 		start := time.Now()
 		int8Result, err := model.EmbedInt8(text)
 		if err != nil {
@@ -377,22 +382,23 @@ func main() {
 		int8Time := time.Since(start)
 		totalInt8Time += int8Time
 
-		// Find min/max
-		minVal, maxVal := int8Result.Vector[0], int8Result.Vector[0]
-		for _, v := range int8Result.Vector {
-			if v < minVal {
-				minVal = v
+		if i == 0 {
+			// Find min/max for sample
+			minVal, maxVal := int8Result.Vector[0], int8Result.Vector[0]
+			for _, v := range int8Result.Vector {
+				if v < minVal {
+					minVal = v
+				}
+				if v > maxVal {
+					maxVal = v
+				}
 			}
-			if v > maxVal {
-				maxVal = v
-			}
+			fmt.Printf("  Sample: %q -> scale=%.6f, range=[%d,%d] in %v\n",
+				text, int8Result.Scale, minVal, maxVal, int8Time)
 		}
-
-		fmt.Printf("  %q -> scale=%.6f, range=[%d,%d] in %v\n",
-			text, int8Result.Scale, minVal, maxVal, int8Time)
 	}
 	avgInt8Time := totalInt8Time / time.Duration(len(testTexts))
-	fmt.Printf("  Average: %v per int8 embedding\n", avgInt8Time)
+	fmt.Printf("  Generated %d int8 embeddings, average: %v per embedding\n", len(testTexts), avgInt8Time)
 
 	// Test similarity
 	fmt.Println("\nTesting Similarity Computation:")

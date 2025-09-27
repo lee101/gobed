@@ -115,26 +115,6 @@ func GetOptimalBatchSize() int {
 func GetOptimalGPUBatchSize() int {
 	// Check if we're building with GPU support
 	return GetOptimalBatchSize() // Fall back to CPU sizing for now
-	
-	// Assume some GPU memory is used (we can't check without GPU build tag)
-	var gpuMemUsed uint64 = 1024 * 1024 * 1024 // Assume 1GB used
-	
-	// Assume 8GB GPU, use max 75%
-	const maxGPUMem = 8 * 1024 * 1024 * 1024 * 0.75
-	availableGPUMem := maxGPUMem - float64(gpuMemUsed)
-	
-	// Each batch item needs ~8KB on GPU (embeddings + intermediate)
-	optimalBatch := int(availableGPUMem / 8192)
-	
-	// GPU works best with larger batches
-	if optimalBatch < 128 {
-		return 128
-	}
-	if optimalBatch > 4096 {
-		return 4096
-	}
-	
-	return nearestPowerOf2(optimalBatch)
 }
 
 func nearestPowerOf2(n int) int {

@@ -3,7 +3,7 @@ package gobed
 import (
 	"sync"
 
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // ObjectPool provides reusable object pools to reduce allocations

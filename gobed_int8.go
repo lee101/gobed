@@ -216,9 +216,8 @@ func LoadModelInt8(useInt8 bool) (*EmbeddingModelInt8, error) {
 		model.quantizeWeights()
 	}
 
-	loadTime := time.Since(start)
-	fmt.Printf(" Model loaded in %v (vocab: %d, dims: %d, INT8: %v)\n",
-		loadTime, vocabSize, embedDim, useInt8)
+	_ = time.Since(start) // loadTime
+	// Model loaded successfully
 	return model, nil
 }
 
