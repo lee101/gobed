@@ -1,6 +1,6 @@
 module github.com/lee101/gobed/bed
 
-go 1.23.0
+go 1.24.0
 
 toolchain go1.24.6
 
@@ -13,7 +13,7 @@ require (
 	github.com/lee101/gobed v0.0.0
 	github.com/schollz/progressbar/v3 v3.14.1
 	github.com/spf13/cobra v1.8.0
-	golang.org/x/sync v0.14.0
+	golang.org/x/sync v0.17.0
 )
 
 require (
@@ -28,6 +28,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/sugarme/regexpset v0.0.0-20200920021344-4d4ec8eaf93c // indirect
 	github.com/sugarme/tokenizer v0.3.0 // indirect
+	golang.org/x/exp v0.0.0-20250911091902-df9299821621 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/text v0.25.0 // indirect

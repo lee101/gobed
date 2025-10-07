@@ -13,3 +13,6 @@ func dot512_i8_avx2_alt(a, b *Vec512) int32
 
 //go:noescape
 func l2squared512_i8_avx2(a, b *Vec512) int32
+
+//go:noescape
+func sumabsdiff512_i8_avx2(a, b *Vec512) int32

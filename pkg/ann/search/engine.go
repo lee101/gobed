@@ -63,7 +63,7 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		MaxFlatSize: 1500, // Optimized based on benchmarks - best balance
+		MaxFlatSize: 10000, // Increased for dev datasets to avoid IVF training issues
 		NList:       4096,
 		NProbe:      8,
 		M:           64,
@@ -80,7 +80,7 @@ func DefaultConfig() Config {
 func NewEngine(config Config) *Engine {
 	// Validate and set defaults
 	if config.MaxFlatSize <= 0 {
-		config.MaxFlatSize = 1500 // Optimized default
+		config.MaxFlatSize = 10000 // Increased for dev datasets to avoid IVF training issues
 	}
 	if config.NList <= 0 {
 		config.NList = 4096
@@ -115,12 +115,14 @@ func NewEngine(config Config) *Engine {
 	// Initialize object pools
 	e.candidatePool = &sync.Pool{
 		New: func() interface{} {
-			return make([]int, 0, config.NProbe*100)
+			slice := make([]int, 0, config.NProbe*100)
+			return &slice
 		},
 	}
 	e.resultPool = &sync.Pool{
 		New: func() interface{} {
-			return make([]SearchResult, 0, config.RerankSize)
+			slice := make([]SearchResult, 0, config.RerankSize)
+			return &slice
 		},
 	}
 

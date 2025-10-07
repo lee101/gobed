@@ -1,4 +1,4 @@
-package gobed
+package search
 
 import (
 	"github.com/lee101/gobed/pkg/ann/search"

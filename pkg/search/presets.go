@@ -34,7 +34,7 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 			}
 		}
 		return search.Config{
-			MaxFlatSize: 1500,
+			MaxFlatSize: 10000,
 			NList:       min(256, estimatedSize/50), // Few clusters
 			NProbe:      4,                          // Minimal probes
 			HNSWEnabled: false,                      // Skip graph for simplicity
@@ -46,14 +46,14 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 		// Balance between speed and accuracy
 		if estimatedSize <= 10000 {
 			return search.Config{
-				MaxFlatSize: 1500,
+				MaxFlatSize: 10000,
 				NList:       estimatedSize / 100,
 				NProbe:      8,
 				UseParallel: true,
 			}
 		}
 		return search.Config{
-			MaxFlatSize: 1500,
+			MaxFlatSize: 10000,
 			NList:       min(2048, estimatedSize/100),
 			NProbe:      10,
 			M:           32,

@@ -28,25 +28,39 @@ func generateRandomVectors(n int) ([]simd.Vec512, []float32) {
 
 // BenchmarkSIMD benchmarks SIMD dot product performance
 func BenchmarkSIMD(b *testing.B) {
-	var vec1, vec2 simd.Vec512
-	for i := 0; i < 512; i++ {
-		vec1[i] = int8(rand.Intn(256) - 128)
-		vec2[i] = int8(rand.Intn(256) - 128)
-	}
+    var vec1, vec2 simd.Vec512
+    for i := 0; i < 512; i++ {
+        vec1[i] = int8(rand.Intn(256) - 128)
+        vec2[i] = int8(rand.Intn(256) - 128)
+    }
 
-	b.Run("Dot512", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_ = simd.Dot512(&vec1, &vec2)
-		}
-	})
+    b.Run("Dot512", func(b *testing.B) {
+        b.ResetTimer()
+        for i := 0; i < b.N; i++ {
+            _ = simd.Dot512(&vec1, &vec2)
+        }
+    })
 
-	b.Run("L2Squared512", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_ = simd.L2Squared512(&vec1, &vec2)
-		}
-	})
+    b.Run("L2Squared512", func(b *testing.B) {
+        b.ResetTimer()
+        for i := 0; i < b.N; i++ {
+            _ = simd.L2Squared512(&vec1, &vec2)
+        }
+    })
+
+    b.Run("SumAbsDiff512", func(b *testing.B) {
+        b.ResetTimer()
+        for i := 0; i < b.N; i++ {
+            _ = simd.SumAbsDiff512(&vec1, &vec2)
+        }
+    })
+
+    b.Run("AvgAbsDiff512", func(b *testing.B) {
+        b.ResetTimer()
+        for i := 0; i < b.N; i++ {
+            _ = simd.AvgAbsDiff512(&vec1, &vec2)
+        }
+    })
 }
 
 // BenchmarkFlatSearch benchmarks flat index search

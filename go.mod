@@ -2,10 +2,11 @@ module github.com/lee101/gobed
 
 go 1.23.0
 
-toolchain go1.24.6
+toolchain go1.25.0
 
 require (
 	github.com/fatih/color v1.18.0
+	github.com/lee101/gobed/cuvs_cagra v0.0.0-00010101000000-000000000000
 	github.com/sugarme/gotch v0.9.0
 	github.com/sugarme/tokenizer v0.3.0
 	golang.org/x/sys v0.25.0
@@ -28,3 +29,5 @@ require (
 )
 
 exclude github.com/sugarme/gotch v0.9.1
+
+replace github.com/lee101/gobed/cuvs_cagra => ./cuvs_cagra

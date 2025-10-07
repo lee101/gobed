@@ -12,7 +12,10 @@ import "C"
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -57,15 +60,16 @@ type CAGRAConfig struct {
 
 // DefaultCAGRAConfig returns configuration optimized for ultra-fast search
 func DefaultCAGRAConfig() CAGRAConfig {
-	return CAGRAConfig{
+	config := CAGRAConfig{
 		MaxVectors:      1000000, // Support 1M vectors
 		VectorDim:       512,     // gobed dimension
 		GraphDegree:     64,      // Balance speed/quality
 		MaxIterations:   64,      // Balance speed/recall
 		TargetLatencyUs: 1000,    // <1ms target
 		TargetRecall:    0.95,    // 95% recall target
-		CachePath:       "cagra_index.cache",
 	}
+	config.CachePath = BuildCAGRACachePath("default", config.VectorDim, config.GraphDegree, config.MaxVectors)
+	return config
 }
 
 // FastCAGRAConfig returns configuration optimized for speed over quality
@@ -75,6 +79,7 @@ func FastCAGRAConfig() CAGRAConfig {
 	config.MaxIterations = 32      // Faster search
 	config.TargetLatencyUs = 500   // <0.5ms target
 	config.TargetRecall = 0.90     // 90% recall
+	config.CachePath = BuildCAGRACachePath("fast", config.VectorDim, config.GraphDegree, config.MaxVectors)
 	return config
 }
 
@@ -85,6 +90,7 @@ func QualityCAGRAConfig() CAGRAConfig {
 	config.MaxIterations = 128     // Better recall
 	config.TargetLatencyUs = 2000  // <2ms target
 	config.TargetRecall = 0.99     // 99% recall
+	config.CachePath = BuildCAGRACachePath("quality", config.VectorDim, config.GraphDegree, config.MaxVectors)
 	return config
 }
 
@@ -395,6 +401,26 @@ func (idx *CAGRAIndex) destroy() {
 // Close explicitly releases resources
 func (idx *CAGRAIndex) Close() {
 	idx.destroy()
+}
+
+// BuildCAGRACachePath generates CAGRA cache file path with dev/prod/test separation
+func BuildCAGRACachePath(namespace string, vectorDim, graphDegree, count int) string {
+	baseDir := "/mnt/fast/tmp/netwrck_gobed_indexes"
+
+	if os.Getenv("DEV") == "true" || os.Getenv("DEBUG") == "true" {
+		baseDir += "_dev"
+	}
+
+	if os.Getenv("TESTING") == "true" {
+		baseDir = "/mnt/fast/tmp/test_indexes"
+	}
+
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create CAGRA cache directory %s: %v", baseDir, err)
+	}
+
+	filename := fmt.Sprintf("%s_cagra_%d_%d_%d.cagrabin", namespace, vectorDim, graphDegree, count)
+	return filepath.Join(baseDir, filename)
 }
 
 // isCAGRAAvailable checks if cuVS/CAGRA is available

@@ -1,25 +1,31 @@
 package main
 
 import (
-	"bufio"
-	"flag"
-	"fmt"
-	"log"
-	"os"
+    "bufio"
+    "flag"
+    "fmt"
+    "log"
+    "os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
+	"sync"
 	"time"
-	"unsafe"
+    "unsafe"
 )
 
 // #cgo LDFLAGS: -L. -lcuda_simple -L/usr/local/cuda/lib64 -lcudart
 // #include <stdlib.h>
+// #include <stdbool.h>
 // extern void* simple_search_create(int max_docs, int dim);
 // extern void simple_search_destroy(void* handle);
 // extern int simple_search_add_vectors(void* handle, const signed char* docs, int num_docs);
 // extern int simple_search_query(void* handle, const signed char* query, int k, int* indices, float* scores);
 import "C"
+import (
+    simdpkg "github.com/lee101/gobed/pkg/ann/simd"
+)
 
 // ChunkedDocument represents a semantically meaningful text chunk with line tracking
 type ChunkedDocument struct {
@@ -40,21 +46,12 @@ type ChunkingConfig struct {
 	SmartBoundaries   bool // Try to split at sentence/paragraph boundaries
 }
 
-// FastTokenizer implements zero-allocation int16 tokenization
-type FastTokenizer struct {
-	vocab  map[string]int16
-	maxLen int
-}
-
-// FastModel wraps the embedding model with optimized operations
-type FastModel struct {
-	embeddings [][]int8
-	scales     []float32
-	tokenizer  *FastTokenizer
-}
-
 // Global model instance
 var globalModel *FastModel
+
+// GPU availability flag
+var gpuAvailable bool
+var gpuCheckDone bool
 
 // Default chunking configuration optimized for code and text
 func DefaultChunkingConfig() ChunkingConfig {
@@ -65,86 +62,6 @@ func DefaultChunkingConfig() ChunkingConfig {
 		RespectParagraphs: true, // Split on empty lines
 		SmartBoundaries:   true, // Smart splitting at boundaries
 	}
-}
-
-// LoadFastModel loads the optimized int8 model with fast tokenizer
-func LoadFastModel(modelPath, tokenizerPath string) (*FastModel, error) {
-	// Load tokenizer
-	tokenizer, err := LoadTokenizer(tokenizerPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load tokenizer: %w", err)
-	}
-
-	// Load int8 embeddings and scales
-	embeddings, scales, err := loadInt8Safetensors(modelPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load model: %w", err)
-	}
-
-	return &FastModel{
-		embeddings: embeddings,
-		scales:     scales,
-		tokenizer:  tokenizer,
-	}, nil
-}
-
-// EmbedInt8 generates int8 embeddings with vectorized operations
-func (m *FastModel) EmbedInt8(text string) ([]int8, error) {
-	tokens := m.tokenizer.Tokenize(text)
-	if len(tokens) == 0 {
-		return make([]int8, 512), nil
-	}
-
-	// Accumulate embeddings with vectorized operations
-	result := make([]float32, 512)
-	count := len(tokens)
-
-	for _, tokenID := range tokens {
-		if int(tokenID) < len(m.embeddings) && int(tokenID) < len(m.scales) {
-			embedding := m.embeddings[tokenID]
-			scale := m.scales[tokenID]
-
-			// Vectorized accumulation (8 elements at a time)
-			for i := 0; i < 512; i += 8 {
-				result[i] += float32(embedding[i]) * scale
-				result[i+1] += float32(embedding[i+1]) * scale
-				result[i+2] += float32(embedding[i+2]) * scale
-				result[i+3] += float32(embedding[i+3]) * scale
-				result[i+4] += float32(embedding[i+4]) * scale
-				result[i+5] += float32(embedding[i+5]) * scale
-				result[i+6] += float32(embedding[i+6]) * scale
-				result[i+7] += float32(embedding[i+7]) * scale
-			}
-		}
-	}
-
-	// Normalize by token count
-	invCount := 1.0 / float32(count)
-	for i := 0; i < 512; i += 8 {
-		result[i] *= invCount
-		result[i+1] *= invCount
-		result[i+2] *= invCount
-		result[i+3] *= invCount
-		result[i+4] *= invCount
-		result[i+5] *= invCount
-		result[i+6] *= invCount
-		result[i+7] *= invCount
-	}
-
-	// Fast quantization to int8
-	quantized := make([]int8, 512)
-	for i := 0; i < 512; i++ {
-		val := result[i] * 200.0 // Optimized scale
-		if val > 127 {
-			quantized[i] = 127
-		} else if val < -128 {
-			quantized[i] = -128
-		} else {
-			quantized[i] = int8(val)
-		}
-	}
-
-	return quantized, nil
 }
 
 // ChunkFile intelligently chunks a file into semantically meaningful segments
@@ -266,10 +183,115 @@ func isNaturalBoundary(line string) bool {
 	return false
 }
 
+// CheckGPUAvailable checks if CUDA GPU is available
+func CheckGPUAvailable() bool {
+	if gpuCheckDone {
+		return gpuAvailable
+	}
+
+	gpuCheckDone = true
+
+	// Try to create a small test context
+	handle := C.simple_search_create(C.int(10), C.int(512))
+	if handle != nil {
+		C.simple_search_destroy(handle)
+		gpuAvailable = true
+		return true
+	}
+
+	gpuAvailable = false
+	return false
+}
+
+// CPUSearch performs brute-force search on CPU
+func CPUSearch(chunks []*ChunkedDocument, query string, k int) ([]*ChunkedDocument, []float32, error) {
+    if len(chunks) == 0 {
+        return nil, nil, fmt.Errorf("no documents to search")
+    }
+
+	// Generate query embedding
+	queryEmb, err := globalModel.EmbedInt8(query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Calculate similarities
+	type scoreIndex struct {
+		score float32
+		index int
+	}
+
+	scores := make([]scoreIndex, len(chunks))
+
+    // Compute dot products in parallel (SIMD-accelerated int8 dot products)
+    numWorkers := runtime.NumCPU()
+    chunkSize := (len(chunks) + numWorkers - 1) / numWorkers
+
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		start := w * chunkSize
+		end := start + chunkSize
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+
+		wg.Add(1)
+        go func(start, end int) {
+            defer wg.Done()
+            for i := start; i < end; i++ {
+                emb := chunks[i].Embedding
+                // Guard against malformed embeddings
+                if len(emb) != 512 || len(queryEmb) != 512 {
+                    // Fallback to safe loop if dimensions don't match
+                    var dot int32
+                    max := len(emb)
+                    if len(queryEmb) < max {
+                        max = len(queryEmb)
+                    }
+                    for j := 0; j < max; j++ {
+                        dot += int32(emb[j]) * int32(queryEmb[j])
+                    }
+                    scores[i] = scoreIndex{float32(dot), i}
+                    continue
+                }
+
+                dot := simdpkg.DotN(emb, queryEmb)
+                scores[i] = scoreIndex{float32(dot), i}
+            }
+        }(start, end)
+    }
+	wg.Wait()
+
+	// Sort scores
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].score > scores[j].score
+	})
+
+	// Collect top-k results
+	if k > len(scores) {
+		k = len(scores)
+	}
+
+	results := make([]*ChunkedDocument, k)
+	resultScores := make([]float32, k)
+
+	for i := 0; i < k; i++ {
+		results[i] = chunks[scores[i].index]
+		resultScores[i] = scores[i].score
+	}
+
+	return results, resultScores, nil
+}
+
 // ScalableGPUSearch performs search using our optimized CUDA library
 func ScalableGPUSearch(chunks []*ChunkedDocument, query string, k int) ([]*ChunkedDocument, []float32, error) {
 	if len(chunks) == 0 {
 		return nil, nil, fmt.Errorf("no documents to search")
+	}
+
+	// Check GPU availability
+	if !CheckGPUAvailable() {
+		return CPUSearch(chunks, query, k)
 	}
 
 	numChunks := len(chunks)
@@ -277,7 +299,9 @@ func ScalableGPUSearch(chunks []*ChunkedDocument, query string, k int) ([]*Chunk
 	// Create GPU context sized exactly for our data
 	handle := C.simple_search_create(C.int(numChunks), C.int(512))
 	if handle == nil {
-		return nil, nil, fmt.Errorf("failed to create GPU search context")
+		// Fallback to CPU
+		fmt.Fprintf(os.Stderr, "⚠️ GPU initialization failed, falling back to CPU\n")
+		return CPUSearch(chunks, query, k)
 	}
 	defer C.simple_search_destroy(handle)
 
@@ -288,11 +312,16 @@ func ScalableGPUSearch(chunks []*ChunkedDocument, query string, k int) ([]*Chunk
 	}
 
 	// Add documents to GPU
-	C.simple_search_add_vectors(
+	ret := C.simple_search_add_vectors(
 		handle,
 		(*C.schar)(unsafe.Pointer(&flatEmbeddings[0])),
 		C.int(numChunks),
 	)
+
+	if ret != 0 {
+		fmt.Fprintf(os.Stderr, "⚠️ GPU add vectors failed, falling back to CPU\n")
+		return CPUSearch(chunks, query, k)
+	}
 
 	// Generate query embedding
 	queryEmb, err := globalModel.EmbedInt8(query)
@@ -304,13 +333,18 @@ func ScalableGPUSearch(chunks []*ChunkedDocument, query string, k int) ([]*Chunk
 	indices := make([]int32, k)
 	scores := make([]float32, k)
 
-	C.simple_search_query(
+	ret = C.simple_search_query(
 		handle,
 		(*C.schar)(unsafe.Pointer(&queryEmb[0])),
 		C.int(k),
 		(*C.int)(unsafe.Pointer(&indices[0])),
 		(*C.float)(unsafe.Pointer(&scores[0])),
 	)
+
+	if ret != 0 {
+		fmt.Fprintf(os.Stderr, "⚠️ GPU query failed, falling back to CPU\n")
+		return CPUSearch(chunks, query, k)
+	}
 
 	// Collect results
 	results := make([]*ChunkedDocument, 0, k)
@@ -427,6 +461,8 @@ func main() {
 		showStats   = flag.Bool("stats", false, "Show performance statistics")
 		modelPath   = flag.String("model", "model/modelint8_512dim.safetensors", "Path to model file")
 		tokenizerPath = flag.String("tokenizer", "model/tokenizer.json", "Path to tokenizer file")
+		forceGPU    = flag.Bool("gpu", false, "Force GPU usage (fail if not available)")
+		forceCPU    = flag.Bool("cpu", false, "Force CPU usage")
 	)
 	flag.Parse()
 
@@ -436,6 +472,33 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nOptions:\n")
 		flag.PrintDefaults()
 		os.Exit(1)
+	}
+
+	// Handle GPU/CPU mode
+	if *forceCPU {
+		gpuAvailable = false
+		gpuCheckDone = true
+		if *debug {
+			fmt.Fprintf(os.Stderr, "💻 CPU mode forced\n")
+		}
+	} else if *forceGPU {
+		if !CheckGPUAvailable() {
+			log.Fatalf("GPU requested but not available")
+		}
+		if *debug {
+			fmt.Fprintf(os.Stderr, "🎮 GPU mode forced\n")
+		}
+	} else {
+		// Auto-detect
+		if CheckGPUAvailable() {
+			if *debug {
+				fmt.Fprintf(os.Stderr, "🎮 GPU detected and enabled\n")
+			}
+		} else {
+			if *debug {
+				fmt.Fprintf(os.Stderr, "💻 No GPU detected, using CPU\n")
+			}
+		}
 	}
 
 	// Load model
@@ -528,7 +591,11 @@ func main() {
 
 	// Display results
 	fmt.Printf("\n🔍 Search: \"%s\"\n", query)
-	fmt.Printf("⚡ Time: %.3fms\n", float64(searchTime.Microseconds())/1000.0)
+	if gpuAvailable {
+		fmt.Printf("⚡ Time: %.3fms (GPU)\n", float64(searchTime.Microseconds())/1000.0)
+	} else {
+		fmt.Printf("⚡ Time: %.3fms (CPU)\n", float64(searchTime.Microseconds())/1000.0)
+	}
 	fmt.Printf("📊 Top %d results from %d chunks:\n\n", len(results), len(chunks))
 
 	for i, chunk := range results {

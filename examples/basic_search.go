@@ -11,39 +11,44 @@ func main() {
 	fmt.Println("Gobed Basic Search Example")
 	fmt.Println("=========================")
 
+	// Load the embedding model first
+	fmt.Println("Loading embedding model...")
+	model, err := gobed.LoadModel()
+	if err != nil {
+		log.Fatalf("Failed to load model: %v", err)
+	}
+
 	// Create search engine with auto configuration
 	// This will automatically detect GPU and optimize settings
-	engine, err := gobed.NewAutoSearchEngine()
-	if err != nil {
-		log.Fatalf("Failed to create search engine: %v", err)
-	}
-	defer engine.Close()
+	engine := gobed.NewSearchEngine(model)
 
 	// Show configuration
 	stats := engine.Stats()
-	fmt.Printf("Engine initialized with GPU: %v, Int8: %v\n\n",
-		stats["gpu_enabled"], stats["int8_enabled"])
+	fmt.Printf("Engine initialized: %d documents, Type: %s\n\n",
+		stats.NumDocuments, stats.IndexType)
 
-	// Add some sample documents
-	documents := map[string]string{
-		"ml1":   "machine learning algorithms and neural networks for data science",
-		"ml2":   "deep learning models using convolutional neural networks",
-		"ml3":   "artificial intelligence and natural language processing",
-		"web1":  "web development with JavaScript and React frameworks",
-		"web2":  "backend development using Go and microservices architecture",
-		"web3":  "database design and SQL query optimization techniques",
-		"sci1":  "quantum computing and physics research applications",
-		"sci2":  "biomedical research and computational biology methods",
-		"sci3":  "climate science and environmental data analysis",
-		"biz1":  "business strategy and market analysis frameworks",
-		"biz2":  "financial modeling and investment portfolio management",
-		"biz3":  "project management and agile development methodologies",
+	// Add some sample documents using correct API
+	documentTexts := []string{
+		"machine learning algorithms and neural networks for data science",
+		"deep learning models using convolutional neural networks",
+		"artificial intelligence and natural language processing",
+		"web development with JavaScript and React frameworks",
+		"backend development using Go and microservices architecture",
+		"database design and SQL query optimization techniques",
+		"quantum computing and physics research applications",
+		"biomedical research and computational biology methods",
+		"climate science and environmental data analysis",
+		"business strategy and market analysis frameworks",
+		"financial modeling and investment portfolio management",
+		"project management and agile development methodologies",
 	}
 
-	fmt.Printf("Adding %d documents...\n", len(documents))
-	if err := engine.AddDocuments(documents); err != nil {
-		log.Fatalf("Failed to add documents: %v", err)
+	fmt.Printf("Indexing %d documents...\n", len(documentTexts))
+	ids, err := engine.IndexBatch(documentTexts)
+	if err != nil {
+		log.Fatalf("Failed to index documents: %v", err)
 	}
+	fmt.Printf("✓ Indexed with IDs: %v\n", ids)
 
 	// Perform several example searches
 	queries := []string{
@@ -57,18 +62,17 @@ func main() {
 		fmt.Printf("\n🔍 Searching for: \"%s\"\n", query)
 		fmt.Println(string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─'))
 
-		results, metadata, err := engine.SearchWithMetadata(query, 3)
+		results, err := engine.Search(query, 3)
 		if err != nil {
 			log.Printf("Search failed: %v", err)
 			continue
 		}
 
-		fmt.Printf("Found %d results in %dms\n",
-			len(results), metadata["query_time_ms"])
+		fmt.Printf("Found %d results\n", len(results))
 
 		for i, result := range results {
 			fmt.Printf("%d. [%.3f] %s\n   %s\n",
-				i+1, result.Similarity, result.ID, result.Content)
+				i+1, result.Similarity, result.ID, result.Text)
 		}
 	}
 
@@ -84,21 +88,24 @@ func main() {
 	}
 
 	for _, pair := range pairs {
-		sim, err := engine.Similarity(pair[0], pair[1])
-		if err != nil {
-			log.Printf("Similarity computation failed: %v", err)
+		emb1, err1 := model.Encode(pair[0])
+		emb2, err2 := model.Encode(pair[1])
+
+		if err1 != nil || err2 != nil {
+			log.Printf("Failed to encode similarity pair: %v, %v", err1, err2)
 			continue
 		}
-		fmt.Printf("'%s' ↔ '%s': %.3f\n", pair[0], pair[1], sim)
+
+		similarity := gobed.CosineSimilarity(emb1, emb2)
+		fmt.Printf("'%s' ↔ '%s': %.3f\n", pair[0], pair[1], similarity)
 	}
 
 	// Final statistics
 	finalStats := engine.Stats()
 	fmt.Printf("\n📊 Final Statistics\n")
-	fmt.Println(string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─') + string('─'))
-	fmt.Printf("Documents indexed: %v\n", finalStats["documents_count"])
-	fmt.Printf("GPU acceleration: %v\n", finalStats["gpu_enabled"])
-	fmt.Printf("Int8 quantization: %v\n", finalStats["int8_enabled"])
-	fmt.Printf("Index type: %v\n", finalStats["index_type"])
-	fmt.Printf("Batch size: %v\n", finalStats["batch_size"])
+	fmt.Println("----------------------------------------")
+	fmt.Printf("Documents indexed: %d\n", finalStats.NumDocuments)
+	fmt.Printf("Index type: %s\n", finalStats.IndexType)
+	fmt.Printf("Memory usage: %.2f MB\n", finalStats.MemoryUsageMB)
+	fmt.Printf("Index details: %+v\n", finalStats.IndexDetails)
 }

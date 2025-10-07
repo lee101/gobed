@@ -66,3 +66,7 @@ gpu_env.sh
 # Docker configs
 Dockerfile.*
 bed/model/
+test_cagra
+test_cagra_simple
+test_quality_no_cgo
+bed/test_gpu_benchmark

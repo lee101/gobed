@@ -89,7 +89,7 @@ type IndexingStats struct {
 }
 
 // DefaultSearchConfig returns optimized default configuration
-// Automatically detects and enables GPU when available
+// Automatically detects and enables GPU with CAGRA when available
 func DefaultSearchConfig() SearchConfig {
 	config := SearchConfig{
 		AutoMode:           true,
@@ -97,17 +97,19 @@ func DefaultSearchConfig() SearchConfig {
 		EnableAsync:        false, // Default to sync for simplicity
 		AsyncWorkers:       4,
 		AsyncQueueSize:     1000,
+		Preset:             CAGRAPreset, // Default to our optimal CAGRA configuration
 	}
-	
-	// Auto-detect GPU and enable if available
+
+	// Auto-detect GPU and enable CAGRA if available
 	if IsCUDAAvailable() {
 		config.EnableGPU = true
 		config.GPUDeviceID = 0
 		config.GPUBatchSize = 50000  // Theoretical analysis: 0.6x GPU occupancy, 10x improvement (80M+ vectors/sec)
 		config.MaxExactSearchSize = 100000 // GPU can handle larger exact searches
 		config.UseInt8 = true // Use int8 for 75% memory savings
+		// Preset already set to CAGRAPreset above
 	}
-	
+
 	return config
 }
 
@@ -120,20 +122,33 @@ func AsyncSearchConfig() SearchConfig {
 	return config
 }
 
-// GPUSearchConfig returns configuration optimized for GPU acceleration
+// GPUSearchConfig returns configuration optimized for GPU acceleration with CAGRA
 func GPUSearchConfig() SearchConfig {
 	config := DefaultSearchConfig()
 	config.EnableGPU = true
 	config.GPUDeviceID = 0    // Use first GPU
 	config.GPUBatchSize = 50000 // Theoretical GPU analysis: 50x current utilization (80M+ vectors/sec)
 	config.MaxExactSearchSize = 100000 // GPU can handle larger exact searches
+	config.Preset = CAGRAPreset // Use CAGRA for ultra-fast search by default
 	return config
 }
 
-// NewGPUSearchEngine creates a GPU-accelerated search engine
+// NewGPUSearchEngine creates a GPU-accelerated search engine with CAGRA
 func NewGPUSearchEngine(model *EmbeddingModel) *SearchEngine {
 	return NewSearchEngineWithConfig(model, GPUSearchConfig())
 }
+
+// NewCAGRASearchEngine creates a CAGRA-powered search engine for ultra-fast search
+func NewCAGRASearchEngine(model *EmbeddingModel) *SearchEngine {
+	config := GPUSearchConfig()
+	config.Preset = CAGRAPreset
+	return NewSearchEngineWithConfig(model, config)
+}
+
+// NewOfficialCuvsCAGRASearchEngine creates a search engine using official cuVS CAGRA library
+// func NewOfficialCuvsCAGRASearchEngine(model *EmbeddingModel) *CuvsCAGRASearchEngine {
+//	return NewCuvsCAGRASearchEngine(model)
+// }
 
 // NewSearchEngine creates a new search engine
 // It automatically uses GPU acceleration if available for 39x performance boost

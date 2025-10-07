@@ -78,17 +78,48 @@ __global__ void simple_topk_kernel(
 
 // Create simple search context
 void* simple_search_create(int max_docs, int dim) {
+    // Check for CUDA availability
+    int deviceCount = 0;
+    cudaError_t err = cudaGetDeviceCount(&deviceCount);
+    if (err != cudaSuccess || deviceCount == 0) {
+        return nullptr;
+    }
+
     SimpleSearchContext* ctx = new SimpleSearchContext();
     ctx->max_docs = max_docs;
     ctx->dim = dim;
 
-    // Allocate GPU memory
-    cudaMalloc(&ctx->d_docs, max_docs * dim * sizeof(int8_t));
-    cudaMalloc(&ctx->d_scores, max_docs * sizeof(float));
-    cudaMalloc(&ctx->d_indices, max_docs * sizeof(int));
+    // Allocate GPU memory with error checking
+    err = cudaMalloc(&ctx->d_docs, max_docs * dim * sizeof(int8_t));
+    if (err != cudaSuccess) {
+        delete ctx;
+        return nullptr;
+    }
+
+    err = cudaMalloc(&ctx->d_scores, max_docs * sizeof(float));
+    if (err != cudaSuccess) {
+        cudaFree(ctx->d_docs);
+        delete ctx;
+        return nullptr;
+    }
+
+    err = cudaMalloc(&ctx->d_indices, max_docs * sizeof(int));
+    if (err != cudaSuccess) {
+        cudaFree(ctx->d_docs);
+        cudaFree(ctx->d_scores);
+        delete ctx;
+        return nullptr;
+    }
 
     // Create stream for async operations
-    cudaStreamCreate(&ctx->stream);
+    err = cudaStreamCreate(&ctx->stream);
+    if (err != cudaSuccess) {
+        cudaFree(ctx->d_docs);
+        cudaFree(ctx->d_scores);
+        cudaFree(ctx->d_indices);
+        delete ctx;
+        return nullptr;
+    }
 
     return ctx;
 }
@@ -107,10 +138,11 @@ void simple_search_destroy(void* handle) {
 
 // Add vectors (no limit checking - caller must ensure capacity)
 int simple_search_add_vectors(void* handle, const int8_t* docs, int num_docs) {
+    if (!handle) return -1;
     SimpleSearchContext* ctx = (SimpleSearchContext*)handle;
 
     // Copy all documents to GPU (overwrite any existing)
-    cudaMemcpyAsync(
+    cudaError_t err = cudaMemcpyAsync(
         ctx->d_docs,
         docs,
         num_docs * ctx->dim * sizeof(int8_t),
@@ -118,7 +150,16 @@ int simple_search_add_vectors(void* handle, const int8_t* docs, int num_docs) {
         ctx->stream
     );
 
-    return num_docs;
+    if (err != cudaSuccess) {
+        return -1;
+    }
+
+    err = cudaStreamSynchronize(ctx->stream);
+    if (err != cudaSuccess) {
+        return -1;
+    }
+
+    return 0;
 }
 
 // Perform search
@@ -129,20 +170,29 @@ int simple_search_query(
     int* out_indices,
     float* out_scores
 ) {
+    if (!handle) return -1;
     SimpleSearchContext* ctx = (SimpleSearchContext*)handle;
 
     // Allocate temporary GPU memory for query
     int8_t* d_query;
-    cudaMalloc(&d_query, ctx->dim * sizeof(int8_t));
+    cudaError_t err = cudaMalloc(&d_query, ctx->dim * sizeof(int8_t));
+    if (err != cudaSuccess) {
+        return -1;
+    }
 
     // Copy query to GPU
-    cudaMemcpyAsync(
+    err = cudaMemcpyAsync(
         d_query,
         query,
         ctx->dim * sizeof(int8_t),
         cudaMemcpyHostToDevice,
         ctx->stream
     );
+
+    if (err != cudaSuccess) {
+        cudaFree(d_query);
+        return -1;
+    }
 
     // For this simple version, we'll assume all slots are used
     // In a real implementation, you'd track the actual number of documents
@@ -160,6 +210,12 @@ int simple_search_query(
         ctx->dim
     );
 
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        cudaFree(d_query);
+        return -1;
+    }
+
     // Launch top-k kernel
     simple_topk_kernel<<<1, min(1024, num_docs), 0, ctx->stream>>>(
         ctx->d_scores,
@@ -168,8 +224,14 @@ int simple_search_query(
         k
     );
 
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        cudaFree(d_query);
+        return -1;
+    }
+
     // Copy results back
-    cudaMemcpyAsync(
+    err = cudaMemcpyAsync(
         out_indices,
         ctx->d_indices,
         k * sizeof(int),
@@ -177,7 +239,12 @@ int simple_search_query(
         ctx->stream
     );
 
-    cudaMemcpyAsync(
+    if (err != cudaSuccess) {
+        cudaFree(d_query);
+        return -1;
+    }
+
+    err = cudaMemcpyAsync(
         out_scores,
         ctx->d_scores,
         k * sizeof(float),
@@ -185,13 +252,22 @@ int simple_search_query(
         ctx->stream
     );
 
+    if (err != cudaSuccess) {
+        cudaFree(d_query);
+        return -1;
+    }
+
     // Synchronize to ensure completion
-    cudaStreamSynchronize(ctx->stream);
+    err = cudaStreamSynchronize(ctx->stream);
+    if (err != cudaSuccess) {
+        cudaFree(d_query);
+        return -1;
+    }
 
     // Clean up
     cudaFree(d_query);
 
-    return k;
+    return 0;
 }
 
 } // extern "C"

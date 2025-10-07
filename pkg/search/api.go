@@ -1,4 +1,4 @@
-package gobed
+package search
 
 import (
 	"context"

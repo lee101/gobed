@@ -1,3 +1,5 @@
+// +build cagra
+
 /*
  * CAGRA (CUDA And Graph-based Retrieval Algorithm) wrapper for gobed
  * Provides ultra-fast approximate nearest neighbor search on GPU

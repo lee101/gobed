@@ -203,6 +203,108 @@ func (m *SimpleInt8Model512) EmbedInt8(text string) (*Int8Result512, error) {
 	return quantizeVector512(embedding), nil
 }
 
+// EmbedBatchInt8 efficiently processes multiple texts in a single call
+func (m *SimpleInt8Model512) EmbedBatchInt8(texts []string) ([]*Int8Result512, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+
+	results := make([]*Int8Result512, len(texts))
+
+	// Process texts in parallel batches for better CPU utilization
+	const workerCount = 8 // Use multiple CPU cores
+	const batchSize = 256 // Process in smaller chunks for memory efficiency
+
+	type job struct {
+		index int
+		text  string
+	}
+
+	jobs := make(chan job, len(texts))
+	resultsChan := make(chan struct {
+		index int
+		result *Int8Result512
+		err   error
+	}, len(texts))
+
+	// Start workers
+	for w := 0; w < workerCount; w++ {
+		go func() {
+			for j := range jobs {
+				result, err := m.EmbedInt8(j.text)
+				resultsChan <- struct {
+					index int
+					result *Int8Result512
+					err   error
+				}{j.index, result, err}
+			}
+		}()
+	}
+
+	// Send jobs
+	go func() {
+		defer close(jobs)
+		for i, text := range texts {
+			jobs <- job{i, text}
+		}
+	}()
+
+	// Collect results
+	var firstErr error
+	for i := 0; i < len(texts); i++ {
+		result := <-resultsChan
+		if result.err != nil && firstErr == nil {
+			firstErr = result.err
+		}
+		if result.result != nil {
+			results[result.index] = result.result
+		} else {
+			// Fallback for failed embeddings
+			results[result.index] = &Int8Result512{
+				Vector: make([]int8, Int8EmbeddingDim),
+				Scale:  1.0,
+			}
+		}
+	}
+
+	return results, firstErr
+}
+
+// EmbedBatchInt8Optimized provides the fastest batch processing with memory optimization
+func (m *SimpleInt8Model512) EmbedBatchInt8Optimized(texts []string, progressCallback func(processed, total int)) ([]*Int8Result512, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+
+	results := make([]*Int8Result512, len(texts))
+
+	// For very large batches, use progressive processing to avoid memory spikes
+	const chunkSize = 2000 // Match server batch size
+
+	for start := 0; start < len(texts); start += chunkSize {
+		end := start + chunkSize
+		if end > len(texts) {
+			end = len(texts)
+		}
+
+		chunk := texts[start:end]
+		chunkResults, err := m.EmbedBatchInt8(chunk)
+		if err != nil {
+			return nil, fmt.Errorf("batch embedding failed at chunk %d-%d: %v", start, end, err)
+		}
+
+		// Copy chunk results to main results
+		copy(results[start:end], chunkResults)
+
+		// Report progress
+		if progressCallback != nil {
+			progressCallback(end, len(texts))
+		}
+	}
+
+	return results, nil
+}
+
 // Similarity computes cosine similarity between two texts
 func (m *SimpleInt8Model512) Similarity(text1, text2 string) (float32, error) {
 	emb1, err := m.EmbedInt8(text1)

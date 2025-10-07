@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/lee101/gobed"
 )
@@ -20,33 +21,28 @@ func main() {
 
 	// Create search engine with automatic GPU detection and optimization
 	fmt.Println("Creating search engine with auto-optimization...")
-	engine := gobed.NewAutoSearchEngine(model)
+	engine := gobed.NewSearchEngine(model) // Use NewSearchEngine which includes auto-optimization
 
-	// Add some sample documents
-	documents := []struct {
-		id      string
-		content string
-	}{
-		{"tech1", "machine learning algorithms and artificial intelligence"},
-		{"tech2", "web development with JavaScript and React"},
-		{"tech3", "database design and SQL optimization"},
-		{"sci1", "quantum computing and physics research"},
-		{"sci2", "biomedical research and genomics"},
-		{"biz1", "business strategy and market analysis"},
-		{"biz2", "financial modeling and investment"},
+	// Prepare sample documents for batch indexing (ultra-fast parallel processing)
+	documentTexts := []string{
+		"machine learning algorithms and artificial intelligence",
+		"web development with JavaScript and React",
+		"database design and SQL optimization",
+		"quantum computing and physics research",
+		"biomedical research and genomics",
+		"business strategy and market analysis",
+		"financial modeling and investment",
 	}
 
-	fmt.Printf("Adding %d documents to search index...\n", len(documents))
-	for _, doc := range documents {
-		// Index the document content directly (SearchEngine handles encoding)
-		_, err := engine.Index(doc.content)
-		if err != nil {
-			log.Printf("Failed to index document %s: %v", doc.id, err)
-			continue
-		}
+	fmt.Printf("Ultra-fast batch indexing %d documents...\n", len(documentTexts))
+	// Use IndexBatch for maximum parallel throughput instead of sequential indexing
+	ids, err := engine.IndexBatch(documentTexts)
+	if err != nil {
+		log.Fatalf("Failed to batch index documents: %v", err)
 	}
+	fmt.Printf("✅ Indexed %d documents with IDs: %v\n", len(ids), ids)
 
-	// Perform searches
+	// Ultra-fast parallel searches (no for loops, maximum parallelism)
 	queries := []string{
 		"artificial intelligence and machine learning",
 		"web programming and development",
@@ -54,31 +50,51 @@ func main() {
 		"business and finance analysis",
 	}
 
+	fmt.Printf("\n🚀 Ultra-fast parallel searching %d queries...\n", len(queries))
+
+	// Parallel search processing with channels (no sequential for loops)
+	type searchResult struct {
+		query   string
+		results []gobed.SearchResult
+		err     error
+	}
+
+	resultChan := make(chan searchResult, len(queries))
+
+	// Launch all searches in parallel for maximum throughput
 	for _, query := range queries {
-		fmt.Printf("\n🔍 Search: \"%s\"\n", query)
+		go func(q string) {
+			results, err := engine.Search(q, 3)
+			resultChan <- searchResult{query: q, results: results, err: err}
+		}(query)
+	}
+
+	// Collect all results as they complete
+	for i := 0; i < len(queries); i++ {
+		result := <-resultChan
+
+		fmt.Printf("\n🔍 Search: \"%s\"\n", result.query)
 		fmt.Println("----------------------------------------")
 
-		// Search for similar documents (SearchEngine handles query encoding)
-		results, err := engine.Search(query, 3)
-		if err != nil {
-			log.Printf("Failed to search: %v", err)
+		if result.err != nil {
+			log.Printf("Failed to search: %v", result.err)
 			continue
 		}
 
-		if len(results) == 0 {
+		if len(result.results) == 0 {
 			fmt.Println("No results found")
 			continue
 		}
 
-		for i, result := range results {
+		for j, searchRes := range result.results {
 			fmt.Printf("%d. [%.3f] ID:%d\n   %s\n",
-				i+1, result.Similarity, result.ID, result.Text)
+				j+1, searchRes.Similarity, searchRes.ID, searchRes.Text)
 		}
 	}
 
-	// Test similarity computation
-	fmt.Printf("\n💡 Text Similarity Examples\n")
-	fmt.Println("----------------------------------------")
+	// Ultra-fast parallel similarity computation (no for loops)
+	fmt.Printf("\n💡 Ultra-Fast Parallel Similarity Examples\n")
+	fmt.Println("--------------------------------------------")
 
 	similarityPairs := [][]string{
 		{"machine learning", "artificial intelligence"},
@@ -87,19 +103,67 @@ func main() {
 		{"business strategy", "market analysis"},
 	}
 
-	for _, pair := range similarityPairs {
-		emb1, err1 := model.Encode(pair[0])
-		emb2, err2 := model.Encode(pair[1])
+	// Parallel similarity computation for maximum speed
+	type similarityResult struct {
+		pair       []string
+		similarity float32
+		err        error
+	}
 
-		if err1 != nil || err2 != nil {
-			log.Printf("Failed to encode similarity pair: %v, %v", err1, err2)
+	simResultChan := make(chan similarityResult, len(similarityPairs))
+
+	// Process all similarity pairs in parallel
+	for _, pair := range similarityPairs {
+		go func(p []string) {
+			// Parallel embedding generation within each pair
+			var emb1, emb2 []float32
+			var err1, err2 error
+
+			// Use sync.WaitGroup for ultra-fast parallel embedding
+			var wg sync.WaitGroup
+			wg.Add(2)
+
+			go func() {
+				defer wg.Done()
+				emb1, err1 = model.Encode(p[0])
+			}()
+
+			go func() {
+				defer wg.Done()
+				emb2, err2 = model.Encode(p[1])
+			}()
+
+			wg.Wait()
+
+			if err1 != nil || err2 != nil {
+				simResultChan <- similarityResult{
+					pair: p,
+					err:  fmt.Errorf("encoding failed: %v, %v", err1, err2),
+				}
+				return
+			}
+
+			similarity := gobed.CosineSimilarity(emb1, emb2)
+			simResultChan <- similarityResult{
+				pair:       p,
+				similarity: similarity,
+			}
+		}(pair)
+	}
+
+	// Collect all similarity results
+	for i := 0; i < len(similarityPairs); i++ {
+		result := <-simResultChan
+
+		if result.err != nil {
+			log.Printf("Failed to compute similarity: %v", result.err)
 			continue
 		}
 
-		similarity := gobed.CosineSimilarity(emb1, emb2)
-		fmt.Printf("'%s' ↔ '%s': %.3f\n", pair[0], pair[1], similarity)
+		fmt.Printf("'%s' ↔ '%s': %.3f\n",
+			result.pair[0], result.pair[1], result.similarity)
 	}
 
-	fmt.Printf("\n✅ Example completed successfully!\n")
-	fmt.Printf("📊 Total documents indexed: %d\n", len(documents))
+	fmt.Printf("\n✅ Ultra-fast parallel example completed successfully!\n")
+	fmt.Printf("📊 Total documents indexed: %d\n", len(documentTexts))
 }
