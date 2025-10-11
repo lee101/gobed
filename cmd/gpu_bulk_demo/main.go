@@ -1,4 +1,5 @@
-// +build gpu
+//go:build legacy
+
 
 package main
 

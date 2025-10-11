@@ -154,6 +154,50 @@ func TestRuntimeDispatch(t *testing.T) {
 		cpu.X86.HasAVX512VNNI, cpu.X86.HasAVX512F, cpu.X86.HasAVX512BW, cpu.X86.HasAVX2)
 }
 
+func TestDot512BatchMatchesSingle(t *testing.T) {
+	rand.Seed(123)
+
+	query := &Vec512{}
+	for i := 0; i < len(query); i++ {
+		query[i] = int8(rand.Intn(256) - 128)
+	}
+
+	const total = 129
+	dataset := make([]Vec512, total)
+	for i := range dataset {
+		for j := 0; j < len(dataset[i]); j++ {
+			dataset[i][j] = int8(rand.Intn(256) - 128)
+		}
+	}
+
+	scores := Dot512Batch(query, dataset, nil)
+	if len(scores) != len(dataset) {
+		t.Fatalf("expected %d scores, got %d", len(dataset), len(scores))
+	}
+	for i := range dataset {
+		if want := Dot512(query, &dataset[i]); scores[i] != want {
+			t.Fatalf("batch mismatch at %d: got %d want %d", i, scores[i], want)
+		}
+	}
+
+	// Reuse the underlying buffer with a smaller batch to ensure slicing works.
+	reused := Dot512Batch(query, dataset[:17], scores[:0])
+	if len(reused) != 17 {
+		t.Fatalf("expected 17 reused scores, got %d", len(reused))
+	}
+	for i := range reused {
+		if want := Dot512(query, &dataset[i]); reused[i] != want {
+			t.Fatalf("reused batch mismatch at %d: got %d want %d", i, reused[i], want)
+		}
+	}
+
+	// Empty input should return an empty slice without panicking.
+	empty := Dot512Batch(query, dataset[:0], reused[:0])
+	if len(empty) != 0 {
+		t.Fatalf("expected empty result for zero-length batch, got %d", len(empty))
+	}
+}
+
 func BenchmarkDot512(b *testing.B) {
 	va := &Vec512{}
 	vb := &Vec512{}

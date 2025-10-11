@@ -1,0 +1,61 @@
+LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/lib:$LD_LIBRARY_PATH ./test_cuvs_working
+🚀 CUVS CAGRA Working Benchmark
+================================
+
+GPU: NVIDIA GeForce RTX 3090 (23.56 GB, Compute 8.6)
+
+🔬 Running Benchmarks
+====================
+
+📊 Benchmarking CUVS CAGRA:
+  Dataset: 1000 vectors, 128 dimensions
+  Queries: 10, k=10
+  Computing ground truth...
+  Building CAGRA index...
+  ✅ Index built in 3938.16 ms
+  Running search benchmark...
+  ✅ Search: 0.180 ms/query, 55639 QPS
+  ✅ Recall@10: 100.0%
+
+📊 Benchmarking CUVS CAGRA:
+  Dataset: 10000 vectors, 256 dimensions
+  Queries: 100, k=20
+  Computing ground truth...
+  Building CAGRA index...
+  ✅ Index built in 8637.83 ms
+  Running search benchmark...
+  ✅ Search: 1.210 ms/query, 82616 QPS
+  ✅ Recall@20: 94.3%
+
+📊 Benchmarking CUVS CAGRA:
+  Dataset: 50000 vectors, 512 dimensions
+  Queries: 100, k=50
+  Computing ground truth...
+  Building CAGRA index...
+  ✅ Index built in 19740.01 ms
+  Running search benchmark...
+  ✅ Search: 6.392 ms/query, 15643 QPS
+  ✅ Recall@50: 75.5%
+
+📊 Benchmarking CUVS CAGRA:
+  Dataset: 100000 vectors, 768 dimensions
+  Queries: 100, k=100
+  Computing ground truth...
+  Building CAGRA index...
+  ✅ Index built in 18634.06 ms
+  Running search benchmark...
+  ✅ Search: 18.213 ms/query, 5490 QPS
+  ✅ Recall@100: 73.3%
+
+
+📊 BENCHMARK SUMMARY
+====================
+
+Dataset Size | Build (ms) | Search (ms) | QPS      | Recall
+-------------|------------|-------------|----------|--------
+        1000 |    3938.16 |       0.180 |    55639 | 100.0%
+       10000 |    8637.83 |       1.210 |    82616 |  94.3%
+       50000 |   19740.01 |       6.392 |    15643 |  75.5%
+      100000 |   18634.06 |      18.213 |     5490 |  73.3%
+
+✅ Benchmark complete!

@@ -1,0 +1,3 @@
+This guide describes building a GPU vector search service for engineering documentation.
+Operators batch encode queries, push embeddings to CUDA kernels, and tune IVF parameters.
+Quality metrics like precision, recall, and normalized discounted cumulative gain appear throughout.

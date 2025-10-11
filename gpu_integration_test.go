@@ -32,10 +32,7 @@ func TestGPUEnvironment(t *testing.T) {
 // TestModelLoadingPerformance tests model loading with GPU
 func TestModelLoadingPerformance(t *testing.T) {
 	start := time.Now()
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := loadModelOrSkip(t)
 	loadTime := time.Since(start)
 
 	t.Logf("Model loaded in %v", loadTime)

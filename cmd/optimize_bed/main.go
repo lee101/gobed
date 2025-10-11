@@ -1,4 +1,7 @@
+//go:build legacy
+
 // optimize_bed.go - Comprehensive optimization and testing for bed tool
+
 package main
 
 import (

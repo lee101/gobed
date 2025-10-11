@@ -12,8 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-
-	"github.com/daulet/tokenizers"
+	"unicode"
 )
 
 const (
@@ -22,14 +21,156 @@ const (
 	Int8VocabSize    = 30522
 )
 
+// wordPieceTokenizer implements a minimal WordPiece tokenizer optimized for BERT-style vocabularies.
+type wordPieceTokenizer struct {
+	vocab map[string]int16
+
+	clsID int16
+	sepID int16
+	unkID int16
+
+	addSpecial bool
+}
+
+// tokenize splits text using a lightweight WordPiece algorithm and returns int16 token IDs.
+func (t *wordPieceTokenizer) tokenize(text string) ([]int16, error) {
+	if len(t.vocab) == 0 {
+		return nil, fmt.Errorf("wordpiece vocab not initialized")
+	}
+
+	text = strings.ToLower(text)
+	words := basicWordSplit(text)
+
+	result := make([]int16, 0, len(words)+2)
+	if t.addSpecial && t.clsID >= 0 {
+		result = append(result, t.clsID)
+	}
+
+	for _, word := range words {
+		if id, ok := t.vocab[word]; ok {
+			result = append(result, id)
+			continue
+		}
+
+		subwordIDs := t.tokenizeWordPiece(word)
+		if len(subwordIDs) == 0 {
+			if t.unkID < 0 {
+				return nil, fmt.Errorf("unknown token %q and [UNK] not in vocab", word)
+			}
+			result = append(result, t.unkID)
+			continue
+		}
+		result = append(result, subwordIDs...)
+	}
+
+	if t.addSpecial && t.sepID >= 0 {
+		result = append(result, t.sepID)
+	}
+
+	return result, nil
+}
+
+func (t *wordPieceTokenizer) tokenizeWordPiece(word string) []int16 {
+	if word == "" {
+		return nil
+	}
+
+	var ids []int16
+	chars := []rune(word)
+	start := 0
+
+	for start < len(chars) {
+		end := len(chars)
+		var matched int16 = -1
+		var matchedLen int
+
+		for end > start {
+			sub := string(chars[start:end])
+			if start > 0 {
+				sub = "##" + sub
+			}
+
+			if id, ok := t.vocab[sub]; ok {
+				matched = id
+				matchedLen = end - start
+				break
+			}
+			end--
+		}
+
+		if matched == -1 {
+			return nil
+		}
+
+		ids = append(ids, matched)
+		start += matchedLen
+	}
+
+	return ids
+}
+
+// basicWordSplit performs a simple word split focusing on ASCII letters/digits and treating punctuation as separators.
+func basicWordSplit(text string) []string {
+	var tokens []string
+	var buf strings.Builder
+
+	flush := func() {
+		if buf.Len() > 0 {
+			tokens = append(tokens, buf.String())
+			buf.Reset()
+		}
+	}
+
+	for _, r := range text {
+		switch {
+		case unicode.IsSpace(r):
+			flush()
+		case isWordChar(r):
+			buf.WriteRune(r)
+		default:
+			flush()
+			if !unicode.IsSpace(r) {
+				tokens = append(tokens, string(r))
+			}
+		}
+	}
+	flush()
+	return tokens
+}
+
+func isWordChar(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'' || r == '_'
+}
+
+func newWordPieceTokenizer(vocab map[string]int16) *wordPieceTokenizer {
+	tk := &wordPieceTokenizer{
+		vocab:      vocab,
+		clsID:      -1,
+		sepID:      -1,
+		unkID:      -1,
+		addSpecial: true,
+	}
+
+	if id, ok := vocab["[CLS]"]; ok {
+		tk.clsID = id
+	}
+	if id, ok := vocab["[SEP]"]; ok {
+		tk.sepID = id
+	}
+	if id, ok := vocab["[UNK]"]; ok {
+		tk.unkID = id
+	}
+
+	return tk
+}
+
 // Int8EmbeddingModel512 represents the int8 quantized model with 512 dimensions
 type Int8EmbeddingModel512 struct {
 	// Embeddings stored as int8 for memory efficiency
 	embeddings [][]int8  // shape: [vocab_size, 512]
 	scales     []float32 // shape: [vocab_size] - scale factor for each embedding
 
-	// Tokenizer (outputs int16 token IDs)
-	tokenizer *tokenizers.Tokenizer
+	tokenizer *wordPieceTokenizer
 
 	// Cache for frequently used embeddings
 	cache     sync.Map
@@ -49,11 +190,12 @@ func LoadInt8Model512() (*Int8EmbeddingModel512, error) {
 		return nil, fmt.Errorf("failed to load embeddings: %v", err)
 	}
 
-	// Load tokenizer
-	tk, err := tokenizers.FromFile(tokenizerPath)
+	vocab, err := loadSimpleVocab(tokenizerPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load tokenizer: %v", err)
+		return nil, fmt.Errorf("failed to load tokenizer vocab: %v", err)
 	}
+
+	tk := newWordPieceTokenizer(vocab)
 
 	model := &Int8EmbeddingModel512{
 		embeddings: embeddings,
@@ -199,21 +341,22 @@ func loadFloat32Tensor(file *os.File, info map[string]interface{}, baseOffset in
 	return data, nil
 }
 
-// Tokenize converts text to int16 token IDs
+// Tokenize converts text to int16 token IDs using the in-process wordpiece tokenizer.
 func (m *Int8EmbeddingModel512) Tokenize(text string) ([]int16, error) {
-	encoding := m.tokenizer.EncodeWithOptions(text, false,
-		tokenizers.WithReturnTokens(),
-		tokenizers.WithReturnTypeIDs())
-
-	// Convert uint32 to int16 (safe for vocab size < 32768)
-	tokens := make([]int16, len(encoding.IDs))
-	for i, id := range encoding.IDs {
-		if id >= 32768 {
-			return nil, fmt.Errorf("token ID %d exceeds int16 range", id)
-		}
-		tokens[i] = int16(id)
+	if m.tokenizer == nil {
+		return nil, fmt.Errorf("int8 tokenizer not initialized")
 	}
 
+	tokens, err := m.tokenizer.tokenize(text)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, id := range tokens {
+		if id < 0 || id >= Int8VocabSize {
+			return nil, fmt.Errorf("token ID %d at position %d exceeds int16 range", id, i)
+		}
+	}
 	return tokens, nil
 }
 
@@ -391,8 +534,8 @@ func (m *Int8EmbeddingModel512) Similarity(text1, text2 string) (float32, error)
 // GetMemoryUsage returns the memory usage of the model
 func (m *Int8EmbeddingModel512) GetMemoryUsage() string {
 	// Calculate memory usage
-	embeddingBytes := len(m.embeddings) * Int8EmbeddingDim       // int8 embeddings
-	scaleBytes := len(m.scales) * 4                              // float32 scales
+	embeddingBytes := len(m.embeddings) * Int8EmbeddingDim // int8 embeddings
+	scaleBytes := len(m.scales) * 4                        // float32 scales
 	totalBytes := embeddingBytes + scaleBytes
 
 	// Get cache size estimate

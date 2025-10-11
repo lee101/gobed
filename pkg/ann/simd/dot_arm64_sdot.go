@@ -1,5 +1,4 @@
 //go:build arm64 && cgo
-// +build arm64,cgo
 
 package simd
 

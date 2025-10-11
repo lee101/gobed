@@ -59,7 +59,7 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		MaxFlatSize: 10000, // Increased for dev datasets to avoid IVF training issues
+		MaxFlatSize: 1500, // Tuned default based on recent optimization runs
 		NList:       4096,
 		NProbe:      8,
 		M:           64,
@@ -76,7 +76,7 @@ func DefaultConfig() Config {
 func NewEngine(config Config) *Engine {
 	// Validate and set defaults
 	if config.MaxFlatSize <= 0 {
-		config.MaxFlatSize = 10000 // Increased for dev datasets to avoid IVF training issues
+		config.MaxFlatSize = 1500
 	}
 	if config.NList <= 0 {
 		config.NList = 4096

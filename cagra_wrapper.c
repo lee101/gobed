@@ -1,4 +1,5 @@
-// +build cagra
+//go:build cagra_native
+// +build cagra_native
 
 /*
  * CAGRA (CUDA And Graph-based Retrieval Algorithm) wrapper for gobed
@@ -8,26 +9,19 @@
 
 #include <cuvs/core/c_api.h>
 #include <cuvs/neighbors/cagra.h>
+#include <cuvs/distance/pairwise_distance.h>
 #include <dlpack/dlpack.h>
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
+#include <math.h>
+#include "cagra_wrapper.h"
 
-// Performance tracking
-typedef struct {
-    double build_time_ms;
-    double search_time_ms;
-    double serialize_time_ms;
-    double deserialize_time_ms;
-    size_t index_memory_bytes;
-    int num_vectors;
-    int dim;
-} cagra_stats_t;
-
-// CAGRA index wrapper
-typedef struct {
+// CAGRA index wrapper (define the struct body; typedef is in header)
+struct cagra_wrapper_t {
     cuvsResources_t resources;
     cuvsCagraIndex_t index;
     cuvsCagraIndexParams_t index_params;
@@ -51,7 +45,36 @@ typedef struct {
     // Caching
     int cache_enabled;
     char cache_path[256];
-} cagra_wrapper_t;
+};
+
+// simple integer clamp helpers
+#ifndef INT_MIN
+#define INT_MIN (-2147483647 - 1)
+#endif
+#ifndef INT_MAX
+#define INT_MAX 2147483647
+#endif
+#define CLAMP_INT(v, lo, hi) ((v) < (lo) ? (lo) : ((v) > (hi) ? (hi) : (v)))
+
+// forward declaration
+void cagra_destroy(cagra_wrapper_t* wrapper);
+
+// Helpers to read environment overrides safely
+static int getenv_int(const char* name, int defval) {
+    const char* v = getenv(name);
+    if (!v || !*v) return defval;
+    // simple integer parse
+    int sign = 1; long val = 0; const char* p = v;
+    if (*p == '+') { p++; } else if (*p == '-') { sign = -1; p++; }
+    while (*p && isdigit((unsigned char)*p)) { val = val*10 + (*p - '0'); p++; }
+    return (int)(sign * val);
+}
+
+static float getenv_float(const char* name, float defval) {
+    const char* v = getenv(name);
+    if (!v || !*v) return defval;
+    return (float)atof(v);
+}
 
 // Helper function to convert int8 to float32 with scaling
 __global__ void int8_to_float32_kernel(
@@ -106,6 +129,10 @@ __global__ void float32_to_int8_kernel(
     }
 }
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Create CAGRA wrapper
 cagra_wrapper_t* cagra_create(int max_vectors, int dim) {
     cagra_wrapper_t* wrapper = (cagra_wrapper_t*)calloc(1, sizeof(cagra_wrapper_t));
@@ -115,9 +142,9 @@ cagra_wrapper_t* cagra_create(int max_vectors, int dim) {
     wrapper->num_vectors = 0;
 
     // CAGRA configuration for ultra-fast search
-    wrapper->graph_degree = 64;  // Higher = better quality, more memory
-    wrapper->intermediate_graph_degree = 128;
-    wrapper->max_iterations = 200;
+    wrapper->graph_degree = getenv_int("CAGRA_GRAPH_DEGREE", 64);  // Higher = better quality, more memory
+    wrapper->intermediate_graph_degree = getenv_int("CAGRA_INTERMEDIATE_DEGREE", 128);
+    wrapper->max_iterations = getenv_int("CAGRA_MAX_ITERS", 200);
 
     // Create cuVS resources
     if (cuvsResourcesCreate(&wrapper->resources) != CUVS_SUCCESS) {
@@ -132,10 +159,14 @@ cagra_wrapper_t* cagra_create(int max_vectors, int dim) {
         return NULL;
     }
 
-    // Set index parameters for speed
+    // Set index parameters for speed and correct metric (Inner Product for similarity)
     wrapper->index_params->graph_degree = wrapper->graph_degree;
     wrapper->index_params->intermediate_graph_degree = wrapper->intermediate_graph_degree;
-    wrapper->index_params->graph_build_algo = CUVS_IVF_PQ;  // Fast build algorithm
+    wrapper->index_params->build_algo = IVF_PQ;  // Fast build algorithm per cuVS C API
+    // Ensure we use inner-product similarity to match gobed tests/expectations
+    // (higher score means more similar). CAGRA returns distances; with InnerProduct this is
+    // typically -dot. We will convert to positive similarity at the Go layer if needed.
+    wrapper->index_params->metric = InnerProduct;
 
     // Create search params
     if (cuvsCagraSearchParamsCreate(&wrapper->search_params) != CUVS_SUCCESS) {
@@ -145,20 +176,36 @@ cagra_wrapper_t* cagra_create(int max_vectors, int dim) {
         return NULL;
     }
 
-    // Set search parameters for <1ms latency
-    wrapper->search_params->max_queries = 1;
-    wrapper->search_params->algo = CUVS_SINGLE_CTA;  // Fastest for single query
-    wrapper->search_params->max_iterations = 64;     // Balance speed/quality
-    wrapper->search_params->team_size = 8;
+    // Set search parameters with env overrides for tuning
+    wrapper->search_params->max_queries = getenv_int("CAGRA_MAX_QUERIES", 1);
+    {
+        int algo = getenv_int("CAGRA_ALGO", (int)SINGLE_CTA);
+        // Accept values from enum cuvsCagraSearchAlgo
+        if (algo != (int)SINGLE_CTA && algo != (int)MULTI_CTA && algo != (int)MULTI_KERNEL && algo != (int)AUTO) {
+            algo = (int)SINGLE_CTA;
+        }
+        wrapper->search_params->algo = (enum cuvsCagraSearchAlgo)algo;
+    }
+    int maxit = getenv_int("CAGRA_SEARCH_MAX_ITERS", 64);
+    int minit = getenv_int("CAGRA_SEARCH_MIN_ITERS", 0);
+    wrapper->search_params->max_iterations = maxit;
+    wrapper->search_params->min_iterations = minit;
+    wrapper->search_params->team_size = getenv_int("CAGRA_TEAM_SIZE", 8);
+    int itopk = getenv_int("CAGRA_ITOPK_SIZE", 64);
+    if (itopk < 1) itopk = 64;
+    wrapper->search_params->itopk_size = itopk;
+    int sw = getenv_int("CAGRA_SEARCH_WIDTH", 1);
+    if (sw < 1) sw = 1;
+    wrapper->search_params->search_width = sw;
 
     // Allocate GPU memory
     size_t dataset_bytes = max_vectors * dim * sizeof(int8_t);
     size_t dataset_fp32_bytes = max_vectors * dim * sizeof(float);
     size_t scales_bytes = max_vectors * sizeof(float);
 
-    cudaMalloc(&wrapper->d_dataset, dataset_bytes);
-    cudaMalloc(&wrapper->d_dataset_fp32, dataset_fp32_bytes);
-    cudaMalloc(&wrapper->d_scales, scales_bytes);
+    cudaMalloc((void**)&wrapper->d_dataset, dataset_bytes);
+    cudaMalloc((void**)&wrapper->d_dataset_fp32, dataset_fp32_bytes);
+    cudaMalloc((void**)&wrapper->d_scales, scales_bytes);
 
     if (!wrapper->d_dataset || !wrapper->d_dataset_fp32 || !wrapper->d_scales) {
         cagra_destroy(wrapper);
@@ -267,7 +314,7 @@ int cagra_search(
 
     // Allocate GPU memory for query
     float* d_query_fp32;
-    cudaMalloc(&d_query_fp32, wrapper->dim * sizeof(float));
+    cudaMalloc((void**)&d_query_fp32, wrapper->dim * sizeof(float));
 
     // Convert int8 query to float32 on GPU
     float* h_query_fp32 = (float*)malloc(wrapper->dim * sizeof(float));
@@ -280,8 +327,8 @@ int cagra_search(
     // Allocate GPU memory for results
     uint32_t* d_neighbors;
     float* d_distances;
-    cudaMalloc(&d_neighbors, k * sizeof(uint32_t));
-    cudaMalloc(&d_distances, k * sizeof(float));
+    cudaMalloc((void**)&d_neighbors, k * sizeof(uint32_t));
+    cudaMalloc((void**)&d_distances, k * sizeof(float));
 
     // Create DLTensors
     DLManagedTensor query_tensor;
@@ -377,7 +424,7 @@ int cagra_search_batch(
     // Allocate GPU memory for queries
     size_t queries_bytes = num_queries * wrapper->dim * sizeof(float);
     float* d_queries_fp32;
-    cudaMalloc(&d_queries_fp32, queries_bytes);
+    cudaMalloc((void**)&d_queries_fp32, queries_bytes);
 
     // Convert int8 queries to float32
     float* h_queries_fp32 = (float*)malloc(queries_bytes);
@@ -393,14 +440,14 @@ int cagra_search_batch(
     // Allocate GPU memory for results
     uint32_t* d_neighbors;
     float* d_distances;
-    cudaMalloc(&d_neighbors, num_queries * k * sizeof(uint32_t));
-    cudaMalloc(&d_distances, num_queries * k * sizeof(float));
+    cudaMalloc((void**)&d_neighbors, num_queries * k * sizeof(uint32_t));
+    cudaMalloc((void**)&d_distances, num_queries * k * sizeof(float));
 
     // Create batch search params for throughput
     cuvsCagraSearchParams_t batch_params;
     cuvsCagraSearchParamsCreate(&batch_params);
     batch_params->max_queries = num_queries;
-    batch_params->algo = CUVS_MULTI_CTA;  // Better for batch
+    batch_params->algo = MULTI_CTA;  // Better for batch
     batch_params->max_iterations = 64;
     batch_params->team_size = 16;
 
@@ -604,3 +651,7 @@ void cagra_destroy(cagra_wrapper_t* wrapper) {
 
     free(wrapper);
 }
+
+#ifdef __cplusplus
+} // extern "C"
+#endif

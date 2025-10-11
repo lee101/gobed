@@ -7,14 +7,14 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // SimpleInt8Model512 is a simple version that works without external C deps
 type SimpleInt8Model512 struct {
-	embeddings [][]int8  // shape: [vocab_size, 512]
-	scales     []float32 // shape: [vocab_size] - scale factor for each embedding
-	vocab      map[string]int16  // token to ID mapping
+	embeddings [][]int8         // shape: [vocab_size, 512]
+	scales     []float32        // shape: [vocab_size] - scale factor for each embedding
+	vocab      map[string]int16 // token to ID mapping
+	tokenizer  *wordPieceTokenizer
 }
 
 // LoadSimpleInt8Model512 loads the int8 model with built-in tokenizer
@@ -40,6 +40,7 @@ func LoadSimpleInt8Model512() (*SimpleInt8Model512, error) {
 		embeddings: embeddings,
 		scales:     scales,
 		vocab:      vocab,
+		tokenizer:  newWordPieceTokenizer(vocab),
 	}
 
 	log.Printf(" Simple Int8 model loaded: vocab=%d, dims=%d, memory=%.1f MB",
@@ -79,53 +80,24 @@ func loadSimpleVocab(path string) (map[string]int16, error) {
 
 // SimpleTokenize performs basic tokenization (space-separated + subword)
 func (m *SimpleInt8Model512) SimpleTokenize(text string) []int16 {
-	text = strings.ToLower(strings.TrimSpace(text))
-	words := strings.Fields(text)
-
-	var tokens []int16
-
-	// Add [CLS] token (typically ID 101)
-	if clsID, ok := m.vocab["[CLS]"]; ok {
-		tokens = append(tokens, clsID)
+	if m.tokenizer == nil {
+		return nil
 	}
-
-	for _, word := range words {
-		// Try exact match first
-		if id, ok := m.vocab[word]; ok {
-			tokens = append(tokens, id)
-			continue
-		}
-
-		// Try with ## prefix (BERT subword tokens)
-		if id, ok := m.vocab["##"+word]; ok {
-			tokens = append(tokens, id)
-			continue
-		}
-
-		// Try word pieces (simple splitting)
-		found := false
-		for token, id := range m.vocab {
-			if strings.Contains(word, strings.TrimPrefix(token, "##")) && len(token) > 3 {
-				tokens = append(tokens, id)
-				found = true
-				break
-			}
-		}
-
-		// Fallback to [UNK] token
-		if !found {
-			if unkID, ok := m.vocab["[UNK]"]; ok {
-				tokens = append(tokens, unkID)
-			}
-		}
+	tokens, err := m.tokenizer.tokenize(text)
+	if err != nil {
+		return []int16{}
 	}
-
-	// Add [SEP] token (typically ID 102)
-	if sepID, ok := m.vocab["[SEP]"]; ok {
-		tokens = append(tokens, sepID)
-	}
-
 	return tokens
+}
+
+// EmbeddingTable returns the vocab embedding matrix (read-only).
+func (m *SimpleInt8Model512) EmbeddingTable() [][]int8 {
+	return m.embeddings
+}
+
+// ScaleTable returns per-token quantization scales (read-only).
+func (m *SimpleInt8Model512) ScaleTable() []float32 {
+	return m.scales
 }
 
 // EmbedTokens embeds int16 token IDs directly
@@ -222,9 +194,9 @@ func (m *SimpleInt8Model512) EmbedBatchInt8(texts []string) ([]*Int8Result512, e
 
 	jobs := make(chan job, len(texts))
 	resultsChan := make(chan struct {
-		index int
+		index  int
 		result *Int8Result512
-		err   error
+		err    error
 	}, len(texts))
 
 	// Start workers
@@ -233,9 +205,9 @@ func (m *SimpleInt8Model512) EmbedBatchInt8(texts []string) ([]*Int8Result512, e
 			for j := range jobs {
 				result, err := m.EmbedInt8(j.text)
 				resultsChan <- struct {
-					index int
+					index  int
 					result *Int8Result512
-					err   error
+					err    error
 				}{j.index, result, err}
 			}
 		}()
@@ -342,4 +314,35 @@ func (m *SimpleInt8Model512) Similarity(text1, text2 string) (float32, error) {
 	}
 
 	return scaledDot / float32(math.Sqrt(float64(scaledNorm1*scaledNorm2))), nil
+}
+
+// EmbedTokensInt8 converts pre-tokenized input directly into an int8 embedding result.
+func (m *SimpleInt8Model512) EmbedTokensInt8(tokens []int16) (*Int8Result512, error) {
+	if len(tokens) == 0 {
+		return &Int8Result512{
+			Vector: make([]int8, Int8EmbeddingDim),
+			Scale:  1.0,
+		}, nil
+	}
+
+	embedding, err := m.EmbedTokens(tokens)
+	if err != nil {
+		return nil, err
+	}
+	return quantizeVector512(embedding), nil
+}
+
+// EmbedDim returns the embedding dimensionality for API compatibility.
+func (m *SimpleInt8Model512) EmbedDim() int {
+	return Int8EmbeddingDim
+}
+
+// VocabSize returns the size of the token vocabulary.
+func (m *SimpleInt8Model512) VocabSize() int {
+	return len(m.embeddings)
+}
+
+// Close is provided for API compatibility with heavier model implementations.
+func (m *SimpleInt8Model512) Close() error {
+	return nil
 }

@@ -1,4 +1,4 @@
-// +build gpu
+//go:build legacy && gpu
 
 package gobed
 
@@ -107,7 +107,7 @@ func NewOptimizedSearchEngine(model *EmbeddingModel, config SearchConfig) *Optim
 // ProcessBatch processes a batch of texts efficiently
 func (e *OptimizedSearchEngine) ProcessBatch(texts []string) ([][]float32, error) {
 	results := make([][]float32, len(texts))
-	
+
 	// Use worker pool for parallel processing
 	ch := make(chan int, len(texts))
 	for i := range texts {
@@ -117,7 +117,7 @@ func (e *OptimizedSearchEngine) ProcessBatch(texts []string) ([][]float32, error
 
 	var wg sync.WaitGroup
 	wg.Add(e.workers)
-	
+
 	for w := 0; w < e.workers; w++ {
 		go func() {
 			defer wg.Done()
@@ -127,12 +127,12 @@ func (e *OptimizedSearchEngine) ProcessBatch(texts []string) ([][]float32, error
 				if err != nil {
 					continue
 				}
-				
+
 				results[i] = embedding
 			}
 		}()
 	}
-	
+
 	wg.Wait()
 	return results, nil
 }
@@ -142,7 +142,7 @@ func (e *OptimizedSearchEngine) Search(query string, k int) ([]SearchResult, err
 	// Use buffer pool for temporary allocations
 	buf := GetTokenBuffer()
 	defer PutTokenBuffer(buf)
-	
+
 	return e.searchEngine.Search(query, k)
 }
 
@@ -152,7 +152,7 @@ func (e *OptimizedSearchEngine) IndexBatch(texts []string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Add to search engine using proper API
 	for i, embedding := range embeddings {
 		if embedding != nil {
@@ -160,7 +160,7 @@ func (e *OptimizedSearchEngine) IndexBatch(texts []string) error {
 			e.searchEngine.IndexWithID(i, texts[i])
 		}
 	}
-	
+
 	return nil
 }
 
@@ -172,7 +172,7 @@ func quantizeVector(vec []float32) []int8 {
 	} else {
 		result = result[:len(vec)]
 	}
-	
+
 	// Find scale
 	var maxVal float32
 	for _, v := range vec {
@@ -183,12 +183,12 @@ func quantizeVector(vec []float32) []int8 {
 			maxVal = -v
 		}
 	}
-	
+
 	scale := maxVal / 127.0
 	if scale == 0 {
 		scale = 1
 	}
-	
+
 	// Quantize
 	for i, v := range vec {
 		quantized := int8(v / scale)
@@ -199,6 +199,6 @@ func quantizeVector(vec []float32) []int8 {
 		}
 		result[i] = quantized
 	}
-	
+
 	return result
 }

@@ -6,6 +6,7 @@ echo " Building BED search tool..."
 
 # Auto-detect CUDA version from nvidia-smi
 GPU_AVAILABLE=false
+CUVS_AVAILABLE=false
 if command -v nvidia-smi &> /dev/null; then
     CUDA_VERSION=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+\.[0-9]+' | head -1)
     if [ -n "$CUDA_VERSION" ]; then
@@ -60,6 +61,13 @@ else
     echo "ℹ  nvidia-smi not found, building CPU-only version"
 fi
 
+# Detect cuVS
+if [ -d "/usr/local/include/cuvs" ] || [ -f "/usr/local/lib/libcuvs.so" ]; then
+    CUVS_PATH="/usr/local"
+    CUVS_AVAILABLE=true
+    echo " Detected cuVS at: $CUVS_PATH"
+fi
+
 # Set CUDA paths if available
 if [ "$GPU_AVAILABLE" = true ]; then
     export CUDA_PATH
@@ -93,10 +101,18 @@ else
     echo "ℹ  Building CPU-only version"
 fi
 
-# Build the binary - use bed_cuda.go which has our working implementation
+# Build the binary - prefer CAGRA path when cuVS is available
+EXTRA_TAGS=""
+if [ "$CUVS_AVAILABLE" = true ]; then
+    EXTRA_TAGS="cagra"
+    # Ensure loader can find cuVS and our gobed libs at runtime
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib:$(cd ..; pwd)"
+    export CGO_LDFLAGS="$CGO_LDFLAGS -L$(cd ..; pwd) -lcagra_wrapper -lcuvs -lcuvs_c"
+fi
+
 if [ "$GPU_AVAILABLE" = true ] && [ -n "$GPU_TAGS" ]; then
     echo " Compiling with GPU support..."
-    go build $GPU_TAGS -o bed bed_cuda.go || {
+    go build $GPU_TAGS -tags "$EXTRA_TAGS" -o bed bed_cuda.go || {
         echo "  GPU build failed, falling back to CPU build"
         go build -o bed bed_cuda.go
     }

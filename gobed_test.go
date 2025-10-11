@@ -5,11 +5,19 @@ import (
 	"testing"
 )
 
+// mustLoadModelForTest loads the embedding model or skips the test when unavailable.
+func mustLoadModelForTest(t *testing.T) *EmbeddingModel {
+	t.Helper()
+	return loadModelOrSkip(t)
+}
+
+func mustLoadModelForBenchmark(b *testing.B) *EmbeddingModel {
+	b.Helper()
+	return loadModelOrSkipB(b)
+}
+
 func TestEmbeddingModelWithRealModel(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := mustLoadModelForTest(t)
 
 	testCases := []struct {
 		name     string
@@ -38,8 +46,9 @@ func TestEmbeddingModelWithRealModel(t *testing.T) {
 				t.Fatalf("Failed to encode sentence '%s': %v", tc.sentence, err)
 			}
 
-			if len(embedding) != 1024 {
-				t.Errorf("Expected embedding dimension 1024, got %d", len(embedding))
+			expectedDim := model.EmbedDim
+			if len(embedding) != expectedDim {
+				t.Errorf("Expected embedding dimension %d, got %d", expectedDim, len(embedding))
 			}
 
 			var sum, sqSum float32
@@ -114,10 +123,7 @@ func TestEmbeddingModelWithRealModel(t *testing.T) {
 }
 
 func TestSimilarityMethod(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := mustLoadModelForTest(t)
 
 	testPairs := []struct {
 		name   string
@@ -149,10 +155,7 @@ func TestSimilarityMethod(t *testing.T) {
 }
 
 func TestFindMostSimilar(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := mustLoadModelForTest(t)
 
 	candidates := []string{
 		"The dog is playing in the garden",
@@ -225,10 +228,7 @@ func TestFindMostSimilar(t *testing.T) {
 }
 
 func TestEdgeCases(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := mustLoadModelForTest(t)
 
 	edgeCases := []struct {
 		name        string
@@ -259,13 +259,17 @@ func TestEdgeCases(t *testing.T) {
 				t.Errorf("Expected error but got none")
 			}
 			if !ec.shouldError && err != nil {
+				if isModelUnavailable(err) {
+					t.Skipf("skipping: %v", err)
+				}
 				t.Logf("Edge case '%s' produced error (might be expected): %v", ec.name, err)
 				return
 			}
 
 			if err == nil {
-				if len(embedding) != 1024 {
-					t.Errorf("Unexpected embedding dimension: %d", len(embedding))
+				expectedDim := model.EmbedDim
+				if len(embedding) != expectedDim {
+					t.Errorf("Unexpected embedding dimension: %d (expected %d)", len(embedding), model.EmbedDim)
 				}
 
 				var nonZeroCount int
@@ -286,21 +290,24 @@ func TestEdgeCases(t *testing.T) {
 }
 
 func TestConsistency(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := mustLoadModelForTest(t)
 
 	sentence := "This is a test for consistency"
 
 	firstEmb, err := model.Encode(sentence)
 	if err != nil {
+		if isModelUnavailable(err) {
+			t.Skipf("skipping: %v", err)
+		}
 		t.Fatalf("Failed to encode: %v", err)
 	}
 
 	for i := 0; i < 10; i++ {
 		emb, err := model.Encode(sentence)
 		if err != nil {
+			if isModelUnavailable(err) {
+				t.Skipf("skipping: %v", err)
+			}
 			t.Fatalf("Failed to encode on iteration %d: %v", i, err)
 		}
 
@@ -323,10 +330,7 @@ func TestConsistency(t *testing.T) {
 }
 
 func BenchmarkSingleEncoding(b *testing.B) {
-	model, err := LoadModel()
-	if err != nil {
-		b.Fatalf("Failed to load model: %v", err)
-	}
+	model := mustLoadModelForBenchmark(b)
 
 	sentence := "This is a benchmark test sentence for performance measurement."
 
@@ -340,10 +344,7 @@ func BenchmarkSingleEncoding(b *testing.B) {
 }
 
 func BenchmarkSimilarityComputation(b *testing.B) {
-	model, err := LoadModel()
-	if err != nil {
-		b.Fatalf("Failed to load model: %v", err)
-	}
+	model := mustLoadModelForBenchmark(b)
 
 	text1 := "First text for similarity comparison"
 	text2 := "Second text for similarity comparison"

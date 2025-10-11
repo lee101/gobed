@@ -4,7 +4,6 @@ import (
 	"container/heap"
 	"runtime"
 	"sync"
-	"unsafe"
 
 	"github.com/lee101/gobed/pkg/ann/simd"
 )
@@ -37,6 +36,8 @@ var heapPool = sync.Pool{
 		return &h
 	},
 }
+
+const dotBatchSize = 64
 
 // FlatIndex is a simple flat index for exact search
 type FlatIndex struct {
@@ -89,15 +90,27 @@ func (idx *FlatIndex) SearchTopK(query *simd.Vec512, K int) []SearchResult {
 		heapPool.Put(h)
 	}()
 
-	for i := range idx.vectors {
-		score := simd.Dot512(query, &idx.vectors[i])
+	total := len(idx.vectors)
+	scoreBuf := make([]int32, dotBatchSize)
+	blockBuf := scoreBuf[:0]
 
-		if h.Len() < K {
-			heap.Push(h, SearchResult{ID: idx.ids[i], Score: score})
-		} else if score > (*h)[0].Score {
-			(*h)[0] = SearchResult{ID: idx.ids[i], Score: score}
-			heap.Fix(h, 0)
+	for base := 0; base < total; base += dotBatchSize {
+		limit := base + dotBatchSize
+		if limit > total {
+			limit = total
 		}
+
+		blockScores := simd.Dot512Batch(query, idx.vectors[base:limit], blockBuf)
+		for offset, score := range blockScores {
+			idxGlobal := base + offset
+			if h.Len() < K {
+				heap.Push(h, SearchResult{ID: idx.ids[idxGlobal], Score: score})
+			} else if score > (*h)[0].Score {
+				(*h)[0] = SearchResult{ID: idx.ids[idxGlobal], Score: score}
+				heap.Fix(h, 0)
+			}
+		}
+		blockBuf = blockScores[:0]
 	}
 
 	// Extract results in descending order
@@ -160,15 +173,26 @@ func (idx *FlatIndex) SearchTopKParallel(query *simd.Vec512, K int) []SearchResu
 				heapPool.Put(h)
 			}()
 
-			for i := start; i < end; i++ {
-				score := simd.Dot512(query, &idx.vectors[i])
+			scoreBuf := make([]int32, dotBatchSize)
+			blockBuf := scoreBuf[:0]
 
-				if h.Len() < K {
-					heap.Push(h, SearchResult{ID: idx.ids[i], Score: score})
-				} else if score > (*h)[0].Score {
-					(*h)[0] = SearchResult{ID: idx.ids[i], Score: score}
-					heap.Fix(h, 0)
+			for base := start; base < end; base += dotBatchSize {
+				limit := base + dotBatchSize
+				if limit > end {
+					limit = end
 				}
+
+				blockScores := simd.Dot512Batch(query, idx.vectors[base:limit], blockBuf)
+				for offset, score := range blockScores {
+					idxGlobal := base + offset
+					if h.Len() < K {
+						heap.Push(h, SearchResult{ID: idx.ids[idxGlobal], Score: score})
+					} else if score > (*h)[0].Score {
+						(*h)[0] = SearchResult{ID: idx.ids[idxGlobal], Score: score}
+						heap.Fix(h, 0)
+					}
+				}
+				blockBuf = blockScores[:0]
 			}
 
 			// Convert heap to slice
@@ -247,6 +271,8 @@ func (idx *FlatIndex) SearchTopKTiled(query *simd.Vec512, K int) []SearchResult 
 	heap.Init(h)
 
 	n := len(idx.vectors)
+	scoreBuf := make([]int32, tileSize)
+	blockBuf := scoreBuf[:0]
 
 	// Process in tiles
 	for tileStart := 0; tileStart < n; tileStart += tileSize {
@@ -255,23 +281,18 @@ func (idx *FlatIndex) SearchTopKTiled(query *simd.Vec512, K int) []SearchResult 
 			tileEnd = n
 		}
 
-		// Prefetch next tile
-		if tileEnd < n && tileEnd+tileSize <= n {
-			nextTile := &idx.vectors[tileEnd]
-			_ = unsafe.Sizeof(*nextTile) // Prefetch hint
-		}
-
 		// Process current tile
-		for i := tileStart; i < tileEnd; i++ {
-			score := simd.Dot512(query, &idx.vectors[i])
-
+		blockScores := simd.Dot512Batch(query, idx.vectors[tileStart:tileEnd], blockBuf)
+		for offset, score := range blockScores {
+			idxGlobal := tileStart + offset
 			if h.Len() < K {
-				heap.Push(h, SearchResult{ID: idx.ids[i], Score: score})
+				heap.Push(h, SearchResult{ID: idx.ids[idxGlobal], Score: score})
 			} else if score > (*h)[0].Score {
-				(*h)[0] = SearchResult{ID: idx.ids[i], Score: score}
+				(*h)[0] = SearchResult{ID: idx.ids[idxGlobal], Score: score}
 				heap.Fix(h, 0)
 			}
 		}
+		blockBuf = blockScores[:0]
 	}
 
 	// Extract results

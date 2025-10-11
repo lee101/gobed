@@ -1,3 +1,5 @@
+//go:build legacy
+
 // test_go_optimization.go - Standalone test of optimization concepts
 package main
 

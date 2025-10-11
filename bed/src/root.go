@@ -111,14 +111,27 @@ func init() {
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
-	query := strings.Join(args, " ")
-	
-	// Use SimpleBedSearcher for now
-	searcher, err := NewSimpleBedSearcher()
-	if err != nil {
-		return fmt.Errorf("failed to initialize searcher: %w", err)
-	}
-	defer searcher.Close()
+    query := strings.Join(args, " ")
+
+    // Prefer CAGRA GPU searcher when --gpu is set; fallback to simple CPU
+    var (
+        searcher interface{ Search(BedSearchOptions) error; Close() error }
+        err error
+    )
+    if flagGPU {
+        if s, e := NewCAGRABedSearcher(); e == nil {
+            searcher = s
+        } else {
+            // Fallback with notice
+            fmt.Printf("GPU/CAGRA unavailable (%v). Falling back to CPU search.\n", e)
+            searcher, err = NewSimpleBedSearcher()
+            if err != nil { return fmt.Errorf("failed to init fallback searcher: %w", err) }
+        }
+    } else {
+        searcher, err = NewSimpleBedSearcher()
+        if err != nil { return fmt.Errorf("failed to initialize searcher: %w", err) }
+    }
+    defer searcher.Close()
 
 	// Configure search options
 	options := BedSearchOptions{
@@ -134,7 +147,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		Verbose:        flagVerbose,
 	}
 
-	return searcher.Search(options)
+    return searcher.Search(options)
 }
 
 func runIndex(cmd *cobra.Command, args []string) error {

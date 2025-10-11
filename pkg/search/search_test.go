@@ -82,44 +82,21 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestSearchPresets(t *testing.T) {
-	// Test that search presets work correctly
+	// Ensure preset constants remain within expected bounds
 	presets := []struct {
-		name        string
-		preset      SearchPreset
-		expectFast  bool
-		expectHighQ bool
+		name   string
+		preset SearchPreset
 	}{
-		{
-			name:        "ultra fast",
-			preset:      UltraFast,
-			expectFast:  true,
-			expectHighQ: false,
-		},
-		{
-			name:        "fast",
-			preset:      Fast,
-			expectFast:  true,
-			expectHighQ: false,
-		},
-		{
-			name:        "balanced",
-			preset:      Balanced,
-			expectFast:  false,
-			expectHighQ: false,
-		},
-		{
-			name:        "high quality",
-			preset:      HighQuality,
-			expectFast:  false,
-			expectHighQ: true,
-		},
+		{name: "cagra", preset: CAGRAPreset},
+		{name: "fast", preset: FastPreset},
+		{name: "balanced", preset: BalancedPreset},
+		{name: "accurate", preset: AccuratePreset},
 	}
 
 	for _, tt := range presets {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test preset properties
-			if tt.preset < 0 || tt.preset > 3 {
-				t.Errorf("Invalid preset value: %d", tt.preset)
+			if tt.preset < FastPreset || tt.preset > CustomPreset {
+				t.Errorf("preset %q out of range: %d", tt.name, tt.preset)
 			}
 		})
 	}

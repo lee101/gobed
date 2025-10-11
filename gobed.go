@@ -356,7 +356,6 @@ func (m *EmbeddingModel) GetAvailableTexts() []string {
 	return texts
 }
 
-
 // loadRealSafetensors loads the actual model weights
 func loadRealSafetensors(filePath string) ([][]float32, int, int, error) {
 	file, err := os.Open(filePath)
@@ -388,32 +387,158 @@ func loadRealSafetensors(filePath string) ([][]float32, int, int, error) {
 		return nil, 0, 0, err
 	}
 
-	// Get embedding weights
-	info, exists := header["embedding.weight"]
-	if !exists {
-		return nil, 0, 0, fmt.Errorf("embedding.weight not found")
-	}
-
-	if info.Dtype != "F32" || len(info.Shape) != 2 {
-		return nil, 0, 0, fmt.Errorf("unsupported tensor format")
-	}
-
-	start, end := info.DataOffsets[0], info.DataOffsets[1]
-	tensorBytes := data[start:end]
-	rows, cols := info.Shape[0], info.Shape[1]
-
-	// Load weights
-	weights := make([][]float32, rows)
-	for i := range weights {
-		weights[i] = make([]float32, cols)
-	}
-
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			offset := (i*cols + j) * 4
-			bits := binary.LittleEndian.Uint32(tensorBytes[offset : offset+4])
-			weights[i][j] = math.Float32frombits(bits)
+	loadFloat32Tensor := func(info TensorInfo) ([][]float32, int, int, error) {
+		if info.Dtype != "F32" {
+			return nil, 0, 0, fmt.Errorf("unsupported tensor dtype: %s", info.Dtype)
 		}
+		if len(info.Shape) != 2 {
+			return nil, 0, 0, fmt.Errorf("unsupported tensor rank: %d", len(info.Shape))
+		}
+
+		start := int(info.DataOffsets[0])
+		end := int(info.DataOffsets[1])
+		if start < 0 || end > len(data) || start >= end {
+			return nil, 0, 0, fmt.Errorf("invalid data offsets for tensor")
+		}
+
+		tensorBytes := data[start:end]
+		rows, cols := info.Shape[0], info.Shape[1]
+		expectedSize := rows * cols * 4
+		if len(tensorBytes) != expectedSize {
+			return nil, 0, 0, fmt.Errorf("unexpected tensor byte size: got %d, expected %d", len(tensorBytes), expectedSize)
+		}
+
+		weights := make([][]float32, rows)
+		for i := range weights {
+			weights[i] = make([]float32, cols)
+		}
+
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				offset := (i*cols + j) * 4
+				bits := binary.LittleEndian.Uint32(tensorBytes[offset : offset+4])
+				weights[i][j] = math.Float32frombits(bits)
+			}
+		}
+
+		return weights, rows, cols, nil
+	}
+
+	// Prefer direct float32 embeddings if available
+	if info, exists := header["embedding.weight"]; exists && info.Dtype == "F32" {
+		return loadFloat32Tensor(info)
+	}
+
+	floatNames := []string{
+		"embeddings.weight",
+		"word_embeddings.weight",
+		"model.embed_tokens.weight",
+	}
+	for _, name := range floatNames {
+		if info, exists := header[name]; exists && info.Dtype == "F32" {
+			return loadFloat32Tensor(info)
+		}
+	}
+
+	// Fall back to quantized int8 embeddings with per-token scales
+	int8Names := []string{
+		"embeddings.weight",
+		"embedding.weight",
+		"word_embeddings.weight",
+		"model.embed_tokens.weight",
+	}
+
+	var int8Name string
+	for _, name := range int8Names {
+		if info, exists := header[name]; exists && info.Dtype == "I8" {
+			int8Name = name
+			break
+		}
+	}
+
+	if int8Name == "" {
+		return nil, 0, 0, fmt.Errorf("embedding weights not found in safetensors")
+	}
+
+	scaleNames := []string{
+		"embeddings.scales",
+		"embedding.scales",
+		"model.embed_tokens.scales",
+	}
+
+	var scaleName string
+	for _, name := range scaleNames {
+		if _, exists := header[name]; exists {
+			scaleName = name
+			break
+		}
+	}
+
+	if scaleName == "" {
+		return nil, 0, 0, fmt.Errorf("quantized embeddings found but scales tensor missing")
+	}
+
+	int8Info := header[int8Name]
+	scaleInfo := header[scaleName]
+
+	if len(int8Info.Shape) != 2 {
+		return nil, 0, 0, fmt.Errorf("unexpected int8 tensor rank: %d", len(int8Info.Shape))
+	}
+
+	if scaleInfo.Dtype != "F32" || len(scaleInfo.Shape) != 1 {
+		return nil, 0, 0, fmt.Errorf("unexpected scales tensor format")
+	}
+
+	rows := int8Info.Shape[0]
+	cols := int8Info.Shape[1]
+
+	if scaleInfo.Shape[0] != rows {
+		return nil, 0, 0, fmt.Errorf("scale vector length %d does not match vocab %d", scaleInfo.Shape[0], rows)
+	}
+
+	int8Start := int(int8Info.DataOffsets[0])
+	int8End := int(int8Info.DataOffsets[1])
+	if int8Start < 0 || int8End > len(data) || int8Start >= int8End {
+		return nil, 0, 0, fmt.Errorf("invalid data offsets for int8 tensor")
+	}
+
+	rawInt8 := data[int8Start:int8End]
+	if len(rawInt8) != rows*cols {
+		return nil, 0, 0, fmt.Errorf("unexpected int8 tensor size: got %d, expected %d", len(rawInt8), rows*cols)
+	}
+
+	scaleStart := int(scaleInfo.DataOffsets[0])
+	scaleEnd := int(scaleInfo.DataOffsets[1])
+	if scaleStart < 0 || scaleEnd > len(data) || scaleStart >= scaleEnd {
+		return nil, 0, 0, fmt.Errorf("invalid data offsets for scales tensor")
+	}
+
+	scaleBytes := data[scaleStart:scaleEnd]
+	if len(scaleBytes) != rows*4 {
+		return nil, 0, 0, fmt.Errorf("unexpected scales tensor size: got %d, expected %d", len(scaleBytes), rows*4)
+	}
+
+	scales := make([]float32, rows)
+	for i := 0; i < rows; i++ {
+		offset := i * 4
+		bits := binary.LittleEndian.Uint32(scaleBytes[offset : offset+4])
+		scale := math.Float32frombits(bits)
+		if scale == 0 {
+			scale = 1.0
+		}
+		scales[i] = scale
+	}
+
+	weights := make([][]float32, rows)
+	index := 0
+	for i := 0; i < rows; i++ {
+		scale := scales[i]
+		row := make([]float32, cols)
+		for j := 0; j < cols; j++ {
+			row[j] = float32(int8(rawInt8[index])) * scale
+			index++
+		}
+		weights[i] = row
 	}
 
 	return weights, rows, cols, nil

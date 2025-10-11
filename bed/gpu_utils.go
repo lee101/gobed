@@ -6,6 +6,8 @@ import "C"
 
 import (
 	"log"
+
+	"github.com/lee101/gobed/metrics/perfdata"
 )
 
 // CheckGPUAvailable checks if CUDA GPU is available
@@ -37,6 +39,26 @@ func ShouldUseGPU(numDocs int, debug bool) bool {
 	if !CheckGPUAvailable() {
 		if debug {
 			log.Println("GPU not available, using CPU")
+		}
+		return false
+	}
+
+	if preferGPU, ok := perfdata.ShouldPreferGPU(numDocs); ok {
+		if debug {
+			if preferGPU {
+				log.Printf("Using GPU based on empirical perfdata (size=%d)", numDocs)
+			} else {
+				log.Printf("Using CPU based on empirical perfdata (size=%d)", numDocs)
+			}
+		}
+		return preferGPU
+	}
+
+	cpuLatency := perfdata.CPULatencyNs(numDocs)
+	const cpuFavorCutoff = 40000.0 // 40µs -> 25K QPS
+	if cpuLatency <= cpuFavorCutoff {
+		if debug {
+			log.Printf("Using CPU (latency %.0f ns) due to fast CPU measurements", cpuLatency)
 		}
 		return false
 	}

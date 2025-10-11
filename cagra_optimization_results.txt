@@ -1,0 +1,106 @@
+LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/lib:$LD_LIBRARY_PATH ./test_cagra_optimization
+🚀 CAGRA Optimization Benchmark
+===============================
+
+GPU: NVIDIA GeForce RTX 3090 (23.56 GB, Compute 8.6)
+
+Dataset: 5000 vectors, 512 dimensions
+Queries: 100, k=20
+
+Generating test data...
+Computing ground truth...
+
+🔬 Running Benchmarks
+=====================
+
+Testing: Ultra-Fast v1
+  GraphDegree: 16, Itopk: 32, Width: 1, Iterations: 0
+  ✅ Build: 4474.76 ms, Search: 0.493 ms/query, 202840 QPS
+  ✅ Recall@20: 75.2%, Exact matches: 93.0%
+
+Testing: Ultra-Fast v2
+  GraphDegree: 16, Itopk: 64, Width: 1, Iterations: 0
+  ✅ Build: 3595.18 ms, Search: 1.981 ms/query, 50487 QPS
+  ✅ Recall@20: 84.4%, Exact matches: 99.0%
+
+Testing: Fast v1
+  GraphDegree: 32, Itopk: 64, Width: 1, Iterations: 2
+  ✅ Build: 11524.95 ms, Search: 1.946 ms/query, 51399 QPS
+  ✅ Recall@20: 8.7%, Exact matches: 40.0%
+
+Testing: Fast v2
+  GraphDegree: 32, Itopk: 96, Width: 1, Iterations: 2
+  ✅ Build: 11542.87 ms, Search: 1.844 ms/query, 54238 QPS
+  ✅ Recall@20: 10.5%, Exact matches: 43.0%
+
+Testing: Balanced v1
+  GraphDegree: 48, Itopk: 128, Width: 2, Iterations: 4
+  ✅ Build: 14391.46 ms, Search: 1.959 ms/query, 51049 QPS
+  ✅ Recall@20: 90.0%, Exact matches: 100.0%
+
+Testing: Balanced v2
+  GraphDegree: 64, Itopk: 160, Width: 2, Iterations: 4
+  ✅ Build: 7947.45 ms, Search: 1.982 ms/query, 50459 QPS
+  ✅ Recall@20: 95.0%, Exact matches: 100.0%
+
+Testing: Current Optimal
+  GraphDegree: 64, Itopk: 192, Width: 2, Iterations: 6
+  ✅ Build: 4070.51 ms, Search: 2.236 ms/query, 44720 QPS
+  ✅ Recall@20: 97.5%, Exact matches: 100.0%
+
+Testing: Quality v1
+  GraphDegree: 80, Itopk: 256, Width: 3, Iterations: 8
+  ✅ Build: 5421.49 ms, Search: 1.626 ms/query, 61488 QPS
+  ✅ Recall@20: 99.5%, Exact matches: 100.0%
+
+Testing: Quality v2
+  GraphDegree: 96, Itopk: 320, Width: 4, Iterations: 10
+  ✅ Build: 23010.59 ms, Search: 2.264 ms/query, 44176 QPS
+  ✅ Recall@20: 100.0%, Exact matches: 100.0%
+
+Testing: Ultra-Quality
+  GraphDegree: 128, Itopk: 512, Width: 4, Iterations: 16
+  ✅ Build: 28751.21 ms, Search: 5.012 ms/query, 19951 QPS
+  ✅ Recall@20: 100.0%, Exact matches: 100.0%
+
+
+📊 BENCHMARK SUMMARY
+====================
+
+Configuration    | Build(ms) | Search(ms) | QPS     | Recall | Exact%
+-----------------|-----------|------------|---------|--------|-------
+Ultra-Fast v1    |   4474.76 |      0.493 |  202840 |  75.2% |  93.0%
+Ultra-Fast v2    |   3595.18 |      1.981 |   50487 |  84.4% |  99.0%
+Fast v1          |  11524.95 |      1.946 |   51399 |   8.7% |  40.0%
+Fast v2          |  11542.87 |      1.844 |   54238 |  10.5% |  43.0%
+Balanced v1      |  14391.46 |      1.959 |   51049 |  90.0% | 100.0%
+Balanced v2      |   7947.45 |      1.982 |   50459 |  95.0% | 100.0%
+Current Optimal  |   4070.51 |      2.236 |   44720 |  97.5% | 100.0%
+Quality v1       |   5421.49 |      1.626 |   61488 |  99.5% | 100.0%
+Quality v2       |  23010.59 |      2.264 |   44176 | 100.0% | 100.0%
+Ultra-Quality    |  28751.21 |      5.012 |   19951 | 100.0% | 100.0%
+
+
+🏆 BEST CONFIGURATIONS
+======================
+
+⚡ Best Speed (>90% recall): Quality v1
+   61488 QPS, 1.626 ms latency, 99.5% recall
+
+🎯 Best Recall: Quality v2
+   100.0% recall, 100.0% exact matches
+
+⚖️  Best Balanced: Ultra-Fast v1
+   202840 QPS, 75.2% recall, Score: 152.5
+
+📋 RECOMMENDATION
+=================
+For production use with Go Custom CAGRA:
+  GraphDegree: 16
+  IntermediateDegree: 32
+  ItopkSize: 32
+  SearchWidth: 1
+  MinIterations: 0
+  NProbe: 2
+
+✅ Optimization complete!

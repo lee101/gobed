@@ -43,7 +43,7 @@ type VectorIndexConfig struct {
 // DefaultVectorIndexConfig returns default configuration
 func DefaultVectorIndexConfig() VectorIndexConfig {
 	return VectorIndexConfig{
-		MaxFlatSize: 10000, // Optimized based on benchmarks - balances speed vs accuracy
+		MaxFlatSize:   1500, // Updated per optimization benchmarks for best latency/recall mix
 		NList:         1024, // Moderate number of clusters
 		NProbe:        8,    // Few probes for low latency
 		UsePQ:         true, // Enable compression for large datasets

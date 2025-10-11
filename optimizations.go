@@ -1,5 +1,3 @@
-// +build !gpu
-
 package gobed
 
 import (
@@ -91,14 +89,14 @@ type BatchConfig struct {
 func GetOptimalBatchSize() int {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	// Available memory in MB
 	availableMB := (m.Sys - m.Alloc) / 1024 / 1024
-	
+
 	// Estimate batch size based on memory
 	// Each embedding ~4KB, aim to use 25% of available memory
 	optimalBatch := int(availableMB * 256 / 4) // 256 = 1024 * 0.25
-	
+
 	// Clamp to reasonable range
 	if optimalBatch < 32 {
 		return 32
@@ -106,7 +104,7 @@ func GetOptimalBatchSize() int {
 	if optimalBatch > 2048 {
 		return 2048
 	}
-	
+
 	// Round to power of 2 for better alignment
 	return nearestPowerOf2(optimalBatch)
 }
@@ -121,18 +119,18 @@ func nearestPowerOf2(n int) int {
 	if n <= 0 {
 		return 1
 	}
-	
+
 	// Find the nearest power of 2
 	power := 1
 	for power < n {
 		power <<= 1
 	}
-	
+
 	// Check if the previous power is closer
 	if power-n > n-power/2 && power > 1 {
 		return power / 2
 	}
-	
+
 	return power
 }
 
@@ -160,26 +158,26 @@ func (t *TokenizerOptimizations) TokenizeCached(text string, tokenizeFn func(str
 		return cached, nil
 	}
 	t.cacheMu.RUnlock()
-	
+
 	// Tokenize
 	ids, err := tokenizeFn(text)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert with buffer pool
 	tokens := GetTokenBuffer()
 	for _, id := range ids {
 		tokens = append(tokens, int(id))
 	}
-	
+
 	// Cache if not too large
 	if len(t.tokenCache) < t.maxCacheSize {
 		t.cacheMu.Lock()
 		t.tokenCache[text] = tokens
 		t.cacheMu.Unlock()
 	}
-	
+
 	return tokens, nil
 }
 
@@ -196,9 +194,9 @@ func ZeroCopyInt32ToFloat32(src []int32) []float32 {
 	if len(src) == 0 {
 		return nil
 	}
-	
+
 	// Warning: This shares the underlying memory
-	header := (*[1<<30]float32)(unsafe.Pointer(&src[0]))
+	header := (*[1 << 30]float32)(unsafe.Pointer(&src[0]))
 	return header[:len(src):len(src)]
 }
 
@@ -207,7 +205,7 @@ func FastQuantize(input []float32) ([]int8, float32) {
 	if len(input) == 0 {
 		return nil, 0
 	}
-	
+
 	// Find min/max in single pass
 	minVal, maxVal := input[0], input[0]
 	for i := 1; i < len(input); i++ {
@@ -218,14 +216,14 @@ func FastQuantize(input []float32) ([]int8, float32) {
 			maxVal = input[i]
 		}
 	}
-	
+
 	// Calculate scale
 	scale := (maxVal - minVal) / 255.0
 	if scale == 0 {
 		scale = 1.0
 	}
 	invScale := 1.0 / scale
-	
+
 	// Quantize with buffer pool
 	output := GetInt8Buffer()
 	if cap(output) < len(input) {
@@ -233,7 +231,7 @@ func FastQuantize(input []float32) ([]int8, float32) {
 	} else {
 		output = output[:len(input)]
 	}
-	
+
 	// Vectorizable loop
 	for i := 0; i < len(input); i++ {
 		val := (input[i] - minVal) * invScale
@@ -245,7 +243,7 @@ func FastQuantize(input []float32) ([]int8, float32) {
 			output[i] = int8(val)
 		}
 	}
-	
+
 	return output, scale
 }
 
@@ -263,18 +261,18 @@ func NewParallelProcessor() *ParallelProcessor {
 	if workers > 8 {
 		workers = 8 // Cap at 8 for diminishing returns
 	}
-	
+
 	p := &ParallelProcessor{
 		workers:    workers,
 		jobQueue:   make(chan func(), workers*2),
 		bufferPool: globalBufferPool,
 	}
-	
+
 	// Start workers
 	for i := 0; i < workers; i++ {
 		go p.worker()
 	}
-	
+
 	return p
 }
 

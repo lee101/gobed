@@ -1,79 +1,39 @@
-# Build & Test Setup
+# gobed CI Overview (October 2025)
 
-## Quick Commands
+This repository now mirrors the split CI strategy we use in `netwrck/githubagent`:
 
-```bash
-# Build
-make build          # Build main binary
-make build-all      # Build all binaries
+- **Hosted CPU pipeline (`Hosted CI`)** runs on GitHub-hosted Ubuntu runners. It executes a
+  focused gofmt check and a trimmed unit suite via `scripts/ci/run_cpu_checks.sh` to cover the
+  packages that compile without GPU dependencies (`github.com/lee101/gobed` and
+  `github.com/lee101/gobed/ann/simd`).
 
-# Test
-make test           # Run all tests
-make test-short     # Run short tests only
-make test-race      # Test with race detector
+- **Self-hosted GPU pipeline (`GPU CI`)** runs on our CUDA 12.9 capable runner and invokes
+  `scripts/ci/run_gpu_checks.sh`. The script expects the runner to expose the labels
+  `self-hosted`, `gpu`, and `cuda-12.9` and to have the cuVS/CAGRA libraries in the default
+  install locations (`/usr/local/cuvs`, `/usr/local/cuda`).
 
-# Code Quality
-make fmt            # Format code
-make vet            # Run go vet
-make lint           # Run linters (requires golangci-lint)
-make security       # Security scan
+## Self-hosted runner expectations
 
-# Benchmarks
-make bench          # Run benchmarks
-make bench-cpu      # CPU profiling
-make bench-mem      # Memory profiling
+1. Install CUDA 12.9 and the matching NVIDIA driver.
+2. Install cuVS and ensure `libcuvs` and friends are on the library path.
+3. Keep `libcagra_wrapper.so`, `libgpu_fast_search.so`, and `libtorch` available in the repository
+   checkout (the runner mounts the repo at `~/actions-runner/_work/gobed/gobed`).
+4. The runner user must have permissions to access the GPU (`nvidia-smi` should succeed).
+5. Optional: run `./build_cagra.sh` after cuVS updates to refresh the wrapper library.
+6. Ensure `libcagra_wrapper.so` is built (CI script will call `./build_cagra.sh` if it is missing).
 
-# Docker
-make docker-build   # Build Docker image
-make docker-run     # Run container
-```
+## Local parity
 
-## Release Process
-
-### Simple Version Bumping
+To reproduce the hosted checks locally:
 
 ```bash
-# Bump version (creates and pushes git tag)
-./scripts/bump-version.sh patch  # v1.0.0 -> v1.0.1
-./scripts/bump-version.sh minor  # v1.0.0 -> v1.1.0
-./scripts/bump-version.sh major  # v1.0.0 -> v2.0.0
+./scripts/ci/run_cpu_checks.sh
 ```
 
-When you push a tag starting with `v`, GitHub Actions will automatically:
-- Build binaries for Linux, macOS, Windows (amd64/arm64)
-- Create a GitHub release with changelog
-- Build and push Docker images
-- Publish the Go module
-
-## GitHub Actions
-
-All workflows run automatically on push/PR:
-
-- **ci.yml**: Main build and test pipeline
-- **quality.yml**: Code quality checks
-- **benchmark.yml**: Performance benchmarks
-- **release.yml**: Automated releases on tags
-
-## Local Testing
-
-Run these before pushing:
+For GPU validation (requires CUDA/cuVS on your machine):
 
 ```bash
-# Quick check
-make fmt         # Format code
-make test-short  # Quick tests
-make vet         # Basic linting
-
-# Full check
-make build       # Ensure it builds
-make test        # Run all tests
-make lint        # Full linting (if golangci-lint installed)
+./scripts/ci/run_gpu_checks.sh
 ```
 
-## Known Issues
-
-Some test files have build issues that need fixing:
-- Multiple main functions in benchmark directories
-- Some imports need updating
-
-These don't affect the main library functionality.
+Both scripts exit non-zero on failure to make debugging easier.

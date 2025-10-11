@@ -120,6 +120,126 @@ loop:
     VZEROUPPER              // Clear upper YMM registers
     RET
 
+// func dot512_i8_batch_avx2(query *Vec512, vectors *Vec512, scores *int32, count int)
+TEXT ·dot512_i8_batch_avx2(SB), NOSPLIT, $0-32
+    MOVQ query+0(FP), SI      // Base pointer to query vector
+    MOVQ vectors+8(FP), DI    // Base pointer to dataset vectors
+    MOVQ scores+16(FP), R8    // Pointer to output scores
+    MOVQ count+24(FP), CX     // Number of vectors to process
+
+    TESTQ CX, CX
+    JLE batch_done
+
+batch_loop:
+    MOVQ SI, R9               // Reset query pointer
+    MOVQ DI, R10              // Current vector pointer
+
+    VPXOR Y0, Y0, Y0
+    VPXOR Y1, Y1, Y1
+    VPXOR Y2, Y2, Y2
+    VPXOR Y3, Y3, Y3
+
+    MOVQ $4, DX               // 512 bytes / 128 bytes per iteration
+
+batch_inner:
+    VMOVDQU (R9), Y4
+    VMOVDQU (R10), Y5
+
+    VPMOVSXBW X4, Y6
+    VEXTRACTI128 $1, Y4, X7
+    VPMOVSXBW X7, Y7
+
+    VPMOVSXBW X5, Y8
+    VEXTRACTI128 $1, Y5, X9
+    VPMOVSXBW X9, Y9
+
+    VPMADDWD Y6, Y8, Y10
+    VPMADDWD Y7, Y9, Y11
+
+    VPADDD Y10, Y0, Y0
+    VPADDD Y11, Y1, Y1
+
+    VMOVDQU 32(R9), Y4
+    VMOVDQU 32(R10), Y5
+
+    VPMOVSXBW X4, Y6
+    VEXTRACTI128 $1, Y4, X7
+    VPMOVSXBW X7, Y7
+
+    VPMOVSXBW X5, Y8
+    VEXTRACTI128 $1, Y5, X9
+    VPMOVSXBW X9, Y9
+
+    VPMADDWD Y6, Y8, Y10
+    VPMADDWD Y7, Y9, Y11
+
+    VPADDD Y10, Y2, Y2
+    VPADDD Y11, Y3, Y3
+
+    VMOVDQU 64(R9), Y4
+    VMOVDQU 64(R10), Y5
+
+    VPMOVSXBW X4, Y6
+    VEXTRACTI128 $1, Y4, X7
+    VPMOVSXBW X7, Y7
+
+    VPMOVSXBW X5, Y8
+    VEXTRACTI128 $1, Y5, X9
+    VPMOVSXBW X9, Y9
+
+    VPMADDWD Y6, Y8, Y10
+    VPMADDWD Y7, Y9, Y11
+
+    VPADDD Y10, Y0, Y0
+    VPADDD Y11, Y1, Y1
+
+    VMOVDQU 96(R9), Y4
+    VMOVDQU 96(R10), Y5
+
+    VPMOVSXBW X4, Y6
+    VEXTRACTI128 $1, Y4, X7
+    VPMOVSXBW X7, Y7
+
+    VPMOVSXBW X5, Y8
+    VEXTRACTI128 $1, Y5, X9
+    VPMOVSXBW X9, Y9
+
+    VPMADDWD Y6, Y8, Y10
+    VPMADDWD Y7, Y9, Y11
+
+    VPADDD Y10, Y2, Y2
+    VPADDD Y11, Y3, Y3
+
+    ADDQ $128, R9
+    ADDQ $128, R10
+
+    DECQ DX
+    JNZ batch_inner
+
+    VPADDD Y0, Y1, Y0
+    VPADDD Y2, Y3, Y2
+    VPADDD Y0, Y2, Y0
+
+    VEXTRACTI128 $1, Y0, X1
+    VPADDD X0, X1, X0
+    VPSHUFD $0x4E, X0, X1
+    VPADDD X0, X1, X0
+    VPSHUFD $0xB1, X0, X1
+    VPADDD X0, X1, X0
+
+    VMOVD X0, AX
+    MOVL AX, (R8)           // Store score
+
+    MOVQ R10, DI            // Advance to next vector
+    ADDQ $4, R8             // Advance score pointer
+
+    DECQ CX
+    JNZ batch_loop
+
+batch_done:
+    VZEROUPPER
+    RET
+
 // Alternative implementation for processors without VPMADDWD
 // func dot512_i8_avx2_alt(a, b *Vec512) int32
 TEXT ·dot512_i8_avx2_alt(SB), NOSPLIT, $0-24

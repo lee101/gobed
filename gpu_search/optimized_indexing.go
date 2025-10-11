@@ -1,3 +1,5 @@
+//go:build legacy
+
 // optimized_indexing.go - Drop-in optimization for gobed GPU indexing
 package main // Keep this as main package
 

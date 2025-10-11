@@ -1,3 +1,5 @@
+//go:build legacy
+
 // go_client_optimized.go - High-performance Go client for GPU server
 package main
 

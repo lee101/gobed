@@ -1,3 +1,5 @@
+//go:build legacy
+
 package gobed
 
 import (
@@ -10,9 +12,9 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I/usr/local/cuda/include -I/usr/local/cuda/targets/x86_64-linux/include -I./gpu
-#cgo LDFLAGS: -L./gpu -ltorch_cgo_wrapper -L/usr/local/cuda/lib64 -lcudart
-#include "torch_cgo_wrapper.h"
+#cgo CFLAGS: -I/usr/local/cuda/include -I/usr/local/cuda/targets/x86_64-linux/include -I${SRCDIR}/../gpu
+#cgo LDFLAGS: -L${SRCDIR}/../gpu -ltorch_cgo_wrapper -L/usr/local/cuda/lib64 -lcudart
+#include "../gpu/torch_cgo_wrapper.h"
 #include <cuda_runtime_api.h>
 #include <stdlib.h>
 
@@ -39,35 +41,35 @@ import "C"
 type GPUMemoryManager struct {
 	deviceID    int
 	totalMemory uint64
-	
+
 	// Memory pools for different object types
-	vectorPool     *GPUBlockPool
-	queryPool      *GPUBlockPool
-	resultPool     *GPUBlockPool
-	
+	vectorPool *GPUBlockPool
+	queryPool  *GPUBlockPool
+	resultPool *GPUBlockPool
+
 	// Memory tracking
-	allocatedBytes uint64
-	peakUsage      uint64
+	allocatedBytes  uint64
+	peakUsage       uint64
 	allocationCount uint64
-	
+
 	// Configuration
 	maxMemoryUsage uint64 // Maximum memory to use (bytes)
 	reserveMemory  uint64 // Memory to keep free for system
-	
+
 	// Synchronization
 	mutex sync.RWMutex
 }
 
 // GPUBlockPool manages a pool of GPU memory blocks
 type GPUBlockPool struct {
-	blockSize    uint64
-	maxBlocks    int
-	freeBlocks   []unsafe.Pointer
-	allocBlocks  map[unsafe.Pointer]bool
-	totalAlloc   uint64
-	mutex        sync.Mutex
-	allocCount   uint64
-	freeCount    uint64
+	blockSize   uint64
+	maxBlocks   int
+	freeBlocks  []unsafe.Pointer
+	allocBlocks map[unsafe.Pointer]bool
+	totalAlloc  uint64
+	mutex       sync.Mutex
+	allocCount  uint64
+	freeCount   uint64
 }
 
 // GPUMemoryConfig configures the GPU memory manager
@@ -75,7 +77,7 @@ type GPUMemoryConfig struct {
 	DeviceID              int
 	MaxMemoryUsagePercent float64 // Percentage of GPU memory to use
 	VectorPoolBlockSize   uint64  // Size of vector memory blocks
-	QueryPoolBlockSize    uint64  // Size of query memory blocks  
+	QueryPoolBlockSize    uint64  // Size of query memory blocks
 	ResultPoolBlockSize   uint64  // Size of result memory blocks
 	MaxVectorBlocks       int     // Maximum vector blocks
 	MaxQueryBlocks        int     // Maximum query blocks
@@ -87,14 +89,14 @@ type GPUMemoryConfig struct {
 func DefaultGPUMemoryConfig() GPUMemoryConfig {
 	return GPUMemoryConfig{
 		DeviceID:              0,
-		MaxMemoryUsagePercent: 0.85, // Use 85% of GPU memory
-		VectorPoolBlockSize:   1024 * 1024 * 4,  // 4MB blocks for vectors
-		QueryPoolBlockSize:    1024 * 512,       // 512KB blocks for queries
-		ResultPoolBlockSize:   1024 * 256,       // 256KB blocks for results
-		MaxVectorBlocks:       1000,              // Up to 4GB for vectors
-		MaxQueryBlocks:        100,               // Up to 50MB for queries
-		MaxResultBlocks:       100,               // Up to 25MB for results
-		ReserveMemoryMB:       1024,              // Reserve 1GB for system
+		MaxMemoryUsagePercent: 0.85,            // Use 85% of GPU memory
+		VectorPoolBlockSize:   1024 * 1024 * 4, // 4MB blocks for vectors
+		QueryPoolBlockSize:    1024 * 512,      // 512KB blocks for queries
+		ResultPoolBlockSize:   1024 * 256,      // 256KB blocks for results
+		MaxVectorBlocks:       1000,            // Up to 4GB for vectors
+		MaxQueryBlocks:        100,             // Up to 50MB for queries
+		MaxResultBlocks:       100,             // Up to 25MB for results
+		ReserveMemoryMB:       1024,            // Reserve 1GB for system
 	}
 }
 
@@ -122,7 +124,7 @@ func NewGPUMemoryManager(config GPUMemoryConfig) (*GPUMemoryManager, error) {
 
 	// Initialize memory pools
 	var err error
-	
+
 	manager.vectorPool, err = newGPUBlockPool(config.VectorPoolBlockSize, config.MaxVectorBlocks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vector pool: %w", err)
@@ -177,7 +179,7 @@ func newGPUBlockPool(blockSize uint64, maxBlocks int) (*GPUBlockPool, error) {
 // allocateBlock allocates a single GPU memory block
 func (pool *GPUBlockPool) allocateBlock() (unsafe.Pointer, error) {
 	var ptr unsafe.Pointer
-	
+
 	// Allocate GPU memory using CUDA runtime
 	result := C.cudaMalloc((*unsafe.Pointer)(&ptr), C.size_t(pool.blockSize))
 	if result != C.cudaSuccess {
@@ -186,7 +188,7 @@ func (pool *GPUBlockPool) allocateBlock() (unsafe.Pointer, error) {
 
 	atomic.AddUint64(&pool.totalAlloc, pool.blockSize)
 	atomic.AddUint64(&pool.allocCount, 1)
-	
+
 	return ptr, nil
 }
 
@@ -239,7 +241,7 @@ func (pool *GPUBlockPool) destroy() {
 	for block := range pool.allocBlocks {
 		C.cudaFree(block)
 	}
-	
+
 	for _, block := range pool.freeBlocks {
 		C.cudaFree(block)
 	}
@@ -379,41 +381,41 @@ func (m *GPUMemoryManager) GetMemoryStats() GPUMemoryStats {
 	defer m.mutex.RUnlock()
 
 	return GPUMemoryStats{
-		TotalMemoryGB:     float64(m.totalMemory) / 1024 / 1024 / 1024,
-		FreeMemoryGB:      float64(C.cuda_get_free_memory()) / 1024 / 1024 / 1024,
-		AllocatedGB:       float64(atomic.LoadUint64(&m.allocatedBytes)) / 1024 / 1024 / 1024,
-		PeakUsageGB:       float64(atomic.LoadUint64(&m.peakUsage)) / 1024 / 1024 / 1024,
-		MaxUsageGB:        float64(m.maxMemoryUsage) / 1024 / 1024 / 1024,
-		AllocationCount:   atomic.LoadUint64(&m.allocationCount),
-		VectorPoolStats:   m.getPoolStats(m.vectorPool, "vectors"),
-		QueryPoolStats:    m.getPoolStats(m.queryPool, "queries"),
-		ResultPoolStats:   m.getPoolStats(m.resultPool, "results"),
+		TotalMemoryGB:   float64(m.totalMemory) / 1024 / 1024 / 1024,
+		FreeMemoryGB:    float64(C.cuda_get_free_memory()) / 1024 / 1024 / 1024,
+		AllocatedGB:     float64(atomic.LoadUint64(&m.allocatedBytes)) / 1024 / 1024 / 1024,
+		PeakUsageGB:     float64(atomic.LoadUint64(&m.peakUsage)) / 1024 / 1024 / 1024,
+		MaxUsageGB:      float64(m.maxMemoryUsage) / 1024 / 1024 / 1024,
+		AllocationCount: atomic.LoadUint64(&m.allocationCount),
+		VectorPoolStats: m.getPoolStats(m.vectorPool, "vectors"),
+		QueryPoolStats:  m.getPoolStats(m.queryPool, "queries"),
+		ResultPoolStats: m.getPoolStats(m.resultPool, "results"),
 	}
 }
 
 // GPUMemoryStats provides detailed GPU memory statistics
 type GPUMemoryStats struct {
-	TotalMemoryGB     float64
-	FreeMemoryGB      float64
-	AllocatedGB       float64
-	PeakUsageGB       float64
-	MaxUsageGB        float64
-	AllocationCount   uint64
-	VectorPoolStats   PoolStats
-	QueryPoolStats    PoolStats
-	ResultPoolStats   PoolStats
+	TotalMemoryGB   float64
+	FreeMemoryGB    float64
+	AllocatedGB     float64
+	PeakUsageGB     float64
+	MaxUsageGB      float64
+	AllocationCount uint64
+	VectorPoolStats PoolStats
+	QueryPoolStats  PoolStats
+	ResultPoolStats PoolStats
 }
 
 // PoolStats provides statistics for a memory pool
 type PoolStats struct {
-	Name          string
-	BlockSizeMB   float64
-	MaxBlocks     int
-	AllocBlocks   int
-	FreeBlocks    int
-	TotalAllocGB  float64
-	AllocCount    uint64
-	FreeCount     uint64
+	Name         string
+	BlockSizeMB  float64
+	MaxBlocks    int
+	AllocBlocks  int
+	FreeBlocks   int
+	TotalAllocGB float64
+	AllocCount   uint64
+	FreeCount    uint64
 }
 
 // getPoolStats returns statistics for a memory pool
@@ -422,14 +424,14 @@ func (m *GPUMemoryManager) getPoolStats(pool *GPUBlockPool, name string) PoolSta
 	defer pool.mutex.Unlock()
 
 	return PoolStats{
-		Name:          name,
-		BlockSizeMB:   float64(pool.blockSize) / 1024 / 1024,
-		MaxBlocks:     pool.maxBlocks,
-		AllocBlocks:   len(pool.allocBlocks),
-		FreeBlocks:    len(pool.freeBlocks),
-		TotalAllocGB:  float64(atomic.LoadUint64(&pool.totalAlloc)) / 1024 / 1024 / 1024,
-		AllocCount:    atomic.LoadUint64(&pool.allocCount),
-		FreeCount:     atomic.LoadUint64(&pool.freeCount),
+		Name:         name,
+		BlockSizeMB:  float64(pool.blockSize) / 1024 / 1024,
+		MaxBlocks:    pool.maxBlocks,
+		AllocBlocks:  len(pool.allocBlocks),
+		FreeBlocks:   len(pool.freeBlocks),
+		TotalAllocGB: float64(atomic.LoadUint64(&pool.totalAlloc)) / 1024 / 1024 / 1024,
+		AllocCount:   atomic.LoadUint64(&pool.allocCount),
+		FreeCount:    atomic.LoadUint64(&pool.freeCount),
 	}
 }
 
@@ -469,7 +471,7 @@ func (m *GPUMemoryManager) StartMemoryMonitor(interval time.Duration) {
 
 		for range ticker.C {
 			stats := m.GetMemoryStats()
-			
+
 			// Log memory usage if high
 			usagePercent := stats.AllocatedGB / stats.TotalMemoryGB * 100
 			if usagePercent > 70 {
@@ -496,7 +498,7 @@ func (m *GPUMemoryManager) Close() error {
 	m.resultPool.destroy()
 
 	runtime.SetFinalizer(m, nil)
-	
+
 	fmt.Printf("🧠 GPU Memory Manager closed\n")
 	return nil
 }

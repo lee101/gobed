@@ -1,11 +1,11 @@
-// +build gpu
+//go:build gpu
 
 package gobed
 
 /*
-#cgo CFLAGS: -I./gpu
-#cgo LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.8/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.8/lib64
-#include "pure_cuda_indexer.h"
+#cgo CFLAGS: -I${SRCDIR}/gpu
+#cgo LDFLAGS: -L${SRCDIR}/gpu -lpure_cuda_indexer -L/usr/local/cuda-12.8/lib64 -lcudart -lcublas -Wl,-rpath,${SRCDIR}/gpu -Wl,-rpath,/usr/local/cuda-12.8/lib64
+#include "gpu/pure_cuda_indexer.h"
 #include <stdlib.h>
 */
 import "C"
@@ -18,25 +18,25 @@ import (
 
 // GPUIndexer provides CUDA-accelerated indexing and search using pure CUDA
 type GPUIndexer struct {
-	handle       unsafe.Pointer
-	config       IndexConfig
-	mutex        sync.RWMutex
-	vectorDim    int
-	vocabSize    int
-	embedDim     int
-	deviceID     int
-	isReady      bool
-	embeddings   []float32
-	numVectors   int
+	handle            unsafe.Pointer
+	config            IndexConfig
+	mutex             sync.RWMutex
+	vectorDim         int
+	vocabSize         int
+	embedDim          int
+	deviceID          int
+	isReady           bool
+	embeddings        []float32
+	numVectors        int
 	actualMemoryUsage uint64 // Track actual indexer memory usage
 }
 
 // IndexConfig configures the GPU indexer
 type IndexConfig struct {
-	VectorDim        int
-	VocabSize        int  // For token embeddings
-	EmbedDim         int  // Embedding dimension
-	DeviceID         int
+	VectorDim int
+	VocabSize int // For token embeddings
+	EmbedDim  int // Embedding dimension
+	DeviceID  int
 }
 
 // DefaultGPUConfig returns an optimal configuration for GPU indexing
@@ -176,7 +176,7 @@ func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	// Flatten vectors for C interface
 	numVectors := len(vectors)
 	flatVectors := make([]int8, numVectors*g.vectorDim)
-	
+
 	for i, vec := range vectors {
 		if len(vec) != g.vectorDim {
 			return fmt.Errorf("vector dimension mismatch at index %d: expected %d, got %d",
@@ -306,7 +306,7 @@ func (g *GPUIndexer) GetTotalGPUMemoryUsage() uint64 {
 func (g *GPUIndexer) SetMaxTokens(maxTokens int) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	
+
 	C.cuda_set_max_tokens(g.handle, C.int(maxTokens))
 	// Max tokens updated
 }
@@ -316,18 +316,18 @@ func (g *GPUIndexer) SetMaxTokens(maxTokens int) {
 func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int) (int, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	
+
 	if len(tokenSequences) == 0 {
 		return 0, fmt.Errorf("no token sequences provided")
 	}
-	
+
 	if len(seqLengths) != len(tokenSequences) {
-		return 0, fmt.Errorf("sequence lengths mismatch: %d sequences, %d lengths", 
+		return 0, fmt.Errorf("sequence lengths mismatch: %d sequences, %d lengths",
 			len(tokenSequences), len(seqLengths))
 	}
-	
+
 	batchSize := len(tokenSequences)
-	
+
 	// Find max sequence length
 	maxSeqLen := 0
 	for _, seq := range tokenSequences {
@@ -335,7 +335,7 @@ func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int)
 			maxSeqLen = len(seq)
 		}
 	}
-	
+
 	// Flatten token sequences into a single array
 	flatTokens := make([]int32, batchSize*maxSeqLen)
 	for i, seq := range tokenSequences {
@@ -343,13 +343,13 @@ func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int)
 			flatTokens[i*maxSeqLen+j] = token
 		}
 	}
-	
+
 	// Convert to C types
 	cSeqLengths := make([]C.int, len(seqLengths))
 	for i, l := range seqLengths {
 		cSeqLengths[i] = C.int(l)
 	}
-	
+
 	result := C.cuda_bulk_index_tokens(
 		g.handle,
 		(*C.int)(unsafe.Pointer(&flatTokens[0])),
@@ -357,11 +357,11 @@ func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int)
 		C.int(batchSize),
 		C.int(maxSeqLen),
 	)
-	
+
 	if result == 0 {
 		return 0, fmt.Errorf("bulk indexing failed on GPU")
 	}
-	
+
 	g.numVectors += int(result)
 	return int(result), nil
 }

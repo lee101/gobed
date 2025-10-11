@@ -4,12 +4,19 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 )
+
+type benchQuery struct {
+	text     string
+	relevant []string
+}
 
 // TestGPUSearchIndex tests the GPU search functionality
 func TestGPUSearchIndex(t *testing.T) {
@@ -499,11 +506,13 @@ func BenchmarkSearch(b *testing.B) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create corpus
-	for i := 0; i < 1000; i++ {
+	// Create corpus with unique topic tokens per document
+	numDocs := 1000
+	for i := 0; i < numDocs; i++ {
 		filename := fmt.Sprintf("file%d.txt", i)
-		content := fmt.Sprintf("Document %d about various topics\n%s",
-			i, strings.Repeat("line with content\n", 20))
+		topicTag := fmt.Sprintf("topic_%04d", i)
+		content := fmt.Sprintf("Document %d about %s and various topics\n%sRelevant token: %s\n",
+			i, topicTag, strings.Repeat("line with content\n", 20), topicTag)
 		filepath := filepath.Join(tempDir, filename)
 		if err := ioutil.WriteFile(filepath, []byte(content), 0644); err != nil {
 			b.Fatal(err)
@@ -515,26 +524,63 @@ func BenchmarkSearch(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	queries := []string{
-		"document about topics",
-		"various content",
-		"line with",
-		"search query",
-		"test benchmark",
+	docIDs := []int{5, 42, 123, 256, 512, 789, 900, 999}
+	benchQueries := make([]benchQuery, len(docIDs))
+	for i, id := range docIDs {
+		if id >= numDocs {
+			b.Fatalf("docID %d exceeds corpus size %d", id, numDocs)
+		}
+		benchQueries[i] = benchQuery{
+			text:     fmt.Sprintf("topic_%04d", id),
+			relevant: []string{fmt.Sprintf("file%d.txt", id)},
+		}
 	}
+
+	totalNDCG := 0.0
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		query := queries[i%len(queries)]
-		if _, err := index.Search(query, 10); err != nil {
+		q := benchQueries[i%len(benchQueries)]
+		results, err := index.Search(q.text, 10)
+		if err != nil {
 			b.Fatal(err)
 		}
+		totalNDCG += computeNDCGForBedResults(results, q.relevant, 10)
 	}
 
 	qps := float64(b.N) / b.Elapsed().Seconds()
 	b.ReportMetric(qps, "queries/sec")
 	b.ReportMetric(b.Elapsed().Seconds()/float64(b.N)*1000, "ms/query")
+	if b.N > 0 {
+		b.ReportMetric(totalNDCG/float64(b.N), "ndcg@10")
+	}
+
+	stats := index.GetStats()
+	if avg, ok := stats["avg_qps"]; ok {
+		switch v := avg.(type) {
+		case float32:
+			b.ReportMetric(float64(v), "gpu_avg_qps")
+		case float64:
+			b.ReportMetric(v, "gpu_avg_qps")
+		}
+	}
+	if peak, ok := stats["peak_qps"]; ok {
+		switch v := peak.(type) {
+		case float32:
+			b.ReportMetric(float64(v), "gpu_peak_qps")
+		case float64:
+			b.ReportMetric(v, "gpu_peak_qps")
+		}
+	}
+	if mem, ok := stats["memory_mb"]; ok {
+		switch v := mem.(type) {
+		case float32:
+			b.ReportMetric(float64(v), "gpu_memory_mb")
+		case float64:
+			b.ReportMetric(v, "gpu_memory_mb")
+		}
+	}
 }
 
 // BenchmarkBatchSearch benchmarks batch search performance
@@ -556,10 +602,11 @@ func BenchmarkBatchSearch(b *testing.B) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create corpus
-	for i := 0; i < 1000; i++ {
+	numDocs := 1000
+	for i := 0; i < numDocs; i++ {
 		filename := fmt.Sprintf("file%d.txt", i)
-		content := fmt.Sprintf("Document %d\n%s", i, strings.Repeat("content\n", 20))
+		topicTag := fmt.Sprintf("topic_%04d", i)
+		content := fmt.Sprintf("Document %d about %s\n%sRelevant token: %s\n", i, topicTag, strings.Repeat("content\n", 20), topicTag)
 		filepath := filepath.Join(tempDir, filename)
 		if err := ioutil.WriteFile(filepath, []byte(content), 0644); err != nil {
 			b.Fatal(err)
@@ -574,18 +621,38 @@ func BenchmarkBatchSearch(b *testing.B) {
 	// Prepare batch queries
 	batchSizes := []int{10, 100, 1000}
 
+	docIDs := []int{5, 42, 123, 256, 512, 789, 900, 999}
+
 	for _, batchSize := range batchSizes {
 		b.Run(fmt.Sprintf("batch_%d", batchSize), func(b *testing.B) {
 			queries := make([]string, batchSize)
+			queryMeta := make([]benchQuery, batchSize)
 			for i := range queries {
-				queries[i] = fmt.Sprintf("query %d", i)
+				docID := docIDs[i%len(docIDs)]
+				if docID >= numDocs {
+					b.Fatalf("docID %d exceeds corpus size %d", docID, numDocs)
+				}
+				queryMeta[i] = benchQuery{
+					text:     fmt.Sprintf("topic_%04d", docID),
+					relevant: []string{fmt.Sprintf("file%d.txt", docID)},
+				}
+				queries[i] = queryMeta[i].text
 			}
+
+			totalNDCG := 0.0
 
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				if _, err := index.BatchSearch(queries, 10); err != nil {
+				results, err := index.BatchSearch(queries, 10)
+				if err != nil {
 					b.Fatal(err)
+				}
+				if len(results) != batchSize {
+					b.Fatalf("expected %d batch results, got %d", batchSize, len(results))
+				}
+				for q := range results {
+					totalNDCG += computeNDCGForBedResults(results[q], queryMeta[q].relevant, 10)
 				}
 			}
 
@@ -593,6 +660,74 @@ func BenchmarkBatchSearch(b *testing.B) {
 			qps := float64(totalQueries) / b.Elapsed().Seconds()
 			b.ReportMetric(qps, "queries/sec")
 			b.ReportMetric(float64(batchSize), "batch_size")
+			if b.N > 0 && batchSize > 0 {
+				b.ReportMetric(totalNDCG/float64(b.N*batchSize), "ndcg@10")
+			}
 		})
 	}
+}
+
+func computeNDCGForBedResults(results []*GPUSearchResult, relevant []string, k int) float64 {
+	if len(relevant) == 0 {
+		return 0
+	}
+
+	gradeMap := make(map[string]float64, len(relevant))
+	for i, file := range relevant {
+		gradeMap[file] = float64(len(relevant) - i)
+	}
+
+	actual := make([]float64, 0, min(k, len(results)))
+	for i := 0; i < len(results) && i < k; i++ {
+		base := filepath.Base(results[i].FilePath)
+		actual = append(actual, gradeMap[base])
+	}
+
+	if len(actual) == 0 {
+		return 0
+	}
+
+	ideal := make([]float64, 0, len(gradeMap))
+	for _, grade := range gradeMap {
+		if grade > 0 {
+			ideal = append(ideal, grade)
+		}
+	}
+	sort.Sort(sort.Reverse(sort.Float64Slice(ideal)))
+	if len(ideal) > len(actual) {
+		ideal = ideal[:len(actual)]
+	}
+
+	return computeNDCGFromGrades(actual, ideal)
+}
+
+func computeNDCGFromGrades(actual, ideal []float64) float64 {
+	if len(actual) == 0 || len(ideal) == 0 {
+		return 0
+	}
+
+	dcg := discountedGainGrades(actual)
+	idcg := discountedGainGrades(ideal)
+	if idcg == 0 {
+		return 0
+	}
+	return dcg / idcg
+}
+
+func discountedGainGrades(grades []float64) float64 {
+	var sum float64
+	for i, grade := range grades {
+		if grade <= 0 {
+			continue
+		}
+		sum += grade / math.Log2(float64(i)+2)
+	}
+	return sum
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

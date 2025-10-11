@@ -1,0 +1,4 @@
+GPU accelerated semantic search pipeline notes.
+This internal memo documents how we use CUDA kernels and vector search to index code repositories.
+Key phrases include embedding search quality, GPU inference, and low latency retrieval.
+The research group compares top-k recall, NDCG@10 quality, and shared GPU memory usage for production.

@@ -32,7 +32,7 @@ export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUVS_PATH/lib:$LD_LIBRARY_PATH
 # Compile CAGRA wrapper
 echo "🔨 Compiling CAGRA wrapper..."
 
-nvcc -c cagra_wrapper.c -o cagra_wrapper.o \
+nvcc -x cu -c cagra_wrapper.c -o cagra_wrapper.o \
     -arch=sm_86 \
     -O3 \
     -use_fast_math \
@@ -53,7 +53,7 @@ ar rcs libcagra_wrapper.a cagra_wrapper.o
 
 # Create shared library
 nvcc -shared cagra_wrapper.o -o libcagra_wrapper.so \
-    -lcudart -lcublas -lcuvs \
+    -lcudart -lcublas -lcuvs -lcuvs_c \
     -L$CUDA_PATH/lib64 \
     -L$CUVS_PATH/lib
 

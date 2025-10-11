@@ -1,13 +1,16 @@
+//go:build legacy
+
 package main
 
 import (
-	"fmt"
-	"math/rand"
-	"strings"
-	"time"
+    "fmt"
+    "math/rand"
+    "strings"
+    "time"
 
-	"github.com/lee101/gobed"
-	"github.com/lee101/gobed/pkg/ann/simd"
+    "github.com/lee101/gobed"
+    "github.com/lee101/gobed/pkg/ann/simd"
+    annsearch "github.com/lee101/gobed/pkg/ann/search"
 )
 
 // BenchmarkResult stores timing and quality metrics
@@ -116,68 +119,70 @@ func generateTestData(n, numQueries int) ([]simd.Vec512, []float32, []simd.Vec51
 }
 
 func benchmarkIVF(vectors []simd.Vec512, scales []float32, queries []simd.Vec512, queryScales []float32) BenchmarkResult {
-	result := BenchmarkResult{Name: "IVF-HNSW-PQ (Current)"}
+    // Use internal ANN engine directly to avoid external model deps
+    result := BenchmarkResult{Name: "Current Engine (Flat)"}
 
-	// Load model
-	model, err := gobed.LoadModel()
-	if err != nil {
-		result.Error = fmt.Errorf("failed to load model: %v", err)
-		return result
-	}
+    // Configure engine to use flat for all sizes to ensure consistent, exact baseline
+    cfg := annsearch.DefaultConfig()
+    cfg.MaxFlatSize = len(vectors) + 1 // force flat path
+    cfg.UseParallel = true
 
-	// Create search engine
-	engine := gobed.NewGPUSearchEngine(model)
-	defer engine.Close()
+    engine := annsearch.NewEngine(cfg)
 
-	// Generate documents for indexing
-	docs := make([]string, len(vectors))
-	ids := make([]int, len(vectors))
-	for i := 0; i < len(vectors); i++ {
-		docs[i] = fmt.Sprintf("Document %d with test content", i)
-		ids[i] = i
-	}
+    // Indexing
+    fmt.Print("  Flat indexing: ")
+    ids := make([]int, len(vectors))
+    for i := range ids { ids[i] = i }
 
-	// Benchmark indexing
-	fmt.Print("  IVF indexing: ")
-	indexStart := time.Now()
+    indexStart := time.Now()
+    if err := engine.AddBatch(vectors, scales, ids); err != nil {
+        result.Error = fmt.Errorf("indexing failed: %v", err)
+        fmt.Println("ERROR")
+        return result
+    }
+    result.IndexTime = time.Since(indexStart)
+    result.IndexThroughput = float64(len(vectors)) / result.IndexTime.Seconds()
+    fmt.Printf("%v (%.0f vecs/sec)\n", result.IndexTime, result.IndexThroughput)
 
-	err = engine.IndexBatchWithIDs(ids, docs)
-	if err != nil {
-		result.Error = fmt.Errorf("IVF indexing failed: %v", err)
-		fmt.Println("ERROR")
-		return result
-	}
+    // Search benchmark and quality (recall on exact queries)
+    fmt.Print("  Flat search:   ")
 
-	result.IndexTime = time.Since(indexStart)
-	result.IndexThroughput = float64(len(vectors)) / result.IndexTime.Seconds()
+    const k = 10
+    // Precompute ground truth for exact queries: their own ID should be rank #1
+    half := len(queries) / 2
 
-	fmt.Printf("%v (%.0f vecs/sec)\n", result.IndexTime, result.IndexThroughput)
+    start := time.Now()
+    exactTop1 := 0
+    for i := 0; i < len(queries); i++ {
+        res, err := engine.Search(&queries[i], k)
+        if err != nil {
+            result.Error = fmt.Errorf("search failed: %v", err)
+            fmt.Println("ERROR")
+            return result
+        }
+        if i < half {
+            // queries[i] == vectors[i]
+            if len(res) > 0 && res[0].ID == i {
+                exactTop1++
+            }
+        }
+    }
+    elapsed := time.Since(start)
 
-	// Benchmark search - Skip for now due to gobed search engine issue
-	fmt.Print("  IVF search:   ")
+    avg := elapsed / time.Duration(len(queries))
+    result.AvgSearchTime = avg
+    result.SearchQPS = 1.0 / avg.Seconds()
+    // Exact top-1 ratio over exact queries as a simple recall@1 proxy
+    if half > 0 {
+        result.Recall = float64(exactTop1) / float64(half)
+    }
+    // Estimate memory usage
+    stats := engine.Stats()
+    result.MemoryMB = float64(stats.MemoryUsage) / 1024.0 / 1024.0
 
-	// Use estimated performance based on typical IVF-HNSW performance
-	// These are conservative estimates for the current implementation
-	var avgSearchTime time.Duration
-	if len(vectors) <= 10000 {
-		avgSearchTime = 3 * time.Millisecond // 3ms for small datasets
-	} else if len(vectors) <= 100000 {
-		avgSearchTime = 8 * time.Millisecond // 8ms for medium datasets
-	} else {
-		avgSearchTime = 15 * time.Millisecond // 15ms for large datasets
-	}
+    fmt.Printf("%v avg (%.0f QPS, %.1f%% exact@1)\n", result.AvgSearchTime, result.SearchQPS, result.Recall*100)
 
-	result.AvgSearchTime = avgSearchTime
-	result.SearchQPS = 1.0 / result.AvgSearchTime.Seconds()
-	result.Recall = 0.92 // Typical IVF-HNSW recall
-
-	// Estimate memory usage
-	result.MemoryMB = float64(len(vectors)*512) / 1024.0 / 1024.0 // Rough estimate
-
-	fmt.Printf("%v avg (%.0f QPS, %.1f%% recall)\n",
-		result.AvgSearchTime, result.SearchQPS, result.Recall*100)
-
-	return result
+    return result
 }
 
 func benchmarkCAGRA(vectors []simd.Vec512, scales []float32, queries []simd.Vec512, queryScales []float32) BenchmarkResult {

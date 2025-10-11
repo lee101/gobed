@@ -36,7 +36,7 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 			}
 		}
 		return search.Config{
-			MaxFlatSize: 10000,
+			MaxFlatSize: 1500,
 			NList:       min(256, estimatedSize/50), // Few clusters
 			NProbe:      4,                          // Minimal probes
 			HNSWEnabled: false,                      // Skip graph for simplicity
@@ -48,14 +48,14 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 		// Balance between speed and accuracy
 		if estimatedSize <= 10000 {
 			return search.Config{
-				MaxFlatSize: 10000,
+				MaxFlatSize: 1500,
 				NList:       estimatedSize / 100,
 				NProbe:      8,
 				UseParallel: true,
 			}
 		}
 		return search.Config{
-			MaxFlatSize: 10000,
+			MaxFlatSize: 1500,
 			NList:       min(2048, estimatedSize/100),
 			NProbe:      10,
 			M:           32,
@@ -86,14 +86,14 @@ func GetSearchConfig(preset SearchPreset, estimatedSize int) search.Config {
 		// Optimal CAGRA configuration: Quality v1 from benchmarks
 		// Achieves 99.5% recall, 61K QPS on RTX 3090
 		return search.Config{
-			MaxFlatSize:  10000,                        // Use approximate search for larger datasets
-			NList:        min(1024, estimatedSize/50),  // More clusters for better partitioning
-			NProbe:       32,                           // Optimized for 99.5% recall
-			M:            40,                           // GraphDegree/2 where GraphDegree=80
-			NBits:        8,                            // INT8 quantization
-			HNSWEnabled:  false,                        // Pure CAGRA, no HNSW
-			RerankSize:   256,                          // Larger rerank for quality
-			UseParallel:  true,                         // Always use parallelization
+			MaxFlatSize: 10000,                       // Use approximate search for larger datasets
+			NList:       min(1024, estimatedSize/50), // More clusters for better partitioning
+			NProbe:      32,                          // Optimized for 99.5% recall
+			M:           40,                          // GraphDegree/2 where GraphDegree=80
+			NBits:       8,                           // INT8 quantization
+			HNSWEnabled: false,                       // Pure CAGRA, no HNSW
+			RerankSize:  256,                         // Larger rerank for quality
+			UseParallel: true,                        // Always use parallelization
 			// Optimal parameters from benchmarks:
 			// GraphDegree: 80 (for index build)
 			// IntermediateGraphDegree: 160

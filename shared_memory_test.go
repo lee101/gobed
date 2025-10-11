@@ -15,10 +15,7 @@ func TestSharedMemoryIndex(t *testing.T) {
 	testPath := "/tmp/gobed_test_shared_" + fmt.Sprint(time.Now().UnixNano())
 	defer os.RemoveAll(testPath)
 
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := loadModelOrSkip(t)
 
 	t.Run("CreateAndClose", func(t *testing.T) {
 		config := SharedMemoryConfig{
@@ -346,10 +343,7 @@ func TestSharedMemoryPerformance(t *testing.T) {
 	testPath := "/tmp/gobed_perf_test_" + fmt.Sprint(time.Now().UnixNano())
 	defer os.RemoveAll(testPath)
 
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := loadModelOrSkip(t)
 
 	config := SharedMemoryConfig{
 		BasePath:    testPath,
@@ -420,7 +414,7 @@ func BenchmarkSharedMemorySearch(b *testing.B) {
 	testPath := "/tmp/gobed_bench_" + fmt.Sprint(time.Now().UnixNano())
 	defer os.RemoveAll(testPath)
 
-	model, _ := LoadModel()
+	model := loadModelOrSkipB(b)
 	config := SharedMemoryConfig{
 		BasePath:    testPath,
 		MaxVectors:  1000,

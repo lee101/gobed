@@ -1,10 +1,10 @@
-// +build cagra
+//go:build cagra
 
 package gobed
 
 /*
 #cgo CFLAGS: -I./
-#cgo LDFLAGS: -L./ -lcagra_wrapper -L/usr/local/cuda/lib64 -lcudart -lcublas -lcuvs -ldl -lstdc++ -lm
+#cgo LDFLAGS: -L./ -lcagra_wrapper -L/usr/local/cuda/lib64 -lcudart -lcublas -lcublasLt -lcuvs -lcuvs_c -ldl -lstdc++ -lm
 #include "cagra_wrapper.h"
 #include <stdlib.h>
 */
@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -26,19 +25,19 @@ import (
 // CAGRAIndex provides NVIDIA cuVS CAGRA-based ultra-fast approximate nearest neighbor search
 // Targets sub-millisecond search latency for million+ vectors
 type CAGRAIndex struct {
-	handle       *C.cagra_wrapper_t
-	config       CAGRAConfig
-	mutex        sync.RWMutex
+	handle *C.cagra_wrapper_t
+	config CAGRAConfig
+	mutex  sync.RWMutex
 
 	// State
-	isBuilt      bool
-	numVectors   int
-	vectorDim    int
+	isBuilt    bool
+	numVectors int
+	vectorDim  int
 
 	// Performance tracking
-	buildTime    time.Duration
+	buildTime     time.Duration
 	avgSearchTime time.Duration
-	searchCount  int64
+	searchCount   int64
 
 	// Caching
 	cachePath    string
@@ -47,15 +46,15 @@ type CAGRAIndex struct {
 
 // CAGRAConfig configures CAGRA for optimal performance
 type CAGRAConfig struct {
-	MaxVectors    int     // Maximum vectors to support
-	VectorDim     int     // Vector dimension (512 for gobed)
-	GraphDegree   int     // Graph connectivity (32-128, higher = better quality)
-	MaxIterations int     // Search iterations (32-128, higher = better recall)
-	CachePath     string  // Path for persistent index storage
+	MaxVectors    int    // Maximum vectors to support
+	VectorDim     int    // Vector dimension (512 for gobed)
+	GraphDegree   int    // Graph connectivity (32-128, higher = better quality)
+	MaxIterations int    // Search iterations (32-128, higher = better recall)
+	CachePath     string // Path for persistent index storage
 
 	// Performance targets
-	TargetLatencyUs  int  // Target search latency in microseconds (1000 = 1ms)
-	TargetRecall     float32 // Target recall (0.9-0.99)
+	TargetLatencyUs int     // Target search latency in microseconds (1000 = 1ms)
+	TargetRecall    float32 // Target recall (0.9-0.99)
 }
 
 // DefaultCAGRAConfig returns configuration optimized for ultra-fast search
@@ -75,10 +74,10 @@ func DefaultCAGRAConfig() CAGRAConfig {
 // FastCAGRAConfig returns configuration optimized for speed over quality
 func FastCAGRAConfig() CAGRAConfig {
 	config := DefaultCAGRAConfig()
-	config.GraphDegree = 32        // Faster build/search
-	config.MaxIterations = 32      // Faster search
-	config.TargetLatencyUs = 500   // <0.5ms target
-	config.TargetRecall = 0.90     // 90% recall
+	config.GraphDegree = 32      // Faster build/search
+	config.MaxIterations = 32    // Faster search
+	config.TargetLatencyUs = 500 // <0.5ms target
+	config.TargetRecall = 0.90   // 90% recall
 	config.CachePath = BuildCAGRACachePath("fast", config.VectorDim, config.GraphDegree, config.MaxVectors)
 	return config
 }
@@ -86,10 +85,10 @@ func FastCAGRAConfig() CAGRAConfig {
 // QualityCAGRAConfig returns configuration optimized for quality over speed
 func QualityCAGRAConfig() CAGRAConfig {
 	config := DefaultCAGRAConfig()
-	config.GraphDegree = 128       // Better quality
-	config.MaxIterations = 128     // Better recall
-	config.TargetLatencyUs = 2000  // <2ms target
-	config.TargetRecall = 0.99     // 99% recall
+	config.GraphDegree = 128      // Better quality
+	config.MaxIterations = 128    // Better recall
+	config.TargetLatencyUs = 2000 // <2ms target
+	config.TargetRecall = 0.99    // 99% recall
 	config.CachePath = BuildCAGRACachePath("quality", config.VectorDim, config.GraphDegree, config.MaxVectors)
 	return config
 }
@@ -185,6 +184,16 @@ func (idx *CAGRAIndex) Search(query simd.Vec512, queryScale float32, k int) ([]S
 	if !idx.isBuilt {
 		return nil, fmt.Errorf("index not built")
 	}
+	if idx.numVectors == 0 {
+		return []SearchResult{}, nil
+	}
+
+	switch {
+	case k <= 0:
+		return []SearchResult{}, nil
+	case k > idx.numVectors:
+		k = idx.numVectors
+	}
 
 	start := time.Now()
 
@@ -220,13 +229,18 @@ func (idx *CAGRAIndex) Search(query simd.Vec512, queryScale float32, k int) ([]S
 		)
 	}
 
-	// Convert to SearchResult format
-	results := make([]SearchResult, k)
+	// Convert to SearchResult format (expose positive similarity)
+	results := make([]SearchResult, 0, k)
 	for i := 0; i < k; i++ {
-		results[i] = SearchResult{
-			ID:         int(neighbors[i]),
-			Similarity: distances[i],
+		similarity := distances[i]
+		if similarity < 0 {
+			similarity = -similarity
 		}
+
+		results = append(results, SearchResult{
+			ID:         int(neighbors[i]),
+			Similarity: similarity,
+		})
 	}
 
 	// Log performance for first few searches
@@ -248,6 +262,9 @@ func (idx *CAGRAIndex) SearchBatch(queries []simd.Vec512, queryScales []float32,
 	if !idx.isBuilt {
 		return nil, fmt.Errorf("index not built")
 	}
+	if idx.numVectors == 0 {
+		return [][]SearchResult{}, nil
+	}
 
 	nQueries := len(queries)
 	if nQueries == 0 {
@@ -256,6 +273,13 @@ func (idx *CAGRAIndex) SearchBatch(queries []simd.Vec512, queryScales []float32,
 
 	if len(queryScales) != nQueries {
 		return nil, fmt.Errorf("query scales count mismatch")
+	}
+
+	if k <= 0 {
+		return make([][]SearchResult, nQueries), nil
+	}
+	if k > idx.numVectors {
+		k = idx.numVectors
 	}
 
 	start := time.Now()
@@ -297,14 +321,20 @@ func (idx *CAGRAIndex) SearchBatch(queries []simd.Vec512, queryScales []float32,
 	// Convert results
 	results := make([][]SearchResult, nQueries)
 	for i := 0; i < nQueries; i++ {
-		results[i] = make([]SearchResult, k)
+		row := make([]SearchResult, 0, k)
 		for j := 0; j < k; j++ {
-			idx := i*k + j
-			results[i][j] = SearchResult{
-				ID:         int(neighbors[idx]),
-				Similarity: distances[idx],
+			off := i*k + j
+			similarity := distances[off]
+			if similarity < 0 {
+				similarity = -similarity
 			}
+
+			row = append(row, SearchResult{
+				ID:         int(neighbors[off]),
+				Similarity: similarity,
+			})
 		}
+		results[i] = row
 	}
 
 	return results, nil
@@ -367,27 +397,27 @@ func (idx *CAGRAIndex) GetStats() CAGRAStats {
 	C.cagra_get_stats(idx.handle, &cStats)
 
 	return CAGRAStats{
-		NumVectors:       idx.numVectors,
-		VectorDim:        idx.vectorDim,
-		BuildTimeMs:      float64(cStats.build_time_ms),
-		AvgSearchTimeMs:  float64(idx.avgSearchTime.Microseconds()) / 1000.0,
-		SearchCount:      idx.searchCount,
-		MemoryBytes:      int64(cStats.index_memory_bytes),
-		IsBuilt:          idx.isBuilt,
-		CacheEnabled:     idx.cacheEnabled,
+		NumVectors:      idx.numVectors,
+		VectorDim:       idx.vectorDim,
+		BuildTimeMs:     float64(cStats.build_time_ms),
+		AvgSearchTimeMs: float64(idx.avgSearchTime.Microseconds()) / 1000.0,
+		SearchCount:     idx.searchCount,
+		MemoryBytes:     int64(cStats.index_memory_bytes),
+		IsBuilt:         idx.isBuilt,
+		CacheEnabled:    idx.cacheEnabled,
 	}
 }
 
 // CAGRAStats contains performance statistics
 type CAGRAStats struct {
-	NumVectors       int
-	VectorDim        int
-	BuildTimeMs      float64
-	AvgSearchTimeMs  float64
-	SearchCount      int64
-	MemoryBytes      int64
-	IsBuilt          bool
-	CacheEnabled     bool
+	NumVectors      int
+	VectorDim       int
+	BuildTimeMs     float64
+	AvgSearchTimeMs float64
+	SearchCount     int64
+	MemoryBytes     int64
+	IsBuilt         bool
+	CacheEnabled    bool
 }
 
 // destroy cleans up CAGRA resources
@@ -428,10 +458,4 @@ func isCAGRAAvailable() bool {
 	// This would check for cuVS library availability
 	// For now, assume it's available if built with cagra tag
 	return true
-}
-
-// SearchResult represents a single search result
-type SearchResult struct {
-	ID         int
-	Similarity float32
 }
