@@ -1,3 +1,5 @@
+//go:build !gpu || !legacy
+
 package gobed
 
 import (

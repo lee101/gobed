@@ -1,3 +1,5 @@
+//go:build legacy && gpu
+
 package src
 
 /*
@@ -94,10 +96,10 @@ type GPUSearchIndex struct {
 	cudaHandle unsafe.Pointer
 
 	// Index data
-	chunks      []*Chunk
-	fileIndex   map[string][]uint64 // file -> chunk IDs
-	chunkMap    map[uint64]*Chunk   // ID -> chunk
-	numVectors  int32
+	chunks     []*Chunk
+	fileIndex  map[string][]uint64 // file -> chunk IDs
+	chunkMap   map[uint64]*Chunk   // ID -> chunk
+	numVectors int32
 
 	// IVF index
 	ivfTrained bool

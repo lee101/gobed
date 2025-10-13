@@ -11,7 +11,6 @@ package gobed
 import "C"
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -117,7 +116,7 @@ func NewCAGRAIndex(config CAGRAConfig) (*CAGRAIndex, error) {
 	// Set finalizer
 	runtime.SetFinalizer(index, (*CAGRAIndex).destroy)
 
-	log.Printf("🚀 CAGRA Index created: max_vectors=%d, dim=%d, graph_degree=%d",
+	Debugf("🚀 CAGRA Index created: max_vectors=%d, dim=%d, graph_degree=%d",
 		config.MaxVectors, config.VectorDim, config.GraphDegree)
 
 	return index, nil
@@ -137,7 +136,7 @@ func (idx *CAGRAIndex) BuildIndex(vectors []simd.Vec512, scales []float32) error
 		return fmt.Errorf("scales count mismatch: %d vectors, %d scales", n, len(scales))
 	}
 
-	log.Printf("🔨 Building CAGRA index: %d vectors", n)
+	Debugf("🔨 Building CAGRA index: %d vectors", n)
 	start := time.Now()
 
 	// Flatten vectors for C API
@@ -166,7 +165,7 @@ func (idx *CAGRAIndex) BuildIndex(vectors []simd.Vec512, scales []float32) error
 
 	buildThroughput := float64(n) / idx.buildTime.Seconds()
 
-	log.Printf("✅ CAGRA index built: %v (%.0f vectors/sec)", idx.buildTime, buildThroughput)
+	Debugf("✅ CAGRA index built: %v (%.0f vectors/sec)", idx.buildTime, buildThroughput)
 
 	// Save to cache if enabled
 	if idx.cacheEnabled {
@@ -245,7 +244,7 @@ func (idx *CAGRAIndex) Search(query simd.Vec512, queryScale float32, k int) ([]S
 
 	// Log performance for first few searches
 	if idx.searchCount <= 5 {
-		log.Printf("🔍 CAGRA search #%d: %.3fms (target: %.1fms)",
+		Debugf("🔍 CAGRA search #%d: %.3fms (target: %.1fms)",
 			idx.searchCount,
 			float64(searchTime.Microseconds())/1000.0,
 			float64(idx.config.TargetLatencyUs)/1000.0)
@@ -315,7 +314,7 @@ func (idx *CAGRAIndex) SearchBatch(queries []simd.Vec512, queryScales []float32,
 	avgPerQuery := batchTime / time.Duration(nQueries)
 	qps := float64(nQueries) / batchTime.Seconds()
 
-	log.Printf("📊 CAGRA batch: %d queries in %v (%.2fms/query, %.0f QPS)",
+	Debugf("📊 CAGRA batch: %d queries in %v (%.2fms/query, %.0f QPS)",
 		nQueries, batchTime, float64(avgPerQuery.Microseconds())/1000.0, qps)
 
 	// Convert results
@@ -349,7 +348,7 @@ func (idx *CAGRAIndex) LoadFromCache() error {
 	idx.mutex.Lock()
 	defer idx.mutex.Unlock()
 
-	log.Printf("📂 Loading CAGRA index from cache: %s", idx.cachePath)
+	Debugf("📂 Loading CAGRA index from cache: %s", idx.cachePath)
 	start := time.Now()
 
 	cPath := C.CString(idx.cachePath)
@@ -363,7 +362,7 @@ func (idx *CAGRAIndex) LoadFromCache() error {
 	loadTime := time.Since(start)
 	idx.isBuilt = true
 
-	log.Printf("✅ CAGRA index loaded from cache in %v", loadTime)
+	Debugf("✅ CAGRA index loaded from cache in %v", loadTime)
 
 	return nil
 }
@@ -374,18 +373,18 @@ func (idx *CAGRAIndex) saveToCache() {
 		return
 	}
 
-	log.Printf("💾 Saving CAGRA index to cache: %s", idx.cachePath)
+	Debugf("💾 Saving CAGRA index to cache: %s", idx.cachePath)
 
 	cPath := C.CString(idx.cachePath)
 	defer C.free(unsafe.Pointer(cPath))
 
 	result := C.cagra_serialize_index(idx.handle, cPath)
 	if result != 0 {
-		log.Printf("⚠️  Failed to save CAGRA index to cache")
+		Debugln("⚠️  Failed to save CAGRA index to cache")
 		return
 	}
 
-	log.Printf("✅ CAGRA index saved to cache")
+	Debugf("✅ CAGRA index saved to cache")
 }
 
 // GetStats returns performance statistics
@@ -446,7 +445,7 @@ func BuildCAGRACachePath(namespace string, vectorDim, graphDegree, count int) st
 	}
 
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		log.Printf("Warning: Failed to create CAGRA cache directory %s: %v", baseDir, err)
+		Debugf("Warning: Failed to create CAGRA cache directory %s: %v", baseDir, err)
 	}
 
 	filename := fmt.Sprintf("%s_cagra_%d_%d_%d.cagrabin", namespace, vectorDim, graphDegree, count)

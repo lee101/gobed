@@ -5,22 +5,23 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/lee101/gobed"
 	"github.com/spf13/cobra"
 )
 
 var (
 	// Global flags
-	flagLimit      int
-	flagContext    int
-	flagColorMode  string
-	flagNoIndex    bool
-	flagForceIndex bool
-	flagGPU        bool
-	flagThreshold  float64
-	flagIgnoreCase bool
-	flagVerbose    bool
-	flagConfig     string
-	flagProgressive bool
+	flagLimit          int
+	flagContext        int
+	flagColorMode      string
+	flagNoIndex        bool
+	flagForceIndex     bool
+	flagGPU            bool
+	flagThreshold      float64
+	flagIgnoreCase     bool
+	flagVerbose        bool
+	flagConfig         string
+	flagProgressive    bool
 	flagSearchBinaries bool
 )
 
@@ -85,11 +86,11 @@ func Execute() error {
 func init() {
 	// Global flags
 	rootCmd.PersistentFlags().IntVarP(&flagLimit, "limit", "l", 10, "Maximum number of results")
-	rootCmd.PersistentFlags().IntVarP(&flagContext, "context", "c", 2, "Lines of context around matches") 
+	rootCmd.PersistentFlags().IntVarP(&flagContext, "context", "c", 2, "Lines of context around matches")
 	rootCmd.PersistentFlags().StringVar(&flagColorMode, "color", "auto", "When to colorize output (auto|always|never)")
 	rootCmd.PersistentFlags().BoolVar(&flagNoIndex, "no-index", false, "Skip indexing, use existing index only")
 	rootCmd.PersistentFlags().BoolVar(&flagForceIndex, "force-index", false, "Force re-indexing even if index exists")
-	rootCmd.PersistentFlags().BoolVar(&flagGPU, "gpu", false, "Enable GPU acceleration (auto-detect if available)")
+	rootCmd.PersistentFlags().BoolVar(&flagGPU, "gpu", false, "Force GPU acceleration (auto-detect by default)")
 	rootCmd.PersistentFlags().Float64Var(&flagThreshold, "threshold", 0.7, "Minimum similarity threshold (0.0-1.0)")
 	rootCmd.PersistentFlags().BoolVarP(&flagIgnoreCase, "ignore-case", "i", false, "Case-insensitive search")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Verbose output")
@@ -100,40 +101,58 @@ func init() {
 	// Search-specific flags
 	rootCmd.Flags().BoolVar(&flagNoIndex, "no-index", false, "Skip indexing, use existing index only")
 
-	// Index-specific flags  
+	// Index-specific flags
 	indexCmd.Flags().BoolVar(&flagForceIndex, "force", false, "Force complete re-indexing")
 	indexCmd.Flags().IntVar(&flagContext, "batch-size", 1000, "Indexing batch size")
 
 	// Add subcommands
 	rootCmd.AddCommand(indexCmd)
-	rootCmd.AddCommand(statusCmd) 
+	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(configCmd)
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
-    query := strings.Join(args, " ")
+	query := strings.Join(args, " ")
 
-    // Prefer CAGRA GPU searcher when --gpu is set; fallback to simple CPU
-    var (
-        searcher interface{ Search(BedSearchOptions) error; Close() error }
-        err error
-    )
-    if flagGPU {
-        if s, e := NewCAGRABedSearcher(); e == nil {
-            searcher = s
-        } else {
-            // Fallback with notice
-            fmt.Printf("GPU/CAGRA unavailable (%v). Falling back to CPU search.\n", e)
-            searcher, err = NewSimpleBedSearcher()
-            if err != nil { return fmt.Errorf("failed to init fallback searcher: %w", err) }
-        }
-    } else {
-        searcher, err = NewSimpleBedSearcher()
-        if err != nil { return fmt.Errorf("failed to initialize searcher: %w", err) }
-    }
-    defer searcher.Close()
+	if flagVerbose {
+		gobed.EnableDebugLogging()
+	}
 
-	// Configure search options
+	useGPU := true
+	if cmd.Flags().Changed("gpu") {
+		useGPU = flagGPU
+	}
+
+	type searcher interface {
+		Search(BedSearchOptions) error
+		Close() error
+	}
+
+	var (
+		searcher searcher
+		err      error
+		gpuUsed  bool
+	)
+
+	if useGPU {
+		if s, e := NewCAGRABedSearcher(); e == nil {
+			searcher = s
+			gpuUsed = true
+		} else {
+			if cmd.Flags().Changed("gpu") && flagGPU {
+				return fmt.Errorf("gpu requested but unavailable: %w", e)
+			}
+		}
+	}
+
+	if searcher == nil {
+		searcher, err = NewSimpleBedSearcher()
+		if err != nil {
+			return fmt.Errorf("failed to initialize searcher: %w", err)
+		}
+	}
+	defer searcher.Close()
+
 	options := BedSearchOptions{
 		Query:          query,
 		Limit:          flagLimit,
@@ -143,17 +162,26 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		ForceIndex:     flagForceIndex,
 		SearchBinaries: flagSearchBinaries,
 		Progressive:    flagProgressive,
-		UseGPU:         flagGPU,
+		UseGPU:         gpuUsed,
 		Verbose:        flagVerbose,
 	}
 
-    return searcher.Search(options)
+	return searcher.Search(options)
 }
 
 func runIndex(cmd *cobra.Command, args []string) error {
 	path := "."
 	if len(args) > 0 {
 		path = args[0]
+	}
+
+	if flagVerbose {
+		gobed.EnableDebugLogging()
+	}
+
+	useGPU := true
+	if cmd.Flags().Changed("gpu") {
+		useGPU = flagGPU
 	}
 
 	indexer, err := NewIndexer()
@@ -163,11 +191,11 @@ func runIndex(cmd *cobra.Command, args []string) error {
 	defer indexer.Close()
 
 	options := IndexOptions{
-		Path:       path,
-		Force:      flagForceIndex,
-		BatchSize:  flagContext, // reusing context flag as batch size
-		UseGPU:     flagGPU,
-		Verbose:    flagVerbose,
+		Path:      path,
+		Force:     flagForceIndex,
+		BatchSize: flagContext, // reusing context flag as batch size
+		UseGPU:    useGPU,
+		Verbose:   flagVerbose,
 	}
 
 	return indexer.Index(options)
@@ -177,20 +205,23 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println("Bed Search Status")
 	fmt.Println("=================")
 	fmt.Println()
-	
+
 	fmt.Printf("Natural language search: Enabled\n")
 	fmt.Printf("Query enhancement:       Enabled\n")
 	fmt.Printf("Gitignore support:       Enabled\n")
 	fmt.Printf("Binary detection:        Enabled\n")
 	fmt.Printf("Parallel workers:        %d\n", runtime.NumCPU())
-	
-	// Check for GPU
-	if flagGPU {
-		fmt.Printf("GPU acceleration:        Requested\n")
-	} else {
-		fmt.Printf("GPU acceleration:        Disabled\n")
+
+	mode := "Auto (try GPU when available)"
+	if cmd.Flags().Changed("gpu") {
+		if flagGPU {
+			mode = "Forced On"
+		} else {
+			mode = "Disabled"
+		}
 	}
-	
+	fmt.Printf("GPU acceleration:        %s\n", mode)
+
 	return nil
 }
 

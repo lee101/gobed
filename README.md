@@ -102,43 +102,53 @@ Real benchmarks on commodity hardware:
 | 100,000 docs | 2.23 ms | 448 QPS |
 | 1M docs (GPU) | 947 ms batch | 1,056 QPS |
 
-##  BED CLI Tool - GPU-Accelerated Filesystem Search
+## Bed CLI – Semantic Filesystem Search
 
-The `bed` tool provides command-line semantic search with GPU acceleration:
+`bed` is the command-line front end that applies Gobed embeddings to your local
+projects. It can index and search using CPU-only mode or take advantage of a
+CUDA-enabled GPU (via cuVS/CAGRA) for sub-millisecond querying.
 
-```bash
-# Build the tool
-cd bed/
-go build -o bed bed_cuda.go
-
-# Search current directory (default: GPU enabled)
-./bed "search query"
-
-# Search with custom options
-./bed -dir /path/to/dir -k 20 "your search"  # Top 20 results
-./bed --debug "query"                         # Show indexing stats
-./bed --gpu=false "query"                     # CPU-only mode
-```
-
-### Real-World Example: Search 243K Lines
+### Quick Start (GPU-accelerated)
 
 ```bash
-# Search ai.txt (243K lines) for "anime"
-./bed -dir testdata -k 12 "anime"
+# 1. Install CUDA 12.8 and fetch the Gobed model
+./setup.sh
 
-# Results in <1ms with GPU acceleration!
- 1. [Line 14, Score: 0.923] ai-Iyo-Anime.webp
- 2. [Line 237, Score: 0.891] ai-Lucy-Anime.webp
-...
+# 2. Run bed with GPU support (CAGRA + CUDA)
+export LD_LIBRARY_PATH="$(pwd)/gpu:/usr/local/cuda-12.8/lib64:${LD_LIBRARY_PATH}"
+go run -tags "cuda gpu cagra" ./cmd/bed --gpu "search query"
+
+# Optional: pre-build the CLI
+go build -tags "cuda gpu cagra" -o bed ./cmd/bed
+./bed --gpu "memory leak in handler"  # searches the current directory
 ```
 
-### Performance on Large Files
+Useful sub-commands:
 
-| File Size | Index Time | Search Time | Throughput |
-|-----------|------------|-------------|------------|
-| 10K lines | 0.2s | 0.02ms | 50,000 QPS |
-| 100K lines | 1.8s | 0.4ms | 2,500 QPS |
-| 243K lines | 4.3s | 0.06ms | 1.7M QPS |
+```bash
+# Index a project (stores the embedding index for faster repeat searches)
+go run -tags "cuda gpu cagra" ./cmd/bed index /path/to/project
+
+# Run a GPU search against an indexed project
+go run -tags "cuda gpu cagra" ./cmd/bed --gpu --limit 15 "database connection"
+
+# CPU fallback
+go run ./cmd/bed "keyword"            # no tags required
+```
+
+### Benchmark Against `testdata/`
+
+We added a Go benchmark that indexes the repository's `testdata/` directory and
+measures semantic search throughput:
+
+```bash
+cd bed
+go test ./src -bench BedSearch -run ^$
+```
+
+The benchmark indexes the sample files once and then repeatedly searches using
+`SimpleSearchEngine`, reporting `queries_per_second` so you can compare CPU and
+GPU configurations on your machine.
 
 ## Advanced Features
 

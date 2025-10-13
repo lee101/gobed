@@ -1,4 +1,4 @@
-//go:build gpu && cuda
+//go:build legacy && gpu && cuda
 
 package src
 

@@ -18,6 +18,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdbool.h>
 #include "cagra_wrapper.h"
 
 // CAGRA index wrapper (define the struct body; typedef is in header)
@@ -45,6 +46,15 @@ struct cagra_wrapper_t {
     // Caching
     int cache_enabled;
     char cache_path[256];
+
+    // Scratch buffers reused between searches
+    float* d_query_fp32;
+    int8_t* d_query_int8;
+    float* d_query_scales;
+    uint32_t* d_scratch_neighbors;
+    float* d_scratch_distances;
+    int scratch_max_queries;
+    int scratch_k;
 };
 
 // simple integer clamp helpers
@@ -129,6 +139,65 @@ __global__ void float32_to_int8_kernel(
     }
 }
 
+#define CAGRA_CUDA_CHECK(expr, msg)                       \
+    do {                                                  \
+        cudaError_t _err = (expr);                        \
+        if (_err != cudaSuccess) {                        \
+            fprintf(stderr, "[CAGRA] CUDA %s failed: %s\n", (msg), cudaGetErrorString(_err)); \
+            return -1;                                    \
+        }                                                 \
+    } while (0)
+
+static int cagra_ensure_scratch(cagra_wrapper_t* wrapper, int max_queries, int k) {
+    if (max_queries < 1) max_queries = 1;
+    if (k < 1) k = 1;
+
+    if (max_queries > wrapper->scratch_max_queries) {
+        if (wrapper->d_query_fp32) cudaFree(wrapper->d_query_fp32);
+        if (wrapper->d_query_int8) cudaFree(wrapper->d_query_int8);
+        if (wrapper->d_query_scales) cudaFree(wrapper->d_query_scales);
+        size_t float_bytes = (size_t)max_queries * wrapper->dim * sizeof(float);
+        size_t int8_bytes = (size_t)max_queries * wrapper->dim * sizeof(int8_t);
+        size_t scale_bytes = (size_t)max_queries * sizeof(float);
+        if (cudaMalloc((void**)&wrapper->d_query_fp32, float_bytes) != cudaSuccess ||
+            cudaMalloc((void**)&wrapper->d_query_int8, int8_bytes) != cudaSuccess ||
+            cudaMalloc((void**)&wrapper->d_query_scales, scale_bytes) != cudaSuccess) {
+            if (wrapper->d_query_fp32) cudaFree(wrapper->d_query_fp32);
+            if (wrapper->d_query_int8) cudaFree(wrapper->d_query_int8);
+            if (wrapper->d_query_scales) cudaFree(wrapper->d_query_scales);
+            wrapper->d_query_fp32 = NULL;
+            wrapper->d_query_int8 = NULL;
+            wrapper->d_query_scales = NULL;
+            wrapper->scratch_max_queries = 0;
+            return -1;
+        }
+        wrapper->scratch_max_queries = max_queries;
+        if (wrapper->d_scratch_neighbors) cudaFree(wrapper->d_scratch_neighbors);
+        if (wrapper->d_scratch_distances) cudaFree(wrapper->d_scratch_distances);
+        wrapper->d_scratch_neighbors = NULL;
+        wrapper->d_scratch_distances = NULL;
+        wrapper->scratch_k = 0;
+    }
+
+    if (k > wrapper->scratch_k || wrapper->d_scratch_neighbors == NULL || wrapper->d_scratch_distances == NULL) {
+        if (wrapper->d_scratch_neighbors) cudaFree(wrapper->d_scratch_neighbors);
+        if (wrapper->d_scratch_distances) cudaFree(wrapper->d_scratch_distances);
+        size_t neighbor_bytes = (size_t)wrapper->scratch_max_queries * k * sizeof(uint32_t);
+        size_t distance_bytes = (size_t)wrapper->scratch_max_queries * k * sizeof(float);
+        if (cudaMalloc((void**)&wrapper->d_scratch_neighbors, neighbor_bytes) != cudaSuccess ||
+            cudaMalloc((void**)&wrapper->d_scratch_distances, distance_bytes) != cudaSuccess) {
+            if (wrapper->d_scratch_neighbors) cudaFree(wrapper->d_scratch_neighbors);
+            if (wrapper->d_scratch_distances) cudaFree(wrapper->d_scratch_distances);
+            wrapper->d_scratch_neighbors = NULL;
+            wrapper->d_scratch_distances = NULL;
+            wrapper->scratch_k = 0;
+            return -1;
+        }
+        wrapper->scratch_k = k;
+    }
+    return 0;
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -140,6 +209,13 @@ cagra_wrapper_t* cagra_create(int max_vectors, int dim) {
 
     wrapper->dim = dim;
     wrapper->num_vectors = 0;
+    wrapper->d_query_fp32 = NULL;
+    wrapper->d_query_int8 = NULL;
+    wrapper->d_query_scales = NULL;
+    wrapper->d_scratch_neighbors = NULL;
+    wrapper->d_scratch_distances = NULL;
+    wrapper->scratch_max_queries = 0;
+    wrapper->scratch_k = 0;
 
     // CAGRA configuration for ultra-fast search
     wrapper->graph_degree = getenv_int("CAGRA_GRAPH_DEGREE", 64);  // Higher = better quality, more memory
@@ -312,23 +388,31 @@ int cagra_search(
 
     clock_t start = clock();
 
-    // Allocate GPU memory for query
-    float* d_query_fp32;
-    cudaMalloc((void**)&d_query_fp32, wrapper->dim * sizeof(float));
-
-    // Convert int8 query to float32 on GPU
-    float* h_query_fp32 = (float*)malloc(wrapper->dim * sizeof(float));
-    for (int i = 0; i < wrapper->dim; i++) {
-        h_query_fp32[i] = (float)query[i] * query_scale;
+    if (cagra_ensure_scratch(wrapper, 1, k) != 0) {
+        return -1;
     }
-    cudaMemcpy(d_query_fp32, h_query_fp32, wrapper->dim * sizeof(float), cudaMemcpyHostToDevice);
-    free(h_query_fp32);
 
-    // Allocate GPU memory for results
-    uint32_t* d_neighbors;
-    float* d_distances;
-    cudaMalloc((void**)&d_neighbors, k * sizeof(uint32_t));
-    cudaMalloc((void**)&d_distances, k * sizeof(float));
+    CAGRA_CUDA_CHECK(cudaMemcpy(wrapper->d_query_int8, query, wrapper->dim * sizeof(int8_t), cudaMemcpyHostToDevice), "copy query int8 to device");
+    CAGRA_CUDA_CHECK(cudaMemcpy(wrapper->d_query_scales, &query_scale, sizeof(float), cudaMemcpyHostToDevice), "copy query scale to device");
+
+    int threads = 256;
+    int total = wrapper->dim;
+    int blocks = (total + threads - 1) / threads;
+    int8_to_float32_kernel<<<blocks, threads>>>(
+        wrapper->d_query_int8,
+        wrapper->d_query_scales,
+        wrapper->d_query_fp32,
+        1,
+        wrapper->dim
+    );
+    if (cudaGetLastError() != cudaSuccess) {
+        fprintf(stderr, "[CAGRA] int8->fp32 kernel failed\n");
+        return -1;
+    }
+
+    float* d_query_fp32 = wrapper->d_query_fp32;
+    uint32_t* d_neighbors = wrapper->d_scratch_neighbors;
+    float* d_distances = wrapper->d_scratch_distances;
 
     // Create DLTensors
     DLManagedTensor query_tensor;
@@ -386,20 +470,12 @@ int cagra_search(
     );
 
     if (err != CUVS_SUCCESS) {
-        cudaFree(d_query_fp32);
-        cudaFree(d_neighbors);
-        cudaFree(d_distances);
         return -1;
     }
 
     // Copy results back to host
-    cudaMemcpy(neighbors, d_neighbors, k * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-    cudaMemcpy(distances, d_distances, k * sizeof(float), cudaMemcpyDeviceToHost);
-
-    // Cleanup
-    cudaFree(d_query_fp32);
-    cudaFree(d_neighbors);
-    cudaFree(d_distances);
+    CAGRA_CUDA_CHECK(cudaMemcpy(neighbors, d_neighbors, k * sizeof(uint32_t), cudaMemcpyDeviceToHost), "copy neighbors to host");
+    CAGRA_CUDA_CHECK(cudaMemcpy(distances, d_distances, k * sizeof(float), cudaMemcpyDeviceToHost), "copy distances to host");
 
     clock_t end = clock();
     wrapper->stats.search_time_ms = ((double)(end - start)) / CLOCKS_PER_SEC * 1000.0;
@@ -421,35 +497,44 @@ int cagra_search_batch(
 
     clock_t start = clock();
 
-    // Allocate GPU memory for queries
-    size_t queries_bytes = num_queries * wrapper->dim * sizeof(float);
-    float* d_queries_fp32;
-    cudaMalloc((void**)&d_queries_fp32, queries_bytes);
-
-    // Convert int8 queries to float32
-    float* h_queries_fp32 = (float*)malloc(queries_bytes);
-    for (int q = 0; q < num_queries; q++) {
-        for (int d = 0; d < wrapper->dim; d++) {
-            int idx = q * wrapper->dim + d;
-            h_queries_fp32[idx] = (float)queries[idx] * query_scales[q];
-        }
+    if (cagra_ensure_scratch(wrapper, num_queries, k) != 0) {
+        return -1;
     }
-    cudaMemcpy(d_queries_fp32, h_queries_fp32, queries_bytes, cudaMemcpyHostToDevice);
-    free(h_queries_fp32);
 
-    // Allocate GPU memory for results
-    uint32_t* d_neighbors;
-    float* d_distances;
-    cudaMalloc((void**)&d_neighbors, num_queries * k * sizeof(uint32_t));
-    cudaMalloc((void**)&d_distances, num_queries * k * sizeof(float));
+    size_t queries_bytes = (size_t)num_queries * wrapper->dim * sizeof(int8_t);
+    size_t scales_bytes = (size_t)num_queries * sizeof(float);
+    CAGRA_CUDA_CHECK(cudaMemcpy(wrapper->d_query_int8, queries, queries_bytes, cudaMemcpyHostToDevice), "copy queries int8 to device");
+    CAGRA_CUDA_CHECK(cudaMemcpy(wrapper->d_query_scales, query_scales, scales_bytes, cudaMemcpyHostToDevice), "copy query scales to device");
+
+    int threads = 256;
+    int total = num_queries * wrapper->dim;
+    int blocks = (total + threads - 1) / threads;
+    int8_to_float32_kernel<<<blocks, threads>>>(
+        wrapper->d_query_int8,
+        wrapper->d_query_scales,
+        wrapper->d_query_fp32,
+        num_queries,
+        wrapper->dim
+    );
+    if (cudaGetLastError() != cudaSuccess) {
+        fprintf(stderr, "[CAGRA] batch int8->fp32 kernel failed\n");
+        return -1;
+    }
+
+    float* d_queries_fp32 = wrapper->d_query_fp32;
+    uint32_t* d_neighbors = wrapper->d_scratch_neighbors;
+    float* d_distances = wrapper->d_scratch_distances;
 
     // Create batch search params for throughput
     cuvsCagraSearchParams_t batch_params;
     cuvsCagraSearchParamsCreate(&batch_params);
     batch_params->max_queries = num_queries;
-    batch_params->algo = MULTI_CTA;  // Better for batch
-    batch_params->max_iterations = 64;
-    batch_params->team_size = 16;
+    batch_params->algo = (num_queries > 1) ? MULTI_CTA : wrapper->search_params->algo;
+    batch_params->max_iterations = wrapper->search_params->max_iterations;
+    batch_params->min_iterations = wrapper->search_params->min_iterations;
+    batch_params->team_size = (num_queries > 1) ? ((wrapper->search_params->team_size > 0) ? wrapper->search_params->team_size : 16) : wrapper->search_params->team_size;
+    batch_params->itopk_size = wrapper->search_params->itopk_size;
+    batch_params->search_width = wrapper->search_params->search_width;
 
     // Create DLTensors for batch
     DLManagedTensor queries_tensor;
@@ -509,20 +594,12 @@ int cagra_search_batch(
     cuvsCagraSearchParamsDestroy(batch_params);
 
     if (err != CUVS_SUCCESS) {
-        cudaFree(d_queries_fp32);
-        cudaFree(d_neighbors);
-        cudaFree(d_distances);
         return -1;
     }
 
     // Copy results back
-    cudaMemcpy(neighbors, d_neighbors, num_queries * k * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-    cudaMemcpy(distances, d_distances, num_queries * k * sizeof(float), cudaMemcpyDeviceToHost);
-
-    // Cleanup
-    cudaFree(d_queries_fp32);
-    cudaFree(d_neighbors);
-    cudaFree(d_distances);
+    CAGRA_CUDA_CHECK(cudaMemcpy(neighbors, d_neighbors, (size_t)num_queries * k * sizeof(uint32_t), cudaMemcpyDeviceToHost), "copy batch neighbors to host");
+    CAGRA_CUDA_CHECK(cudaMemcpy(distances, d_distances, (size_t)num_queries * k * sizeof(float), cudaMemcpyDeviceToHost), "copy batch distances to host");
 
     clock_t end = clock();
     double batch_time_ms = ((double)(end - start)) / CLOCKS_PER_SEC * 1000.0;
@@ -648,6 +725,11 @@ void cagra_destroy(cagra_wrapper_t* wrapper) {
     if (wrapper->d_dataset) cudaFree(wrapper->d_dataset);
     if (wrapper->d_dataset_fp32) cudaFree(wrapper->d_dataset_fp32);
     if (wrapper->d_scales) cudaFree(wrapper->d_scales);
+    if (wrapper->d_query_fp32) cudaFree(wrapper->d_query_fp32);
+    if (wrapper->d_query_int8) cudaFree(wrapper->d_query_int8);
+    if (wrapper->d_query_scales) cudaFree(wrapper->d_query_scales);
+    if (wrapper->d_scratch_neighbors) cudaFree(wrapper->d_scratch_neighbors);
+    if (wrapper->d_scratch_distances) cudaFree(wrapper->d_scratch_distances);
 
     free(wrapper);
 }
