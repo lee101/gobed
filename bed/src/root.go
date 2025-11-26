@@ -123,20 +123,20 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		useGPU = flagGPU
 	}
 
-	type searcher interface {
+	type bedSearcher interface {
 		Search(BedSearchOptions) error
 		Close() error
 	}
 
 	var (
-		searcher searcher
-		err      error
-		gpuUsed  bool
+		srch    bedSearcher
+		err     error
+		gpuUsed bool
 	)
 
 	if useGPU {
 		if s, e := NewCAGRABedSearcher(); e == nil {
-			searcher = s
+			srch = s
 			gpuUsed = true
 		} else {
 			if cmd.Flags().Changed("gpu") && flagGPU {
@@ -145,13 +145,13 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if searcher == nil {
-		searcher, err = NewSimpleBedSearcher()
+	if srch == nil {
+		srch, err = NewSimpleBedSearcher()
 		if err != nil {
 			return fmt.Errorf("failed to initialize searcher: %w", err)
 		}
 	}
-	defer searcher.Close()
+	defer srch.Close()
 
 	options := BedSearchOptions{
 		Query:          query,
@@ -166,7 +166,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		Verbose:        flagVerbose,
 	}
 
-	return searcher.Search(options)
+	return srch.Search(options)
 }
 
 func runIndex(cmd *cobra.Command, args []string) error {

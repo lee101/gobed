@@ -1,3 +1,5 @@
+//go:build gpu && cgo
+
 package gobed
 
 import (
