@@ -1,230 +1,41 @@
-name: CI
+name: Hosted CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
-env:
-  GO_VERSION: '1.21'
-  GOLANGCI_LINT_VERSION: v1.54.2
-
 jobs:
-  build:
-    name: Build and Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        go: ['1.20', '1.21']
-    
+  cpu:
+    name: CPU Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go }}
-        cache: true
-    
-    - name: Install dependencies
-      run: |
-        go mod download
-        go mod tidy
-        
-    - name: Check mod tidy
-      run: |
-        go mod tidy
-        git diff --exit-code go.mod go.sum
-    
-    - name: Build all packages
-      run: |
-        go build -v ./...
-    
-    - name: Build examples
-      run: |
-        for example in examples/*.go; do
-          if grep -q "^package main" "$example"; then
-            echo "Building $example"
-            go build -o /tmp/$(basename "$example" .go) "$example"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Verify gofmt
+        run: |
+          files=$(git ls-files '*.go')
+          if [ -n "$files" ]; then
+            fmt_out=$(gofmt -l $files)
+            if [ -n "$fmt_out" ]; then
+              echo "The following files need gofmt:" >&2
+              echo "$fmt_out" >&2
+              exit 1
+            fi
           fi
-        done
-    
-    - name: Run tests
-      run: |
-        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
-    
-    - name: Run short tests (fast)
-      run: |
-        go test -short -v ./...
-    
-    - name: Upload coverage
-      if: matrix.os == 'ubuntu-latest' && matrix.go == '1.21'
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.txt
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
 
-  lint:
-    name: Lint Code
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-    
-    - name: Run go fmt
-      run: |
-        gofmt_files=$(gofmt -l .)
-        if [[ -n "${gofmt_files}" ]]; then
-          echo "The following files need to be formatted:"
-          echo "${gofmt_files}"
-          exit 1
-        fi
-    
-    - name: Run go vet
-      run: |
-        go vet ./... 2>&1 | tee vet.log
-        # Check for critical errors (ignore some known issues)
-        if grep -E "(undefined|cannot find|too many errors)" vet.log | grep -v "libtorch"; then
-          echo "Critical vet errors found"
-          exit 1
-        fi
-    
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: ${{ env.GOLANGCI_LINT_VERSION }}
-        args: --timeout=10m --skip-dirs=vendor --skip-files=".*_test.go"
-        skip-cache: true
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-    
-    - name: Run gosec Security Scanner
-      uses: securego/gosec@master
-      with:
-        args: '-fmt sarif -out gosec-results.sarif ./...'
-    
-    - name: Upload SARIF file
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
-      with:
-        sarif_file: gosec-results.sarif
-    
-    - name: Run go mod audit
-      run: |
-        go install golang.org/x/vuln/cmd/govulncheck@latest
-        govulncheck ./...
-
-  benchmark:
-    name: Benchmark
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-    
-    - name: Run benchmarks
-      run: |
-        go test -bench=. -benchmem -benchtime=10s ./... | tee benchmark.txt
-    
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
-      with:
-        name: benchmark-results
-        path: benchmark.txt
-    
-    # Optional: Store benchmark results for tracking
-    - name: Store benchmark result
-      uses: benchmark-action/github-action-benchmark@v1
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      with:
-        tool: 'go'
-        output-file-path: benchmark.txt
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        auto-push: false
-        comment-on-alert: true
-        alert-threshold: '150%'
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-    
-    - name: Download model files
-      run: |
-        # Check if model files exist
-        if [ ! -f "model/model.safetensors" ]; then
-          echo "Model files not found, skipping integration tests"
-          echo "skip_integration=true" >> $GITHUB_ENV
-        else
-          echo "skip_integration=false" >> $GITHUB_ENV
-        fi
-    
-    - name: Run integration tests
-      if: env.skip_integration == 'false'
-      run: |
-        go test -v -tags=integration ./...
-
-  docker:
-    name: Docker Build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false
-        tags: gobed:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Run CPU Test Suite
+        run: ./scripts/ci/run_cpu_checks.sh
+        shell: bash

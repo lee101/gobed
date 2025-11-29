@@ -69,8 +69,8 @@ func LoadModel(referenceTokensPath string) (*SimpleEmbeddingModel, error) {
 	}
 
 	loadTime := time.Since(loadStart)
-	log.Printf("✅ Model loaded successfully in %v", loadTime)
-	log.Printf("📊 Loaded %d reference tokens, vocab_size=%d, embed_dim=%d", len(referenceTokens), vocabSize, embedDim)
+	log.Printf(" Model loaded successfully in %v", loadTime)
+	log.Printf(" Loaded %d reference tokens, vocab_size=%d, embed_dim=%d", len(referenceTokens), vocabSize, embedDim)
 
 	return model, nil
 }
@@ -127,7 +127,7 @@ func (m *SimpleEmbeddingModel) encodeTokenIDs(tokenIDs []int) ([]float32, error)
 // benchmarkPureInference benchmarks only the inference part
 func benchmarkPureInference(model *SimpleEmbeddingModel) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 60))
-	fmt.Printf("🚀 PURE INFERENCE BENCHMARK\n")
+	fmt.Printf(" PURE INFERENCE BENCHMARK\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 60))
 
 	// Get available sentences from reference tokens
@@ -140,14 +140,14 @@ func benchmarkPureInference(model *SimpleEmbeddingModel) {
 	}
 
 	if len(sentences) == 0 {
-		log.Printf("❌ No reference sentences available for benchmarking")
+		log.Printf(" No reference sentences available for benchmarking")
 		return
 	}
 
 	fmt.Printf("Benchmarking %d sentences with pure inference timing...\n", len(sentences))
 
 	// Warmup runs
-	fmt.Println("\n🔥 Warmup runs...")
+	fmt.Println("\n Warmup runs...")
 	for i := 0; i < 3; i++ {
 		_, err := model.EncodeText(sentences[0])
 		if err != nil {
@@ -155,10 +155,10 @@ func benchmarkPureInference(model *SimpleEmbeddingModel) {
 			return
 		}
 	}
-	fmt.Println("✅ Warmup completed")
+	fmt.Println(" Warmup completed")
 
 	// Benchmark individual inference times
-	fmt.Println("\n⏱️  Pure inference benchmarks:")
+	fmt.Println("\n  Pure inference benchmarks:")
 	times := make([]time.Duration, len(sentences))
 	embeddings := make([][]float32, len(sentences))
 
@@ -193,14 +193,14 @@ func benchmarkPureInference(model *SimpleEmbeddingModel) {
 	}
 
 	if len(times) == 0 {
-		log.Printf("❌ No successful inferences to analyze")
+		log.Printf(" No successful inferences to analyze")
 		return
 	}
 
 	avgTime := totalTime / time.Duration(len(times))
 	throughput := float64(len(sentences)) / totalTime.Seconds()
 
-	fmt.Printf("\n📊 Performance Summary:\n")
+	fmt.Printf("\n Performance Summary:\n")
 	fmt.Printf("   Total inference time: %v\n", totalTime)
 	fmt.Printf("   Average per inference: %v\n", avgTime)
 	fmt.Printf("   Throughput: %.0f inferences/sec\n", throughput)
@@ -255,7 +255,7 @@ func cosineSimilarity(a, b []float32) float32 {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 GO INFERENCE BENCHMARKING - LOADMODEL() APPROACH")
+	fmt.Println(" GO INFERENCE BENCHMARKING - LOADMODEL() APPROACH")
 	fmt.Println("================================================================================")
 	fmt.Println("Demonstrates: Separated loading vs pure inference timing")
 	fmt.Println("")
@@ -263,25 +263,25 @@ func main() {
 	// Check if reference tokens exist
 	referenceTokensPath := "model/production_reference_tokens.json"
 	if _, err := os.Stat(referenceTokensPath); os.IsNotExist(err) {
-		log.Fatalf("❌ Reference tokens file not found: %s", referenceTokensPath)
+		log.Fatalf(" Reference tokens file not found: %s", referenceTokensPath)
 	}
 
 	// Load model (one-time cost)
 	model, err := LoadModel(referenceTokensPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to load model: %v", err)
+		log.Fatalf(" Failed to load model: %v", err)
 	}
 
 	// Demonstrate the separated approach
-	fmt.Println("✅ Model loaded successfully!")
-	fmt.Println("📝 Now we can benchmark ONLY the inference time...")
+	fmt.Println(" Model loaded successfully!")
+	fmt.Println(" Now we can benchmark ONLY the inference time...")
 
 	// Benchmark pure inference (what we actually care about)
 	benchmarkPureInference(model)
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("✅ Benchmark completed!")
-	fmt.Println("🎯 Key insight: Model loading is separated from inference timing.")
-	fmt.Println("⚡ This approach allows for accurate performance measurement.")
+	fmt.Println(" Benchmark completed!")
+	fmt.Println(" Key insight: Model loading is separated from inference timing.")
+	fmt.Println(" This approach allows for accurate performance measurement.")
 	fmt.Println(strings.Repeat("=", 80))
 }

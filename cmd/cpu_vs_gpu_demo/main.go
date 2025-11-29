@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -75,7 +77,7 @@ func benchmarkStandardIndexing(model *gobed.EmbeddingModel, docs []gobed.Documen
 	elapsed := time.Since(startTime)
 	throughput := float64(len(docs)) / elapsed.Seconds()
 
-	fmt.Printf("📊 Standard Results:\n")
+	fmt.Printf(" Standard Results:\n")
 	fmt.Printf("   Documents: %d\n", len(docs))
 	fmt.Printf("   Time: %.2fs\n", elapsed.Seconds())
 	fmt.Printf("   Throughput: %.0f docs/sec\n", throughput)
@@ -87,7 +89,7 @@ func benchmarkStandardIndexing(model *gobed.EmbeddingModel, docs []gobed.Documen
 // benchmarkCPUBulkIndexing tests CPU bulk indexing with workers
 func benchmarkCPUBulkIndexing(model *gobed.EmbeddingModel, docs []gobed.Document) time.Duration {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 60))
-	fmt.Printf("⚡ CPU BULK INDEXING (PARALLEL)\n")
+	fmt.Printf(" CPU BULK INDEXING (PARALLEL)\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 60))
 
 	config := gobed.DefaultVectorIndexConfig()
@@ -102,13 +104,13 @@ func benchmarkCPUBulkIndexing(model *gobed.EmbeddingModel, docs []gobed.Document
 	elapsed := time.Since(startTime)
 
 	if err != nil {
-		log.Printf("❌ CPU bulk indexing failed: %v", err)
+		log.Printf(" CPU bulk indexing failed: %v", err)
 		return elapsed
 	}
 
 	stats := cpuIndexer.Stats()
 
-	fmt.Printf("📊 CPU Bulk Results:\n")
+	fmt.Printf(" CPU Bulk Results:\n")
 	fmt.Printf("   Documents: %d\n", len(docs))
 	fmt.Printf("   Time: %.2fs\n", elapsed.Seconds())
 	fmt.Printf("   Throughput: %.0f docs/sec\n", stats.Throughput)
@@ -121,9 +123,9 @@ func benchmarkCPUBulkIndexing(model *gobed.EmbeddingModel, docs []gobed.Document
 // showGPUPlaceholder shows what GPU indexing would look like
 func showGPUPlaceholder() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 60))
-	fmt.Printf("🚀 GPU BULK INDEXING (PLACEHOLDER)\n")
+	fmt.Printf(" GPU BULK INDEXING (PLACEHOLDER)\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 60))
-	fmt.Printf("💡 GPU indexing would work like this:\n")
+	fmt.Printf(" GPU indexing would work like this:\n")
 	fmt.Printf("   1. Install libtorch with CUDA support\n")
 	fmt.Printf("   2. Load 5,000 documents into GPU memory as token arrays\n")
 	fmt.Printf("   3. Process entire batch with single GPU forward pass\n")
@@ -137,7 +139,7 @@ func showGPUPlaceholder() {
 // testSearchPerformance verifies search works after bulk indexing
 func testSearchPerformance(model *gobed.EmbeddingModel, docs []gobed.Document) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 60))
-	fmt.Printf("🔍 SEARCH PERFORMANCE TEST\n")
+	fmt.Printf(" SEARCH PERFORMANCE TEST\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 60))
 
 	// Index documents with CPU bulk indexing
@@ -153,11 +155,11 @@ func testSearchPerformance(model *gobed.EmbeddingModel, docs []gobed.Document) {
 	indexTime := time.Since(start)
 
 	if err != nil {
-		log.Printf("❌ Failed to index documents: %v", err)
+		log.Printf(" Failed to index documents: %v", err)
 		return
 	}
 
-	fmt.Printf("✅ Indexed in %.2fs\n", indexTime.Seconds())
+	fmt.Printf(" Indexed in %.2fs\n", indexTime.Seconds())
 
 	// Test queries
 	queries := []string{
@@ -178,7 +180,7 @@ func testSearchPerformance(model *gobed.EmbeddingModel, docs []gobed.Document) {
 		totalSearchTime += searchTime
 
 		if err != nil {
-			log.Printf("❌ Search failed: %v", err)
+			log.Printf(" Search failed: %v", err)
 			continue
 		}
 
@@ -192,7 +194,7 @@ func testSearchPerformance(model *gobed.EmbeddingModel, docs []gobed.Document) {
 	}
 
 	avgSearchTime := totalSearchTime / time.Duration(len(queries))
-	fmt.Printf("\n📊 Search Summary:\n")
+	fmt.Printf("\n Search Summary:\n")
 	fmt.Printf("   Average search time: %.2fms\n", float64(avgSearchTime.Nanoseconds())/1e6)
 	fmt.Printf("   Search throughput: %.0f queries/sec\n", 1.0/avgSearchTime.Seconds())
 }
@@ -205,17 +207,17 @@ func main() {
 	fmt.Println("")
 
 	// Load model
-	fmt.Printf("📦 Loading embedding model...\n")
+	fmt.Printf(" Loading embedding model...\n")
 	model, err := gobed.LoadModel()
 	if err != nil {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	// model.Close() not needed for current implementation
 
-	fmt.Printf("✅ Model loaded successfully\n")
+	fmt.Printf(" Model loaded successfully\n")
 
 	// System info
-	fmt.Printf("\n💻 System Information:\n")
+	fmt.Printf("\n System Information:\n")
 	fmt.Printf("   CPU cores: %d\n", runtime.NumCPU())
 	fmt.Printf("   GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
 
@@ -242,7 +244,7 @@ func main() {
 
 		// Show improvement
 		improvement := float64(standardTime) / float64(cpuBulkTime)
-		fmt.Printf("\n📈 Performance Improvement:\n")
+		fmt.Printf("\n Performance Improvement:\n")
 		fmt.Printf("   CPU Bulk is %.2fx faster than Standard\n", improvement)
 
 		// Force garbage collection between tests
@@ -259,7 +261,7 @@ func main() {
 
 	// Final summary
 	fmt.Printf("\n" + strings.Repeat("=", 80))
-	fmt.Printf("\n✅ BENCHMARKING COMPLETED\n")
+	fmt.Printf("\n BENCHMARKING COMPLETED\n")
 	fmt.Printf(strings.Repeat("=", 80))
 	fmt.Printf("\nKey Results:\n")
 	fmt.Printf("  • CPU bulk indexing provides significant speedup over single-threaded\n")

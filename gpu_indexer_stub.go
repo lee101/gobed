@@ -4,7 +4,7 @@ package gobed
 
 import (
 	"fmt"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // GPUIndexer stub for non-GPU builds

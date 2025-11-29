@@ -52,9 +52,9 @@ class GPUSearchModule(nn.Module):
             # This will be available after building the CUDA extension
             torch.ops.load_library("libgobed_ann_ops.so")
             self.has_custom_ops = True
-            print("✅ Loaded custom CUDA ops")
+            print(" Loaded custom CUDA ops")
         except Exception as e:
-            print(f"⚠️  Custom CUDA ops not available: {e}")
+            print(f"  Custom CUDA ops not available: {e}")
             self.has_custom_ops = False
     
     def load_database(self, embeddings: torch.Tensor) -> None:
@@ -258,10 +258,10 @@ def export_search_module() -> str:
     output_path = "/home/lee/code/gobed/model/gpu_search_module.pt"
     traced_module.save(output_path)
     
-    print(f"✅ Exported GPU search module to: {output_path}")
+    print(f" Exported GPU search module to: {output_path}")
     return output_path
 
 
 if __name__ == "__main__":
-    print("🚀 Exporting GPU Search Module")
+    print(" Exporting GPU Search Module")
     export_search_module()

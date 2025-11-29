@@ -1,4 +1,4 @@
-// +build gpu
+//go:build legacy
 
 package gobed
 
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // BenchmarkGPUBulkIndexing benchmarks the new GPU bulk indexing system
@@ -60,7 +60,7 @@ func BenchmarkGPUBulkIndexing(b *testing.B) {
 		},
 	}
 
-	fmt.Printf("\n🚀 GPU Bulk Indexing Benchmark Suite\n")
+	fmt.Printf("\n GPU Bulk Indexing Benchmark Suite\n")
 	fmt.Printf("GPU: %s, VRAM: %d MB\n", getGPUName(), GetTotalVRAM())
 	fmt.Printf("CPU: %d cores\n\n", runtime.NumCPU())
 
@@ -68,7 +68,7 @@ func BenchmarkGPUBulkIndexing(b *testing.B) {
 
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
-			fmt.Printf("📊 %s: %s\n", tc.name, tc.description)
+			fmt.Printf(" %s: %s\n", tc.name, tc.description)
 			fmt.Printf("   Vectors: %d, Dimension: %d, Clusters: %d\n", 
 				tc.numVectors, tc.vectorDim, tc.nlist)
 
@@ -178,7 +178,7 @@ func BenchmarkGPUVsCPUIVF(b *testing.B) {
 	vectorDim := 512
 	nlist := 256
 
-	fmt.Printf("\n⚡ GPU vs CPU IVF Comparison\n")
+	fmt.Printf("\n GPU vs CPU IVF Comparison\n")
 	fmt.Printf("Dataset: %d vectors, %d dimensions, %d clusters\n\n", numVectors, vectorDim, nlist)
 
 	tokenSequences := generateTokenSequences(numVectors, vectorDim)
@@ -263,7 +263,7 @@ func BenchmarkProgressiveIndexing(b *testing.B) {
 		b.Skip("CUDA not available")
 	}
 
-	fmt.Printf("\n📈 Progressive Indexing Benchmark\n")
+	fmt.Printf("\n Progressive Indexing Benchmark\n")
 
 	numVectors := 100000
 	streamChunkSize := 1000
@@ -477,7 +477,7 @@ func getGPUName() string {
 }
 
 func printBenchmarkSummary(results map[string]BenchmarkResult) {
-	fmt.Printf("\n📋 Benchmark Summary\n")
+	fmt.Printf("\n Benchmark Summary\n")
 	fmt.Printf("=" + fmt.Sprintf("%80s", "") + "\n")
 	fmt.Printf("%-20s %-10s %-15s %-12s %-12s %-10s\n", 
 		"Dataset", "Batch", "Vectors/Sec", "Latency(ms)", "Memory(MB)", "Efficiency")

@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // CPUBulkIndexer provides fast bulk indexing using CPU with parallelization
@@ -116,7 +116,7 @@ func (idx *CPUBulkIndexer) IndexBatch(docs []Document) error {
 	atomic.AddInt64(&idx.totalIndexed, int64(successCount))
 
 	throughput := float64(successCount) / elapsed.Seconds()
-	log.Printf("✅ CPU indexed %d/%d documents in %.2fs (%.0f docs/sec)",
+	log.Printf(" CPU indexed %d/%d documents in %.2fs (%.0f docs/sec)",
 		successCount, len(docs), elapsed.Seconds(), throughput)
 
 	return nil
@@ -152,7 +152,7 @@ type CPUBulkIndexerStats struct {
 
 // LogStats logs the indexing statistics
 func (stats CPUBulkIndexerStats) LogStats() {
-	log.Printf("📊 CPU Bulk Indexing Stats:")
+	log.Printf(" CPU Bulk Indexing Stats:")
 	log.Printf("   Total indexed: %d documents", stats.TotalIndexed)
 	log.Printf("   Total time: %.2fs", stats.TotalTime.Seconds())
 	log.Printf("   Batch size: %d", stats.BatchSize)

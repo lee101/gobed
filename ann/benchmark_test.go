@@ -1,3 +1,5 @@
+//go:build legacy
+
 package ann
 
 import (
@@ -6,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/flat"
-	"github.com/lee101/gobed/ann/search"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/flat"
+	"github.com/lee101/gobed/pkg/ann/search"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // generateRandomVectors generates random int8 vectors for testing
@@ -47,11 +49,25 @@ func BenchmarkSIMD(b *testing.B) {
 			_ = simd.L2Squared512(&vec1, &vec2)
 		}
 	})
+
+	b.Run("SumAbsDiff512", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = simd.SumAbsDiff512(&vec1, &vec2)
+		}
+	})
+
+	b.Run("AvgAbsDiff512", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = simd.AvgAbsDiff512(&vec1, &vec2)
+		}
+	})
 }
 
 // BenchmarkFlatSearch benchmarks flat index search
 func BenchmarkFlatSearch(b *testing.B) {
-	sizes := []int{1000, 10000, 50000}
+	sizes := []int{128, 512, 1024, 2048, 5000, 8192, 10000, 20000, 32768, 50000, 100000}
 	k := 10
 
 	for _, size := range sizes {

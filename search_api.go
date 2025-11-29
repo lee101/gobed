@@ -3,13 +3,14 @@ package gobed
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/lee101/gobed/ann/search"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/search"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // SearchEngine provides a high-level API for vector search
@@ -58,10 +59,10 @@ type SearchConfig struct {
 	MaxConcurrency int  // Maximum concurrent operations (default: runtime.NumCPU())
 
 	// GPU acceleration configuration
-	EnableGPU      bool // Enable GPU acceleration for similarity search (default: false)
-	GPUDeviceID    int  // CUDA device ID to use (default: 0)
-	GPUBatchSize   int  // Batch size for GPU operations (default: 1000)
-	UseInt8        bool // Use int8 quantization for embeddings (75% memory savings)
+	EnableGPU    bool // Enable GPU acceleration for similarity search (default: false)
+	GPUDeviceID  int  // CUDA device ID to use (default: 0)
+	GPUBatchSize int  // Batch size for GPU operations (default: 1000)
+	UseInt8      bool // Use int8 quantization for embeddings (75% memory savings)
 }
 
 // IndexRequest represents an async indexing request
@@ -88,7 +89,7 @@ type IndexingStats struct {
 }
 
 // DefaultSearchConfig returns optimized default configuration
-// Automatically detects and enables GPU when available
+// Automatically detects and enables GPU with CAGRA when available
 func DefaultSearchConfig() SearchConfig {
 	config := SearchConfig{
 		AutoMode:           true,
@@ -96,17 +97,19 @@ func DefaultSearchConfig() SearchConfig {
 		EnableAsync:        false, // Default to sync for simplicity
 		AsyncWorkers:       4,
 		AsyncQueueSize:     1000,
+		Preset:             CAGRAPreset, // Default to our optimal CAGRA configuration
 	}
-	
-	// Auto-detect GPU and enable if available
+
+	// Auto-detect GPU and enable CAGRA if available
 	if IsCUDAAvailable() {
 		config.EnableGPU = true
 		config.GPUDeviceID = 0
-		config.GPUBatchSize = 50000  // Theoretical analysis: 0.6x GPU occupancy, 10x improvement (80M+ vectors/sec)
+		config.GPUBatchSize = 50000        // Theoretical analysis: 0.6x GPU occupancy, 10x improvement (80M+ vectors/sec)
 		config.MaxExactSearchSize = 100000 // GPU can handle larger exact searches
-		config.UseInt8 = true // Use int8 for 75% memory savings
+		config.UseInt8 = true              // Use int8 for 75% memory savings
+		// Preset already set to CAGRAPreset above
 	}
-	
+
 	return config
 }
 
@@ -119,20 +122,33 @@ func AsyncSearchConfig() SearchConfig {
 	return config
 }
 
-// GPUSearchConfig returns configuration optimized for GPU acceleration
+// GPUSearchConfig returns configuration optimized for GPU acceleration with CAGRA
 func GPUSearchConfig() SearchConfig {
 	config := DefaultSearchConfig()
 	config.EnableGPU = true
-	config.GPUDeviceID = 0    // Use first GPU
-	config.GPUBatchSize = 50000 // Theoretical GPU analysis: 50x current utilization (80M+ vectors/sec)
+	config.GPUDeviceID = 0             // Use first GPU
+	config.GPUBatchSize = 50000        // Theoretical GPU analysis: 50x current utilization (80M+ vectors/sec)
 	config.MaxExactSearchSize = 100000 // GPU can handle larger exact searches
+	config.Preset = CAGRAPreset        // Use CAGRA for ultra-fast search by default
 	return config
 }
 
-// NewGPUSearchEngine creates a GPU-accelerated search engine
+// NewGPUSearchEngine creates a GPU-accelerated search engine with CAGRA
 func NewGPUSearchEngine(model *EmbeddingModel) *SearchEngine {
 	return NewSearchEngineWithConfig(model, GPUSearchConfig())
 }
+
+// NewCAGRASearchEngine creates a CAGRA-powered search engine for ultra-fast search
+func NewCAGRASearchEngine(model *EmbeddingModel) *SearchEngine {
+	config := GPUSearchConfig()
+	config.Preset = CAGRAPreset
+	return NewSearchEngineWithConfig(model, config)
+}
+
+// NewOfficialCuvsCAGRASearchEngine creates a search engine using official cuVS CAGRA library
+// func NewOfficialCuvsCAGRASearchEngine(model *EmbeddingModel) *CuvsCAGRASearchEngine {
+//	return NewCuvsCAGRASearchEngine(model)
+// }
 
 // NewSearchEngine creates a new search engine
 // It automatically uses GPU acceleration if available for 39x performance boost
@@ -145,7 +161,7 @@ func NewSearchEngine(model *EmbeddingModel) *SearchEngine {
 func NewSearchEngineWithConfig(model *EmbeddingModel, config SearchConfig) *SearchEngine {
 	// Map public config to internal ann config
 	annConfig := mapSearchConfigToAnnConfig(config)
-	
+
 	se := &SearchEngine{
 		model:          model,
 		index:          search.NewEngine(annConfig), // Initialize the internal index
@@ -315,6 +331,30 @@ func (se *SearchEngine) indexWorker() {
 
 // indexBatchInternal performs the actual batch indexing (must be called with lock held)
 func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
+	if len(ids) != len(texts) {
+		return fmt.Errorf("ids/texts length mismatch")
+	}
+
+	// Track existing state for rollback and determine final document count.
+	existingDocs := make(map[int]string, len(ids))
+	newIDs := make([]int, 0, len(ids))
+	seenIDs := make(map[int]struct{}, len(ids))
+	finalDocCount := len(se.documents)
+
+	for _, id := range ids {
+		if _, seen := seenIDs[id]; seen {
+			continue
+		}
+		seenIDs[id] = struct{}{}
+
+		if doc, found := se.documents[id]; found {
+			existingDocs[id] = doc
+		} else {
+			newIDs = append(newIDs, id)
+			finalDocCount++
+		}
+	}
+
 	// Pre-allocate with exact capacity to avoid slice growing
 	vectors := make([]simd.Vec512, len(texts))
 	scales := make([]float32, len(texts))
@@ -326,21 +366,21 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 	if numWorkers > 8 {
 		numWorkers = 8
 	}
-	
+
 	type embeddingJob struct {
 		index int
 		text  string
 	}
-	
+
 	type embeddingResult struct {
 		index     int
 		embedding *EmbedInt8Result
 		err       error
 	}
-	
+
 	jobChan := make(chan embeddingJob, len(texts))
 	resultChan := make(chan embeddingResult, len(texts))
-	
+
 	// Start worker pool
 	var wg sync.WaitGroup
 	for w := 0; w < numWorkers; w++ {
@@ -356,7 +396,7 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 					}
 					continue
 				}
-				
+
 				// Generate new embedding
 				embedding, err := se.model.EmbedInt8(job.text)
 				if err != nil {
@@ -366,10 +406,10 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 					}
 					continue
 				}
-				
+
 				// Cache the result
 				se.embeddingCache.Put(job.text, embedding)
-				
+
 				resultChan <- embeddingResult{
 					index:     job.index,
 					embedding: embedding,
@@ -377,19 +417,19 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 			}
 		}()
 	}
-	
+
 	// Send all jobs
 	for i, text := range texts {
 		jobChan <- embeddingJob{index: i, text: text}
 	}
 	close(jobChan)
-	
+
 	// Wait for workers to finish
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
-	
+
 	// Collect results
 	results := make(map[int]*EmbedInt8Result)
 	for result := range resultChan {
@@ -398,26 +438,49 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 		}
 		results[result.index] = result.embedding
 	}
-	
+
 	// Copy results in order
 	for i := range texts {
 		embedding := results[i]
 		copy(vectors[i][:], embedding.Vector)
 		scales[i] = embedding.Scale
-		se.documents[ids[i]] = texts[i]
 	}
 
-	// Initialize index if needed
+	documentsUpdated := false
+	restoreDocuments := func() {
+		if !documentsUpdated {
+			return
+		}
+		for _, id := range newIDs {
+			delete(se.documents, id)
+		}
+		for id, text := range existingDocs {
+			se.documents[id] = text
+		}
+		documentsUpdated = false
+	}
+
+	// Update stored documents only after embeddings succeed.
+	for i, text := range texts {
+		se.documents[ids[i]] = text
+	}
+	documentsUpdated = true
+
+	// Initialize index if needed (after documents are available for training).
 	if !se.initialized {
-		finalSize := len(se.documents) + len(texts)
-		err := se.initializeIndex(finalSize)
-		if err != nil {
+		if err := se.initializeIndex(finalDocCount); err != nil {
+			restoreDocuments()
 			return fmt.Errorf("failed to initialize index: %v", err)
 		}
 	}
 
 	// Add to index
-	return se.index.AddBatch(vectors, scales, ids)
+	if err := se.index.AddBatch(vectors, scales, ids); err != nil {
+		restoreDocuments()
+		return err
+	}
+
+	return nil
 }
 
 // Search performs semantic search and returns top K results
@@ -700,10 +763,12 @@ func (se *SearchEngine) initializeIndex(estimatedSize int) error {
 	// If we need IVF, we must train first
 	if estimatedSize > config.MaxFlatSize && config.NList > 0 {
 		trainSize := min(estimatedSize/10, 10000)
+		log.Printf("Large dataset (%d > %d), training index with %d samples", estimatedSize, config.MaxFlatSize, trainSize)
 		err := se.generateTrainingData(trainSize)
 		if err != nil {
 			return fmt.Errorf("failed to train index: %v", err)
 		}
+		log.Printf("Index training completed successfully")
 	}
 
 	se.initialized = true
@@ -856,6 +921,5 @@ func (se *SearchEngine) Optimize() error {
 
 	return nil
 }
-
 
 // min function removed - using the one from parallel_indexing.go

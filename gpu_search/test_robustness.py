@@ -29,7 +29,7 @@ class RobustnessTestSuite:
     
     def log_test(self, test_name: str, success: bool, details: str = ""):
         """Log test result"""
-        status = "✅ PASS" if success else "❌ FAIL"
+        status = " PASS" if success else " FAIL"
         print(f"{status} {test_name}")
         if details:
             print(f"     {details}")
@@ -42,7 +42,7 @@ class RobustnessTestSuite:
     
     def test_cuda_capabilities(self):
         """Test CUDA device capabilities and version compatibility"""
-        print("\n📋 Testing CUDA capabilities...")
+        print("\n Testing CUDA capabilities...")
         
         try:
             # Check device capabilities
@@ -66,7 +66,7 @@ class RobustnessTestSuite:
     
     def test_input_validation(self):
         """Test input validation and error handling"""
-        print("\n🔍 Testing input validation...")
+        print("\n Testing input validation...")
         
         # Test wrong dtype
         try:
@@ -106,7 +106,7 @@ class RobustnessTestSuite:
     
     def test_edge_cases(self):
         """Test edge cases and boundary conditions"""
-        print("\n🎯 Testing edge cases...")
+        print("\n Testing edge cases...")
         
         # Test empty database
         try:
@@ -165,7 +165,7 @@ class RobustnessTestSuite:
     
     def test_batch_operations(self):
         """Test batch operation edge cases"""
-        print("\n📦 Testing batch operations...")
+        print("\n Testing batch operations...")
         
         # Test single query batch
         try:
@@ -229,7 +229,7 @@ class RobustnessTestSuite:
     
     def test_memory_management(self):
         """Test memory allocation and cleanup"""
-        print("\n💾 Testing memory management...")
+        print("\n Testing memory management...")
         
         try:
             initial_memory = torch.cuda.memory_allocated()
@@ -255,7 +255,7 @@ class RobustnessTestSuite:
     
     def test_performance_consistency(self):
         """Test performance consistency across runs"""
-        print("\n⚡ Testing performance consistency...")
+        print("\n Testing performance consistency...")
         
         try:
             q = torch.randint(-128, 127, (512,), dtype=torch.int8, device=self.device)
@@ -308,7 +308,7 @@ class RobustnessTestSuite:
         
         # Summary
         print("\n" + "=" * 80)
-        print("📊 TEST SUMMARY")
+        print(" TEST SUMMARY")
         print("=" * 80)
         
         passed = sum(1 for result in self.test_results if result["success"])
@@ -322,11 +322,11 @@ class RobustnessTestSuite:
         # List failed tests
         failed_tests = [result for result in self.test_results if not result["success"]]
         if failed_tests:
-            print("\n❌ Failed tests:")
+            print("\n Failed tests:")
             for test in failed_tests:
                 print(f"  - {test['test']}: {test['details']}")
         else:
-            print("\n✅ All tests passed!")
+            print("\n All tests passed!")
         
         return passed == total
 
@@ -340,15 +340,15 @@ def main():
         
         print("\n" + "=" * 80)
         if success:
-            print("🎯 SYSTEM READY FOR PRODUCTION DEPLOYMENT")
+            print(" SYSTEM READY FOR PRODUCTION DEPLOYMENT")
         else:
-            print("⚠️  ISSUES FOUND - REVIEW BEFORE DEPLOYMENT")
+            print("  ISSUES FOUND - REVIEW BEFORE DEPLOYMENT")
         print("=" * 80)
         
         return 0 if success else 1
         
     except Exception as e:
-        print(f"\n❌ Test suite failed with error: {e}")
+        print(f"\n Test suite failed with error: {e}")
         traceback.print_exc()
         return 1
 

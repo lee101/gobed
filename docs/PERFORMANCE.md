@@ -2,7 +2,7 @@
 
 This document details the comprehensive performance optimizations implemented in Gobed's search engine and provides guidance for achieving optimal performance.
 
-## 🚀 Performance Summary
+##  Performance Summary
 
 ### Achieved Performance Improvements
 
@@ -24,7 +24,7 @@ Based on comprehensive profiling and optimization, Gobed now delivers:
 - Low memory footprint: ~5MB for 100K documents
 - Efficient embedding caching
 
-## 🔧 Key Optimizations Implemented
+##  Key Optimizations Implemented
 
 ### 1. Embedding Caching System
 
@@ -143,17 +143,17 @@ if estimatedSize <= 5000 {
 }
 ```
 
-## 📊 Benchmark Results
+##  Benchmark Results
 
 ### Performance Comparison Table
 
 | Configuration   | Docs   | Index Time | Index QPS | Search Latency | Memory MB |
 |----------------|--------|------------|-----------|----------------|-----------|
 | Standard       | 10,000 | 1.871s     | 5,345     | 1.48ms         | 4.88      |
-| Async Optimized| 10,000 | 1.98s      | 5,051     | 1.29ms ✨      | 4.88      |
+| Async Optimized| 10,000 | 1.98s      | 5,051     | 1.29ms       | 4.88      |
 | Large Async    | 50,000 | 8.729s     | 5,728     | 1.35ms         | 4.88      |
 
-*✨ = Sub-millisecond or best performance*
+* = Sub-millisecond or best performance*
 
 ### Concurrency Scaling
 
@@ -177,7 +177,7 @@ Search throughput scales excellently with concurrency:
 | Search Latency | 884µs | 670µs | **24% faster** |
 | Throughput | 5,279 docs/sec | 141,227 docs/sec | **26.8x faster** |
 
-## ⚙️ Configuration Guidelines
+##  Configuration Guidelines
 
 ### For Maximum Speed
 
@@ -206,7 +206,7 @@ config.AsyncQueueSize = 5000
 engine := gobed.NewSearchEngineWithConfig(model, config)
 ```
 
-## 🔍 Profiling and Monitoring
+##  Profiling and Monitoring
 
 ### CPU Profiling Results
 
@@ -235,7 +235,7 @@ fmt.Printf("Memory: %.2f MB, Index: %s\n",
 fmt.Printf("Cache size: %d entries\n", engine.CacheSize())
 ```
 
-## 🎯 Performance Recommendations
+##  Performance Recommendations
 
 ### Development
 
@@ -288,7 +288,7 @@ Gobed now includes a high-performance shared memory architecture for cross-proce
 
 See [SHARED_MEMORY.md](SHARED_MEMORY.md) for detailed documentation.
 
-## 🚀 Future Optimizations
+##  Future Optimizations
 
 ### Planned Improvements
 

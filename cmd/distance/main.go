@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -22,7 +24,7 @@ func main() {
 	fmt.Println("🔄 Loading real embedding model...")
 	model, err := gobed.LoadModel()
 	if err != nil {
-		log.Fatalf("❌ Error loading model: %v", err)
+		log.Fatalf(" Error loading model: %v", err)
 	}
 
 	// List available texts
@@ -37,7 +39,7 @@ func main() {
 	}
 
 	if text1 == "" || text2 == "" {
-		fmt.Println("❌ Please provide both -text1 and -text2")
+		fmt.Println(" Please provide both -text1 and -text2")
 		fmt.Println("Use -list to see available texts")
 		return
 	}
@@ -57,18 +59,18 @@ func main() {
 
 	// If either text is not found, note that we'll use the tokenizer
 	if !text1Found || !text2Found {
-		fmt.Printf("ℹ️  Using tokenizer for arbitrary text input\n")
+		fmt.Printf("ℹ  Using tokenizer for arbitrary text input\n")
 	}
 
 	// Encode both texts with REAL model
 	emb1, err := model.Encode(text1)
 	if err != nil {
-		log.Fatalf("❌ Error encoding text1: %v", err)
+		log.Fatalf(" Error encoding text1: %v", err)
 	}
 
 	emb2, err := model.Encode(text2)
 	if err != nil {
-		log.Fatalf("❌ Error encoding text2: %v", err)
+		log.Fatalf(" Error encoding text2: %v", err)
 	}
 
 	// Calculate similarity and distance
@@ -82,6 +84,6 @@ func main() {
 	fmt.Printf("Similarity: %.6f\n", similarity)
 	fmt.Printf("Distance: %.6f\n", distance)
 
-	fmt.Println("\n✅ Real embedding calculation completed!")
+	fmt.Println("\n Real embedding calculation completed!")
 	fmt.Println("🔬 Used REAL static-retrieval-mrl-en-v1 safetensors weights!")
 }

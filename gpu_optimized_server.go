@@ -1,4 +1,4 @@
-// +build gpu
+//go:build legacy && gpu
 
 package gobed
 
@@ -7,7 +7,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 var (
@@ -18,11 +18,11 @@ var (
 // GPUBufferPool manages reusable buffers for GPU operations
 type GPUBufferPool struct {
 	// Pools for different buffer sizes
-	int8Pool512   sync.Pool  // For 512-dim int8 vectors
-	float32Pool   sync.Pool  // For float32 scales
-	int32Pool     sync.Pool  // For token IDs
-	embeddingPool sync.Pool  // For embedding results
-	
+	int8Pool512   sync.Pool // For 512-dim int8 vectors
+	float32Pool   sync.Pool // For float32 scales
+	int32Pool     sync.Pool // For token IDs
+	embeddingPool sync.Pool // For embedding results
+
 	// Pre-allocated buffers for batch operations
 	batchBuffers []BatchBuffer
 	bufferLock   sync.Mutex
@@ -53,28 +53,28 @@ func NewGPUBufferPool() *GPUBufferPool {
 	pool := &GPUBufferPool{
 		batchBuffers: make([]BatchBuffer, 16), // Pre-allocate 16 batch buffers
 	}
-	
+
 	// Initialize int8 pool for 512-dim vectors
 	pool.int8Pool512 = sync.Pool{
 		New: func() interface{} {
 			return make([]int8, 512)
 		},
 	}
-	
+
 	// Initialize float32 pool for scales
 	pool.float32Pool = sync.Pool{
 		New: func() interface{} {
 			return make([]float32, 1)
 		},
 	}
-	
+
 	// Initialize int32 pool for token IDs
 	pool.int32Pool = sync.Pool{
 		New: func() interface{} {
 			return make([]int32, 512) // Default max tokens
 		},
 	}
-	
+
 	// Initialize embedding result pool
 	pool.embeddingPool = sync.Pool{
 		New: func() interface{} {
@@ -84,7 +84,7 @@ func NewGPUBufferPool() *GPUBufferPool {
 			}
 		},
 	}
-	
+
 	// Pre-allocate batch buffers
 	for i := range pool.batchBuffers {
 		pool.batchBuffers[i] = BatchBuffer{
@@ -94,7 +94,7 @@ func NewGPUBufferPool() *GPUBufferPool {
 			InUse:      false,
 		}
 	}
-	
+
 	return pool
 }
 
@@ -115,14 +115,14 @@ func (p *GPUBufferPool) PutInt8Buffer(buf []int8) {
 func (p *GPUBufferPool) GetBatchBuffer() *BatchBuffer {
 	p.bufferLock.Lock()
 	defer p.bufferLock.Unlock()
-	
+
 	for i := range p.batchBuffers {
 		if !p.batchBuffers[i].InUse {
 			p.batchBuffers[i].InUse = true
 			return &p.batchBuffers[i]
 		}
 	}
-	
+
 	// All buffers in use, create a new one
 	return &BatchBuffer{
 		TokenIDs:   make([]int32, 512),
@@ -140,14 +140,14 @@ func (p *GPUBufferPool) ReleaseBatchBuffer(buf *BatchBuffer) {
 // OptimizedGPUSearch performs GPU search with minimal allocations
 func OptimizedGPUSearch(indexer *GPUIndexer, embedding *EmbedInt8Result, k int) ([]int32, []float32, error) {
 	pool := GetBufferPool()
-	
+
 	// Get a buffer from pool (already sized to 512)
 	int8Vec := pool.GetInt8Buffer()
 	defer pool.PutInt8Buffer(int8Vec)
-	
+
 	// Direct copy, no allocation - we know it's exactly 512 dimensions
 	copy(int8Vec, embedding.Vector[:512])
-	
+
 	// Perform search
 	return indexer.Search(int8Vec, embedding.Scale, k)
 }
@@ -157,49 +157,49 @@ func OptimizedBatchIndex(indexer *GPUIndexer, embeddings []*EmbedInt8Result) err
 	if len(embeddings) == 0 {
 		return nil
 	}
-	
+
 	pool := GetBufferPool()
-	
+
 	// Pre-allocate once for entire batch
 	vectors := make([][]int8, 0, len(embeddings))
 	scales := make([]float32, 0, len(embeddings))
-	
+
 	for _, emb := range embeddings {
 		if emb == nil {
 			continue
 		}
-		
+
 		// Get buffer from pool
 		vec := pool.GetInt8Buffer()
-		
+
 		// Copy only first 512 dimensions
 		truncSize := 512
 		if len(emb.Vector) < truncSize {
 			truncSize = len(emb.Vector)
 		}
 		copy(vec[:truncSize], emb.Vector[:truncSize])
-		
+
 		vectors = append(vectors, vec)
 		scales = append(scales, emb.Scale)
 	}
-	
+
 	// Add vectors to GPU
 	err := indexer.AddVectors(vectors, scales)
-	
+
 	// Return buffers to pool
 	for _, vec := range vectors {
 		pool.PutInt8Buffer(vec)
 	}
-	
+
 	return err
 }
 
 // OptimizedGPUSearchHandler handles search requests with optimized memory usage
 type OptimizedGPUSearchHandler struct {
-	gpuIndexer  *GPUIndexer
-	cpuIndexer  *SharedMemoryIndex
-	bufferPool  *GPUBufferPool
-	useGPU      bool
+	gpuIndexer *GPUIndexer
+	cpuIndexer *SharedMemoryIndex
+	bufferPool *GPUBufferPool
+	useGPU     bool
 }
 
 // NewOptimizedGPUSearchHandler creates an optimized search handler
@@ -218,13 +218,13 @@ func (h *OptimizedGPUSearchHandler) Search(embedding *EmbedInt8Result, k int) ([
 		// Use optimized GPU search with buffer pool
 		return OptimizedGPUSearch(h.gpuIndexer, embedding, k)
 	}
-	
+
 	// Fallback to CPU
 	if h.cpuIndexer != nil {
 		var vec simd.Vec512
 		copy(vec[:], embedding.Vector[:512])
 		results := h.cpuIndexer.SearchTopK(&vec, k)
-		
+
 		indices := make([]int32, len(results))
 		scores := make([]float32, len(results))
 		for i, r := range results {
@@ -233,7 +233,7 @@ func (h *OptimizedGPUSearchHandler) Search(embedding *EmbedInt8Result, k int) ([
 		}
 		return indices, scores, nil
 	}
-	
+
 	return nil, nil, ErrNoIndexer
 }
 
@@ -242,7 +242,7 @@ func (h *OptimizedGPUSearchHandler) BatchAddVectors(embeddings []*EmbedInt8Resul
 	if h.useGPU && h.gpuIndexer != nil {
 		return OptimizedBatchIndex(h.gpuIndexer, embeddings)
 	}
-	
+
 	// CPU fallback
 	if h.cpuIndexer != nil {
 		for i, emb := range embeddings {
@@ -258,7 +258,7 @@ func (h *OptimizedGPUSearchHandler) BatchAddVectors(embeddings []*EmbedInt8Resul
 		h.cpuIndexer.Sync()
 		return nil
 	}
-	
+
 	return ErrNoIndexer
 }
 
@@ -276,13 +276,13 @@ func OptimizedEmbedAndSearch(model *EmbeddingModel, indexer *GPUIndexer, text st
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	// Convert tokens directly to int32 array (no intermediate allocation)
 	tokenIDs := make([]int32, len(encoding.Ids))
 	for i, id := range encoding.Ids {
 		tokenIDs[i] = int32(id)
 	}
-	
+
 	// Direct GPU search with tokens
 	return ZeroCopySearch(indexer, tokenIDs, k)
 }

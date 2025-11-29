@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -143,7 +145,7 @@ func main() {
 	fmt.Printf("Speedup:            %.1fx faster\n", float64(exactTime)/float64(approxTime))
 
 	if approxTime < exactTime/2 {
-		fmt.Println("\n✅ Approximate search is significantly faster!")
+		fmt.Println("\n Approximate search is significantly faster!")
 	}
 }
 

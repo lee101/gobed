@@ -1,0 +1,3 @@
+Machine learning notes covering transformer architectures, deep learning optimization, and embedding evaluation.
+We describe how semantic search relies on neural networks, GPU acceleration, and vector quantization.
+Benchmarks highlight NDCG at 10, recall, and qualitative relevance ratings across datasets.

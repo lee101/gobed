@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -43,7 +45,7 @@ func LoadRealModel() (*RealEmbeddingModel, error) {
 	}
 
 	// Load real tokenizer
-	fmt.Println("📝 Loading tokenizer...")
+	fmt.Println(" Loading tokenizer...")
 	tk, err := loadRealTokenizer()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load tokenizer: %v", err)
@@ -58,7 +60,7 @@ func LoadRealModel() (*RealEmbeddingModel, error) {
 	}
 
 	loadTime := time.Since(start)
-	fmt.Printf("✅ Model loaded in %v (vocab: %d, dims: %d)\n", loadTime, vocabSize, embedDim)
+	fmt.Printf(" Model loaded in %v (vocab: %d, dims: %d)\n", loadTime, vocabSize, embedDim)
 	return model, nil
 }
 
@@ -79,7 +81,7 @@ func loadRealTokenizer() (*tokenizer.Tokenizer, error) {
 	}
 
 	// Try pretrained BERT tokenizer as fallback
-	fmt.Println("⚠️  Local tokenizer not found, using pretrained BERT tokenizer")
+	fmt.Println("  Local tokenizer not found, using pretrained BERT tokenizer")
 	tk, err := pretrained.BertBaseUncased()
 	return tk, err
 }
@@ -148,7 +150,7 @@ func loadSafetensorsWeights() ([][]float32, int, int, error) {
 	tensorBytes := data[start:end]
 	rows, cols := info.Shape[0], info.Shape[1]
 
-	fmt.Printf("📊 Loading embedding matrix: [%d, %d]\n", rows, cols)
+	fmt.Printf(" Loading embedding matrix: [%d, %d]\n", rows, cols)
 
 	// Load weights
 	weights := make([][]float32, rows)
@@ -255,7 +257,7 @@ func main() {
 	flag.Parse()
 
 	if showHelp || (text1 == "" || text2 == "") {
-		fmt.Println("🚀 Real Text Embedding Distance Calculator")
+		fmt.Println(" Real Text Embedding Distance Calculator")
 		fmt.Println(strings.Repeat("=", 50))
 		fmt.Println("Usage:")
 		fmt.Println("  go run cli_distance.go -text1=\"Hello world\" -text2=\"Hi there friend\"")
@@ -276,26 +278,26 @@ func main() {
 	// Load model
 	model, err := LoadRealModel()
 	if err != nil {
-		fmt.Printf("❌ Error loading model: %v\n", err)
+		fmt.Printf(" Error loading model: %v\n", err)
 		return
 	}
 
 	// Encode both texts
 	fmt.Println("\n" + strings.Repeat("=", 70))
-	fmt.Println("📊 EMBEDDING TEXT 1")
+	fmt.Println(" EMBEDDING TEXT 1")
 	fmt.Println(strings.Repeat("-", 70))
 	emb1, err := model.EncodeText(text1)
 	if err != nil {
-		fmt.Printf("❌ Error encoding text1: %v\n", err)
+		fmt.Printf(" Error encoding text1: %v\n", err)
 		return
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 70))
-	fmt.Println("📊 EMBEDDING TEXT 2")
+	fmt.Println(" EMBEDDING TEXT 2")
 	fmt.Println(strings.Repeat("-", 70))
 	emb2, err := model.EncodeText(text2)
 	if err != nil {
-		fmt.Printf("❌ Error encoding text2: %v\n", err)
+		fmt.Printf(" Error encoding text2: %v\n", err)
 		return
 	}
 
@@ -307,16 +309,16 @@ func main() {
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	fmt.Println("📏 DISTANCE CALCULATION")
 	fmt.Println(strings.Repeat("=", 70))
-	fmt.Printf("\n📝 Text 1: \"%s\"\n", text1)
-	fmt.Printf("📝 Text 2: \"%s\"\n", text2)
+	fmt.Printf("\n Text 1: \"%s\"\n", text1)
+	fmt.Printf(" Text 2: \"%s\"\n", text2)
 	fmt.Println(strings.Repeat("-", 70))
-	fmt.Printf("🎯 Cosine Similarity: %.6f\n", similarity)
+	fmt.Printf(" Cosine Similarity: %.6f\n", similarity)
 	fmt.Printf("📐 Distance (1-similarity): %.6f\n", distance)
 
 	// Interpretation
-	fmt.Println("\n📊 INTERPRETATION:")
+	fmt.Println("\n INTERPRETATION:")
 	if similarity > 0.7 {
-		fmt.Println("🔥 Very similar texts")
+		fmt.Println(" Very similar texts")
 	} else if similarity > 0.4 {
 		fmt.Println("🟢 Somewhat similar texts")
 	} else if similarity > 0.1 {
@@ -324,15 +326,15 @@ func main() {
 	} else if similarity > -0.1 {
 		fmt.Println("🔴 Unrelated texts")
 	} else {
-		fmt.Println("❄️  Opposite texts")
+		fmt.Println("❄  Opposite texts")
 	}
 
 	// Show embedding previews
-	fmt.Printf("\n🔍 Embedding dimensions: %d\n", len(emb1))
-	fmt.Printf("📊 Text 1 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
+	fmt.Printf("\n Embedding dimensions: %d\n", len(emb1))
+	fmt.Printf(" Text 1 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
 		emb1[0], emb1[1], emb1[2], emb1[3], emb1[4])
-	fmt.Printf("📊 Text 2 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
+	fmt.Printf(" Text 2 embedding sample: [%.3f, %.3f, %.3f, %.3f, %.3f]\n",
 		emb2[0], emb2[1], emb2[2], emb2[3], emb2[4])
 
-	fmt.Println("\n✅ Real embedding calculation completed!")
+	fmt.Println("\n Real embedding calculation completed!")
 }

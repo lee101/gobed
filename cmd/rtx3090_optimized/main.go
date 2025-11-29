@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -11,7 +13,7 @@ import (
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 RTX 3090 OPTIMIZED GPU INDEXING BENCHMARK")
+	fmt.Println(" RTX 3090 OPTIMIZED GPU INDEXING BENCHMARK")
 	fmt.Println("================================================================================")
 	fmt.Printf("GPU: NVIDIA RTX 3090 (24GB VRAM)\n")
 	fmt.Printf("CPU: %d cores\n", runtime.NumCPU())
@@ -23,7 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("✅ Model loaded successfully\n")
+	fmt.Println(" Model loaded successfully\n")
 
 	// Test configurations - start conservative and scale up
 	configs := []struct {
@@ -50,7 +52,7 @@ func main() {
 
 	for _, cfg := range configs {
 		fmt.Printf("\n============================================================\n")
-		fmt.Printf("📊 Testing: %s\n", cfg.name)
+		fmt.Printf(" Testing: %s\n", cfg.name)
 		fmt.Printf("   Documents: %d | Batch Size: %d\n", cfg.docCount, cfg.batchSize)
 		fmt.Println("------------------------------------------------------------")
 
@@ -76,7 +78,7 @@ func main() {
 			
 			ids, err := engine.IndexBatch(batch)
 			if err != nil {
-				fmt.Printf("   ⚠️  Batch error at %d-%d: %v\n", i, end, err)
+				fmt.Printf("     Batch error at %d-%d: %v\n", i, end, err)
 				continue
 			}
 			totalIndexed += len(ids)
@@ -89,7 +91,7 @@ func main() {
 		stats := engine.Stats()
 
 		// Display indexing results
-		fmt.Printf("\n✅ Indexing Results:\n")
+		fmt.Printf("\n Indexing Results:\n")
 		fmt.Printf("   Indexed: %d/%d documents\n", totalIndexed, cfg.docCount)
 		fmt.Printf("   Time: %v\n", indexElapsed)
 		fmt.Printf("   Throughput: %.0f docs/sec\n", indexThroughput)
@@ -105,7 +107,7 @@ func main() {
 		if totalIndexed > 0 {
 			// Train/optimize index if needed
 			if stats.IndexType != "flat" {
-				fmt.Printf("\n🔧 Optimizing index...\n")
+				fmt.Printf("\n Optimizing index...\n")
 				optStart := time.Now()
 				engine.Optimize()
 				fmt.Printf("   Optimization took: %v\n", time.Since(optStart))
@@ -123,7 +125,7 @@ func main() {
 				"data pipelines",
 			}
 
-			fmt.Printf("\n🔍 Search Performance:\n")
+			fmt.Printf("\n Search Performance:\n")
 			searchStart := time.Now()
 			searchCount := min(1000, totalIndexed/10) // Adaptive search count
 			searchErrors := 0
@@ -155,7 +157,7 @@ func main() {
 		}
 
 		// Memory check
-		fmt.Printf("\n💾 System Status:\n")
+		fmt.Printf("\n System Status:\n")
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
 		fmt.Printf("   Go Memory: %.2f MB\n", float64(m.Alloc)/1024/1024)
@@ -164,7 +166,7 @@ func main() {
 
 	// Final summary
 	fmt.Printf("\n================================================================================\n")
-	fmt.Printf("🏆 BEST RESULTS:\n")
+	fmt.Printf(" BEST RESULTS:\n")
 	fmt.Printf("   Best Config: %s\n", bestConfig)
 	fmt.Printf("   Best Indexing: %.0f docs/sec\n", bestThroughput)
 	fmt.Printf("   Best Search QPS: %.0f\n", bestQPS)

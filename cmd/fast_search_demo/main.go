@@ -1,4 +1,6 @@
-// +build gpu
+//go:build legacy
+
+
 
 package main
 
@@ -14,7 +16,7 @@ import (
 )
 
 func main() {
-	fmt.Printf("⚡ Ultra-Fast GPU Search Demo\n")
+	fmt.Printf("Ultra-Fast GPU Search Demo\n")
 	fmt.Printf("Target: 10-20s indexing, <1ms search\n")
 	fmt.Printf("================================\n\n")
 
@@ -28,17 +30,17 @@ func main() {
 	// Create indexer
 	indexer, err := gobed.NewGPUFastSearchIndexer(config)
 	if err != nil {
-		log.Fatalf("❌ Failed to create fast search indexer: %v", err)
+		log.Fatalf("Failed to create fast search indexer: %v", err)
 	}
 	defer indexer.Close()
 
 	// Check if pre-built index exists
 	indexPath := config.IndexPath
 	if indexer.CheckIndexExists(indexPath) {
-		fmt.Printf("📁 Found existing index, loading...\n")
+		fmt.Printf("Found existing index, loading...\n")
 		runWithExistingIndex(indexer, indexPath)
 	} else {
-		fmt.Printf("🔨 Building new index for 243K vectors...\n")
+		fmt.Printf("Building new index for 243K vectors...\n")
 		runFullIndexBuild(indexer, indexPath)
 	}
 }
@@ -47,17 +49,17 @@ func runWithExistingIndex(indexer *gobed.GPUFastSearchIndexer, indexPath string)
 	// FAST STARTUP - Load pre-built index
 	start := time.Now()
 	if err := indexer.LoadIndex(indexPath); err != nil {
-		log.Fatalf("❌ Failed to load index: %v", err)
+		log.Fatalf(" Failed to load index: %v", err)
 	}
 	loadTime := time.Since(start)
 	
-	fmt.Printf("✅ Index loaded in %v (ultra-fast startup!)\n\n", loadTime)
+	fmt.Printf(" Index loaded in %v (ultra-fast startup!)\n\n", loadTime)
 	
 	// Optimize for inference
 	indexer.OptimizeForInference()
 	
 	// Warmup with common queries
-	fmt.Printf("🔥 Warming up cache with common queries...\n")
+	fmt.Printf(" Warming up cache with common queries...\n")
 	warmupQueries := generateCommonQueries(1000, 512)
 	indexer.WarmupCache(warmupQueries)
 	
@@ -67,44 +69,44 @@ func runWithExistingIndex(indexer *gobed.GPUFastSearchIndexer, indexPath string)
 
 func runFullIndexBuild(indexer *gobed.GPUFastSearchIndexer, indexPath string) {
 	// Simulate your 243K AI images dataset
-	fmt.Printf("📊 Generating dataset (243K vectors, 512 dim)...\n")
+	fmt.Printf(" Generating dataset (243K vectors, 512 dim)...\n")
 	numVectors := 243000
 	vectorDim := 512
 	
 	vectors, scales, ids := generateRealisticDataset(numVectors, vectorDim)
 	
 	// BUILD INDEX - Target 10-20 seconds
-	fmt.Printf("⚡ Building search index (target: 10-20s)...\n")
+	fmt.Printf(" Building search index (target: 10-20s)...\n")
 	buildStart := time.Now()
 	
 	if err := indexer.BuildIndexFast(vectors, scales, ids); err != nil {
-		log.Fatalf("❌ Failed to build index: %v", err)
+		log.Fatalf(" Failed to build index: %v", err)
 	}
 	
 	buildTime := time.Since(buildStart)
-	fmt.Printf("✅ Index built in %v", buildTime)
+	fmt.Printf(" Index built in %v", buildTime)
 	
 	if buildTime.Seconds() <= 20 {
-		fmt.Printf(" (✅ Target met!)\n")
+		fmt.Printf(" ( Target met!)\n")
 	} else {
-		fmt.Printf(" (⚠️  Exceeded 20s target)\n")
+		fmt.Printf(" (  Exceeded 20s target)\n")
 	}
 	
 	// SAVE INDEX for fast future startups
-	fmt.Printf("💾 Saving index for future fast loading...\n")
+	fmt.Printf(" Saving index for future fast loading...\n")
 	saveStart := time.Now()
 	if err := indexer.SaveIndex(indexPath); err != nil {
-		log.Printf("⚠️  Failed to save index: %v", err)
+		log.Printf("  Failed to save index: %v", err)
 	} else {
 		saveTime := time.Since(saveStart)
-		fmt.Printf("✅ Index saved in %v\n", saveTime)
+		fmt.Printf(" Index saved in %v\n", saveTime)
 	}
 	
 	// Optimize for search performance
 	indexer.OptimizeForInference()
 	
 	// Warmup cache
-	fmt.Printf("🔥 Warming up search cache...\n")
+	fmt.Printf(" Warming up search cache...\n")
 	warmupQueries := generateCommonQueries(1000, 512)
 	indexer.WarmupCache(warmupQueries)
 	
@@ -115,7 +117,7 @@ func runFullIndexBuild(indexer *gobed.GPUFastSearchIndexer, indexPath string) {
 }
 
 func runSearchBenchmarks(indexer *gobed.GPUFastSearchIndexer) {
-	fmt.Printf("🎯 Search Performance Testing\n")
+	fmt.Printf(" Search Performance Testing\n")
 	fmt.Printf("Target: <1ms per search\n")
 	fmt.Printf("----------------------------\n")
 	
@@ -130,7 +132,7 @@ func runSearchBenchmarks(indexer *gobed.GPUFastSearchIndexer) {
 }
 
 func testSingleSearch(indexer *gobed.GPUFastSearchIndexer) {
-	fmt.Printf("🔍 Single Search Test (1000 queries):\n")
+	fmt.Printf(" Single Search Test (1000 queries):\n")
 	
 	numTests := 1000
 	k := 10 // Top-10 results
@@ -146,7 +148,7 @@ func testSingleSearch(indexer *gobed.GPUFastSearchIndexer) {
 		latency := time.Since(start)
 		
 		if err != nil {
-			fmt.Printf("   ❌ Query %d failed: %v\n", i, err)
+			fmt.Printf("    Query %d failed: %v\n", i, err)
 			continue
 		}
 		
@@ -155,7 +157,7 @@ func testSingleSearch(indexer *gobed.GPUFastSearchIndexer) {
 		
 		// Check if under 1ms target
 		if latency.Microseconds() > 1000 {
-			fmt.Printf("   ⚠️  Query %d: %dμs (over 1ms target)\n", i, latency.Microseconds())
+			fmt.Printf("     Query %d: %dμs (over 1ms target)\n", i, latency.Microseconds())
 		}
 		
 		// Show progress every 100 queries
@@ -171,20 +173,20 @@ func testSingleSearch(indexer *gobed.GPUFastSearchIndexer) {
 	avgLatencyUs := totalTime.Microseconds() / int64(successCount)
 	qps := float64(successCount) / totalTime.Seconds()
 	
-	fmt.Printf("   📊 Results: %d successful searches\n", successCount)
-	fmt.Printf("   ⏱️  Average latency: %dμs", avgLatencyUs)
+	fmt.Printf("    Results: %d successful searches\n", successCount)
+	fmt.Printf("     Average latency: %dμs", avgLatencyUs)
 	
 	if avgLatencyUs <= 1000 {
-		fmt.Printf(" (✅ Target met!)\n")
+		fmt.Printf(" ( Target met!)\n")
 	} else {
-		fmt.Printf(" (❌ Exceeded 1ms target)\n")
+		fmt.Printf(" ( Exceeded 1ms target)\n")
 	}
 	
-	fmt.Printf("   🚀 Throughput: %.0f QPS\n\n", qps)
+	fmt.Printf("    Throughput: %.0f QPS\n\n", qps)
 }
 
 func testBatchSearch(indexer *gobed.GPUFastSearchIndexer) {
-	fmt.Printf("📦 Batch Search Test:\n")
+	fmt.Printf(" Batch Search Test:\n")
 	
 	batchSizes := []int{10, 50, 100}
 	k := 10
@@ -203,7 +205,7 @@ func testBatchSearch(indexer *gobed.GPUFastSearchIndexer) {
 		batchTime := time.Since(start)
 		
 		if err != nil {
-			fmt.Printf("   ❌ Batch size %d failed: %v\n", batchSize, err)
+			fmt.Printf("    Batch size %d failed: %v\n", batchSize, err)
 			continue
 		}
 		
@@ -213,9 +215,9 @@ func testBatchSearch(indexer *gobed.GPUFastSearchIndexer) {
 			batchSize, batchTime.Microseconds(), avgLatencyUs)
 		
 		if avgLatencyUs <= 1000 {
-			fmt.Printf(" (✅ Target met!)\n")
+			fmt.Printf(" ( Target met!)\n")
 		} else {
-			fmt.Printf(" (❌ Exceeded 1ms target)\n")
+			fmt.Printf(" ( Exceeded 1ms target)\n")
 		}
 		
 		_ = results // Use results
@@ -225,7 +227,7 @@ func testBatchSearch(indexer *gobed.GPUFastSearchIndexer) {
 }
 
 func showFinalStats(indexer *gobed.GPUFastSearchIndexer) {
-	fmt.Printf("📈 Final Performance Statistics\n")
+	fmt.Printf(" Final Performance Statistics\n")
 	fmt.Printf("===============================\n")
 	
 	stats := indexer.GetSearchStats()
@@ -237,14 +239,14 @@ func showFinalStats(indexer *gobed.GPUFastSearchIndexer) {
 	fmt.Printf("Target latency: %dμs\n", stats.TargetLatencyUs)
 	
 	if stats.TargetMet {
-		fmt.Printf("🎉 Performance target MET! Average %.0fμs < %dμs\n", 
+		fmt.Printf(" Performance target MET! Average %.0fμs < %dμs\n", 
 			stats.AvgLatencyUs, stats.TargetLatencyUs)
 	} else {
-		fmt.Printf("⚠️  Performance target MISSED. Average %.0fμs > %dμs\n",
+		fmt.Printf("  Performance target MISSED. Average %.0fμs > %dμs\n",
 			stats.AvgLatencyUs, stats.TargetLatencyUs)
 		
 		// Suggestions for improvement
-		fmt.Printf("\n🔧 Optimization Suggestions:\n")
+		fmt.Printf("\n Optimization Suggestions:\n")
 		fmt.Printf("   - Reduce NProbe (current search accuracy for speed)\n")
 		fmt.Printf("   - Enable more aggressive caching\n")
 		fmt.Printf("   - Pre-warm more common queries\n")
@@ -253,13 +255,13 @@ func showFinalStats(indexer *gobed.GPUFastSearchIndexer) {
 	
 	// Show cache effectiveness
 	if stats.CacheHitRate > 0.3 {
-		fmt.Printf("✅ Cache working well (%.1f%% hit rate)\n", stats.CacheHitRate*100)
+		fmt.Printf(" Cache working well (%.1f%% hit rate)\n", stats.CacheHitRate*100)
 	} else {
-		fmt.Printf("⚠️  Low cache hit rate (%.1f%%) - consider warming more queries\n", 
+		fmt.Printf("  Low cache hit rate (%.1f%%) - consider warming more queries\n", 
 			stats.CacheHitRate*100)
 	}
 	
-	fmt.Printf("\n🚀 Ready for production inference with ultra-fast search!\n")
+	fmt.Printf("\n Ready for production inference with ultra-fast search!\n")
 }
 
 // Helper functions for realistic data generation

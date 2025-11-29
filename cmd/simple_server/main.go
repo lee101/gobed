@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -27,7 +29,7 @@ func main() {
 	)
 	flag.Parse()
 
-	fmt.Println("🚀 High-Performance GoBeD Server")
+	fmt.Println(" High-Performance GoBeD Server")
 	fmt.Println("=================================")
 	fmt.Printf("   Built with: %s\n", runtime.Version())
 	fmt.Printf("   Workers: %d\n", *workers)
@@ -39,7 +41,7 @@ func main() {
 	fmt.Println("\n📚 Loading Embedding Model...")
 	model, err := gobed.LoadModel()
 	if err != nil {
-		log.Fatalf("❌ Failed to load model: %v", err)
+		log.Fatalf(" Failed to load model: %v", err)
 	}
 
 	// Create server
@@ -54,9 +56,9 @@ func main() {
 
 	// Run demonstration if requested
 	if *demoMode {
-		fmt.Println("\n🎪 Running Performance Demonstration...")
+		fmt.Println("\n Running Performance Demonstration...")
 		if err := server.runDemo(*demoVectors); err != nil {
-			log.Printf("⚠️  Demo failed: %v", err)
+			log.Printf("  Demo failed: %v", err)
 		}
 	}
 
@@ -74,18 +76,18 @@ func main() {
 	}
 
 	// Start server
-	fmt.Printf("\n✅ Server Running on Port %d\n", *port)
-	fmt.Printf("   🔍 Search: POST /search\n")
-	fmt.Printf("   📦 Batch Search: POST /batch_search\n")
+	fmt.Printf("\n Server Running on Port %d\n", *port)
+	fmt.Printf("    Search: POST /search\n")
+	fmt.Printf("    Batch Search: POST /batch_search\n")
 	fmt.Printf("   📚 Index: POST /index\n")
-	fmt.Printf("   📈 Benchmark: GET /benchmark\n")
-	fmt.Printf("   📊 Stats: GET /stats\n")
-	fmt.Printf("   🔧 Health: GET /health\n")
+	fmt.Printf("    Benchmark: GET /benchmark\n")
+	fmt.Printf("    Stats: GET /stats\n")
+	fmt.Printf("    Health: GET /health\n")
 
 	// Start HTTP server
 	go func() {
 		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-			log.Fatalf("❌ Server failed: %v", err)
+			log.Fatalf(" Server failed: %v", err)
 		}
 	}()
 
@@ -101,11 +103,11 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	fmt.Println("\n🎯 Ready! Press Ctrl+C to stop.")
+	fmt.Println("\n Ready! Press Ctrl+C to stop.")
 	<-sigChan
 
 	fmt.Println("\n🛑 Shutting down gracefully...")
-	fmt.Println("✅ Goodbye!")
+	fmt.Println(" Goodbye!")
 }
 
 // FastServer provides high-performance vector search
@@ -356,7 +358,7 @@ func (s *FastServer) handleBatchSearch(w http.ResponseWriter, r *http.Request) {
 
 			embedding, err := s.model.EmbedInt8(q)
 			if err != nil {
-				log.Printf("⚠️  Failed to embed query %d: %v", idx, err)
+				log.Printf("  Failed to embed query %d: %v", idx, err)
 				results[idx] = []SearchResult{}
 				return
 			}
@@ -432,7 +434,7 @@ func (s *FastServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 	indexed := 0
 	for result := range results {
 		if result.err != nil {
-			log.Printf("⚠️  Failed to embed document %d: %v", result.id, result.err)
+			log.Printf("  Failed to embed document %d: %v", result.id, result.err)
 			continue
 		}
 
@@ -602,7 +604,7 @@ func (s *FastServer) performanceMonitor() {
 		vectorCount := len(s.vectors)
 		s.mutex.RUnlock()
 
-		fmt.Printf("\n📊 Performance Monitor (Uptime: %.1fm)\n", uptime.Minutes())
+		fmt.Printf("\n Performance Monitor (Uptime: %.1fm)\n", uptime.Minutes())
 		fmt.Printf("   Requests: %d\n", s.totalRequests)
 		fmt.Printf("   Indexed: %d vectors\n", vectorCount)
 		fmt.Printf("   Memory: %.1f MB\n", float64(m.Alloc)/1024/1024)
@@ -618,7 +620,7 @@ func (s *FastServer) performanceMonitor() {
 
 // runDemo runs a demonstration with sample data
 func (s *FastServer) runDemo(numVectors int) error {
-	fmt.Printf("🎪 Demo: Indexing %d vectors and testing search performance\n", numVectors)
+	fmt.Printf(" Demo: Indexing %d vectors and testing search performance\n", numVectors)
 
 	// Generate sample texts
 	sampleTexts := generateSampleTexts(numVectors)
@@ -673,11 +675,11 @@ func (s *FastServer) runDemo(numVectors int) error {
 	s.mutex.RUnlock()
 
 	s.totalIndexed = uint64(indexedCount)
-	fmt.Printf("✅ Indexed %d vectors in %v (%.1f vectors/sec)\n", 
+	fmt.Printf(" Indexed %d vectors in %v (%.1f vectors/sec)\n", 
 		indexedCount, indexTime, float64(indexedCount)/indexTime.Seconds())
 
 	// Test searches
-	fmt.Printf("\n🔍 Testing search performance...\n")
+	fmt.Printf("\n Testing search performance...\n")
 	queries := []string{
 		"machine learning algorithms and optimization",
 		"neural network training and inference",
@@ -705,7 +707,7 @@ func (s *FastServer) runDemo(numVectors int) error {
 	}
 
 	searchTime := time.Since(searchStart)
-	fmt.Printf("✅ Completed %d searches in %v (%.1f searches/sec)\n", 
+	fmt.Printf(" Completed %d searches in %v (%.1f searches/sec)\n", 
 		len(queries), searchTime, float64(len(queries))/searchTime.Seconds())
 
 	return nil
@@ -713,7 +715,7 @@ func (s *FastServer) runDemo(numVectors int) error {
 
 // runLoadTest runs a load test
 func (s *FastServer) runLoadTest() {
-	fmt.Println("\n⚡ Running Load Test...")
+	fmt.Println("\n Running Load Test...")
 
 	queries := []string{
 		"performance test query for load testing",
@@ -753,7 +755,7 @@ func (s *FastServer) runLoadTest() {
 	duration := time.Since(start)
 	rps := float64(requests) / duration.Seconds()
 
-	fmt.Printf("✅ Load test completed:\n")
+	fmt.Printf(" Load test completed:\n")
 	fmt.Printf("   Requests: %d (concurrency: %d)\n", requests, concurrency)
 	fmt.Printf("   Duration: %v\n", duration)
 	fmt.Printf("   Rate: %.1f req/sec\n", rps)

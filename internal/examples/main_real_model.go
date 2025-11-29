@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -65,9 +67,9 @@ func LoadRealModel(safetensorsPath, referenceTokensPath string) (*RealEmbeddingM
 	}
 
 	loadTime := time.Since(loadStart)
-	log.Printf("✅ REAL model loaded successfully in %v", loadTime)
-	log.Printf("📊 Real model specs: vocab_size=%d, embed_dim=%d", vocabSize, embedDim)
-	log.Printf("📦 Reference tokens: %d sentences", len(referenceTokens))
+	log.Printf(" REAL model loaded successfully in %v", loadTime)
+	log.Printf(" Real model specs: vocab_size=%d, embed_dim=%d", vocabSize, embedDim)
+	log.Printf(" Reference tokens: %d sentences", len(referenceTokens))
 
 	return model, nil
 }
@@ -139,7 +141,7 @@ func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, 
 	}
 
 	headerLength := binary.LittleEndian.Uint64(headerLengthBytes)
-	log.Printf("📋 Header length: %d bytes", headerLength)
+	log.Printf(" Header length: %d bytes", headerLength)
 
 	// Read header JSON
 	headerBytes := make([]byte, headerLength)
@@ -154,7 +156,7 @@ func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, 
 		return nil, 0, 0, fmt.Errorf("failed to parse header: %v", err)
 	}
 
-	log.Printf("🔍 Found tensors: %v", func() []string {
+	log.Printf(" Found tensors: %v", func() []string {
 		keys := make([]string, 0, len(header))
 		for k := range header {
 			keys = append(keys, k)
@@ -168,7 +170,7 @@ func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, 
 		return nil, 0, 0, fmt.Errorf("failed to read tensor data: %v", err)
 	}
 
-	log.Printf("📊 Total data size: %d bytes", len(data))
+	log.Printf(" Total data size: %d bytes", len(data))
 
 	// Look for the embedding weights tensor (could be named differently)
 	var info TensorInfo
@@ -178,14 +180,14 @@ func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, 
 	possibleNames := []string{"embeddings.weight", "embedding.weight", "word_embeddings.weight"}
 	for _, name := range possibleNames {
 		if info, exists = header[name]; exists {
-			log.Printf("✅ Found embedding weights: %s", name)
+			log.Printf(" Found embedding weights: %s", name)
 			break
 		}
 	}
 
 	if !exists {
 		// List all available tensors for debugging
-		log.Printf("❌ Embedding weights not found. Available tensors:")
+		log.Printf(" Embedding weights not found. Available tensors:")
 		for name, tensorInfo := range header {
 			log.Printf("   - %s: %v, shape: %v", name, tensorInfo.Dtype, tensorInfo.Shape)
 		}
@@ -211,7 +213,7 @@ func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, 
 	rows := info.Shape[0]
 	cols := info.Shape[1]
 
-	log.Printf("🎯 Loading real embedding matrix: [%d, %d]", rows, cols)
+	log.Printf(" Loading real embedding matrix: [%d, %d]", rows, cols)
 
 	// Load real weights with optimized memory layout
 	weights := make([][]float32, rows)
@@ -235,7 +237,7 @@ func loadRealSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, 
 		}
 	}
 
-	log.Printf("✅ Successfully loaded REAL safetensors weights: [%d, %d]", rows, cols)
+	log.Printf(" Successfully loaded REAL safetensors weights: [%d, %d]", rows, cols)
 	return weights, rows, cols, nil
 }
 
@@ -258,7 +260,7 @@ func loadRealReferenceTokens(referenceTokensPath string) (map[string]TokenData, 
 		return nil, fmt.Errorf("failed to parse reference tokens: %v", err)
 	}
 
-	log.Printf("✅ Loaded real reference tokens for %d sentences", len(referenceTokens))
+	log.Printf(" Loaded real reference tokens for %d sentences", len(referenceTokens))
 	return referenceTokens, nil
 }
 
@@ -307,7 +309,7 @@ func CosineSimilarity(a, b []float32) float32 {
 // benchmarkRealModel benchmarks the real model performance
 func benchmarkRealModel(model *RealEmbeddingModel) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 70))
-	fmt.Printf("🚀 REAL MODEL INFERENCE BENCHMARK\n")
+	fmt.Printf(" REAL MODEL INFERENCE BENCHMARK\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 70))
 
 	// Get test sentences from reference tokens
@@ -317,14 +319,14 @@ func benchmarkRealModel(model *RealEmbeddingModel) {
 	}
 
 	if len(sentences) == 0 {
-		log.Printf("❌ No reference sentences available for benchmarking")
+		log.Printf(" No reference sentences available for benchmarking")
 		return
 	}
 
 	fmt.Printf("Benchmarking %d sentences with REAL model weights...\n", len(sentences))
 
 	// Warmup runs
-	fmt.Println("\n🔥 Warmup runs...")
+	fmt.Println("\n Warmup runs...")
 	for i := 0; i < 5; i++ {
 		_, err := model.EncodeText(sentences[0])
 		if err != nil {
@@ -332,10 +334,10 @@ func benchmarkRealModel(model *RealEmbeddingModel) {
 			return
 		}
 	}
-	fmt.Println("✅ Warmup completed")
+	fmt.Println(" Warmup completed")
 
 	// Individual inference benchmarks
-	fmt.Println("\n⏱️  Real model inference benchmarks:")
+	fmt.Println("\n  Real model inference benchmarks:")
 	times := make([]time.Duration, len(sentences))
 	embeddings := make([][]float32, len(sentences))
 
@@ -370,14 +372,14 @@ func benchmarkRealModel(model *RealEmbeddingModel) {
 	}
 
 	if len(times) == 0 {
-		log.Printf("❌ No successful inferences to analyze")
+		log.Printf(" No successful inferences to analyze")
 		return
 	}
 
 	avgTime := totalTime / time.Duration(len(times))
 	throughput := float64(len(sentences)) / totalTime.Seconds()
 
-	fmt.Printf("\n📊 Real Model Performance Summary:\n")
+	fmt.Printf("\n Real Model Performance Summary:\n")
 	fmt.Printf("   Total inference time: %v\n", totalTime)
 	fmt.Printf("   Average per inference: %v\n", avgTime)
 	fmt.Printf("   Throughput: %.0f inferences/sec\n", throughput)
@@ -402,7 +404,7 @@ func benchmarkRealModel(model *RealEmbeddingModel) {
 	}
 
 	// Accuracy verification with Python results
-	fmt.Println("\n🎯 Accuracy verification with Python:")
+	fmt.Println("\n Accuracy verification with Python:")
 	expected := []float32{5.045, -3.595, 5.027, -0.995, 2.087} // From Python
 
 	// Find "This is a test sentence." if available
@@ -432,13 +434,13 @@ func benchmarkRealModel(model *RealEmbeddingModel) {
 		fmt.Printf("   Max diff: %.6f\n", maxDiff)
 
 		if maxDiff < 0.001 {
-			fmt.Printf("   ✅ PERFECT MATCH!\n")
+			fmt.Printf("    PERFECT MATCH!\n")
 		} else if maxDiff < 0.01 {
-			fmt.Printf("   ✅ EXCELLENT MATCH!\n")
+			fmt.Printf("    EXCELLENT MATCH!\n")
 		} else if maxDiff < 0.1 {
-			fmt.Printf("   ⚠️  Good match\n")
+			fmt.Printf("     Good match\n")
 		} else {
-			fmt.Printf("   ❌ Poor match - check implementation\n")
+			fmt.Printf("    Poor match - check implementation\n")
 		}
 	}
 
@@ -451,7 +453,7 @@ func benchmarkRealModel(model *RealEmbeddingModel) {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 REAL STATIC-RETRIEVAL-MRL-EN-V1 MODEL - GO IMPLEMENTATION")
+	fmt.Println(" REAL STATIC-RETRIEVAL-MRL-EN-V1 MODEL - GO IMPLEMENTATION")
 	fmt.Println("================================================================================")
 	fmt.Println("Model: sentence-transformers/static-retrieval-mrl-en-v1 (REAL WEIGHTS)")
 	fmt.Println("Purpose: Use actual safetensors weights for exact Python matching")
@@ -463,10 +465,10 @@ func main() {
 
 	// Verify files exist
 	if _, err := os.Stat(safetensorsPath); os.IsNotExist(err) {
-		log.Fatalf("❌ Real model file not found: %s", safetensorsPath)
+		log.Fatalf(" Real model file not found: %s", safetensorsPath)
 	}
 	if _, err := os.Stat(referenceTokensPath); os.IsNotExist(err) {
-		log.Fatalf("❌ Real reference tokens file not found: %s", referenceTokensPath)
+		log.Fatalf(" Real reference tokens file not found: %s", referenceTokensPath)
 	}
 
 	fmt.Printf("📂 Using real model: %s\n", safetensorsPath)
@@ -476,15 +478,15 @@ func main() {
 	// Load REAL model (one-time cost)
 	model, err := LoadRealModel(safetensorsPath, referenceTokensPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to load real model: %v", err)
+		log.Fatalf(" Failed to load real model: %v", err)
 	}
 
 	// Benchmark with real model weights
 	benchmarkRealModel(model)
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("✅ Real model benchmark completed!")
-	fmt.Println("🎯 Using actual static-retrieval-mrl-en-v1 safetensors weights")
-	fmt.Println("⚡ Ready for exact Python comparison")
+	fmt.Println(" Real model benchmark completed!")
+	fmt.Println(" Using actual static-retrieval-mrl-en-v1 safetensors weights")
+	fmt.Println(" Ready for exact Python comparison")
 	fmt.Println(strings.Repeat("=", 80))
 }

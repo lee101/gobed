@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -39,7 +41,7 @@ func main() {
 	}
 
 	// Performance test
-	fmt.Println("\n🚀 PERFORMANCE TEST - Embeddings Per Second")
+	fmt.Println("\n PERFORMANCE TEST - Embeddings Per Second")
 	fmt.Println(strings.Repeat("=", 50))
 
 	numIterations := 1000
@@ -67,7 +69,7 @@ func main() {
 	embeddingsPerSecond := float64(successfulEmbeddings) / elapsed.Seconds()
 	timePerEmbedding := elapsed / time.Duration(successfulEmbeddings)
 
-	fmt.Printf("📊 Results:\n")
+	fmt.Printf(" Results:\n")
 	fmt.Printf("   Total time:            %v\n", elapsed)
 	fmt.Printf("   Successful embeddings: %d\n", successfulEmbeddings)
 	fmt.Printf("   Embeddings/second:     %.0f\n", embeddingsPerSecond)
@@ -75,7 +77,7 @@ func main() {
 	fmt.Printf("   Latency (microseconds): %.2f μs\n", float64(timePerEmbedding.Nanoseconds())/1000)
 
 	// Test with single embeddings for more accurate per-embedding timing
-	fmt.Println("\n⏱️ Individual embedding timings:")
+	fmt.Println("\n Individual embedding timings:")
 	for i, sentence := range testSentences[:5] {
 		start := time.Now()
 		_, err := model.Encode(sentence)

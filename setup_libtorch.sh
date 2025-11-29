@@ -2,7 +2,7 @@
 set -e
 
 echo "=================================================================================="
-echo "🔥 LibTorch Setup (Optional - for future GPU acceleration)"
+echo " LibTorch Setup (Optional - for future GPU acceleration)"
 echo "=================================================================================="
 echo ""
 
@@ -12,10 +12,10 @@ if command -v nvidia-smi &> /dev/null; then
     if nvidia-smi &> /dev/null; then
         CUDA_AVAILABLE=true
         CUDA_VERSION=$(nvidia-smi | grep -Po 'CUDA Version: \K[0-9.]+' | head -1)
-        echo "✅ CUDA detected: Version $CUDA_VERSION"
+        echo " CUDA detected: Version $CUDA_VERSION"
     fi
 else
-    echo "ℹ️  No CUDA detected - will install CPU version"
+    echo "ℹ  No CUDA detected - will install CPU version"
 fi
 echo ""
 
@@ -34,7 +34,7 @@ if [ "$CUDA_AVAILABLE" = true ]; then
     if (( CUDA_MAJOR > 12 || (CUDA_MAJOR == 12 && CUDA_MINOR >= 2) )); then
         echo "4) CUDA 12.4 (GPU acceleration, ~2GB) - Recommended for CUDA $CUDA_VERSION"
         echo ""
-        echo "💡 Auto-selecting CUDA 12.4 for your CUDA $CUDA_VERSION setup"
+        echo " Auto-selecting CUDA 12.4 for your CUDA $CUDA_VERSION setup"
         choice=4
     else
         echo ""
@@ -69,17 +69,17 @@ LIBTORCH_ZIP="libtorch.zip"
 # Download if not exists
 if [ ! -f "libtorch/lib/libtorch.so" ]; then
     wget -q --show-progress -O "$LIBTORCH_ZIP" "$LIBTORCH_URL"
-    echo "📦 Extracting LibTorch..."
+    echo " Extracting LibTorch..."
     unzip -q -o "$LIBTORCH_ZIP" -d .
     rm "$LIBTORCH_ZIP"
-    echo "✅ LibTorch installed"
+    echo " LibTorch installed"
 else
-    echo "✅ LibTorch already installed"
+    echo " LibTorch already installed"
 fi
 
 echo ""
 echo "=================================================================================="
-echo "✨ LibTorch Setup Complete!"
+echo " LibTorch Setup Complete!"
 echo "=================================================================================="
 echo ""
 echo "To use LibTorch in your Go code, set these environment variables:"

@@ -1,3 +1,5 @@
+//go:build legacy
+
 // test_go_optimization.go - Standalone test of optimization concepts
 package main
 
@@ -66,13 +68,13 @@ func indexTextsSequential(pipeline *MockPipeline, texts []string, batchSize int)
 	totalTime := time.Since(start)
 	throughput := float64(len(texts)) / totalTime.Seconds()
 
-	log.Printf("✅ Sequential complete: %.0f texts/sec", throughput)
+	log.Printf(" Sequential complete: %.0f texts/sec", throughput)
 	return throughput, totalTime
 }
 
 // Simulate optimized parallel approach
 func indexTextsParallel(pipeline *MockPipeline, texts []string, chunkSize int, maxConcurrent int) (float64, time.Duration) {
-	log.Printf("🚀 Testing PARALLEL approach (optimized)")
+	log.Printf(" Testing PARALLEL approach (optimized)")
 	log.Printf("   Chunk size: %d", chunkSize)
 	log.Printf("   Max concurrent: %d", maxConcurrent)
 
@@ -145,13 +147,13 @@ func indexTextsParallel(pipeline *MockPipeline, texts []string, chunkSize int, m
 	totalTime := time.Since(start)
 	throughput := float64(len(texts)) / totalTime.Seconds()
 
-	log.Printf("✅ Parallel complete: %.0f texts/sec", throughput)
+	log.Printf(" Parallel complete: %.0f texts/sec", throughput)
 	return throughput, totalTime
 }
 
 func runBenchmark(numTexts int) {
 	log.Printf("\n" + strings.Repeat("=", 60))
-	log.Printf("📊 BENCHMARKING WITH %d TEXTS", numTexts)
+	log.Printf(" BENCHMARKING WITH %d TEXTS", numTexts)
 	log.Printf(strings.Repeat("=", 60))
 
 	// Generate test data
@@ -173,20 +175,20 @@ func runBenchmark(numTexts int) {
 	improvement := optimizedThroughput / currentThroughput
 	timeSaved := currentTime - optimizedTime
 
-	log.Printf("\n🎯 PERFORMANCE RESULTS:")
+	log.Printf("\n PERFORMANCE RESULTS:")
 	log.Printf("   Current approach:    %.0f texts/sec (%v)", currentThroughput, currentTime)
 	log.Printf("   Optimized approach:  %.0f texts/sec (%v)", optimizedThroughput, optimizedTime)
 	log.Printf("   Improvement:         %.1fx faster", improvement)
 	log.Printf("   Time saved:          %v", timeSaved)
 
 	if improvement > 5.0 {
-		log.Printf("   🚀 EXCELLENT optimization!")
+		log.Printf("    EXCELLENT optimization!")
 	} else if improvement > 3.0 {
-		log.Printf("   ✅ Very good optimization")
+		log.Printf("    Very good optimization")
 	} else if improvement > 2.0 {
-		log.Printf("   ✅ Good optimization")
+		log.Printf("    Good optimization")
 	} else {
-		log.Printf("   ⚠️  Limited improvement")
+		log.Printf("     Limited improvement")
 	}
 }
 
@@ -202,7 +204,7 @@ func main_disabled() { // Disabled to fix duplicate main
 	}
 
 	log.Printf("\n" + strings.Repeat("=", 60))
-	log.Printf("💡 OPTIMIZATION SUMMARY")
+	log.Printf(" OPTIMIZATION SUMMARY")
 	log.Printf(strings.Repeat("=", 60))
 	log.Printf("Key improvements:")
 	log.Printf("  1. Parallel chunk processing (8 workers)")

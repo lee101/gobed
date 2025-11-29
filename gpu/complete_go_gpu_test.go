@@ -11,25 +11,25 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 Complete Go GPU Integration Test")
+	fmt.Println(" Complete Go GPU Integration Test")
 	fmt.Println("===================================")
 
 	// Test 1: Basic GPU Search Engine
-	fmt.Println("\n📋 Test 1: GPU Search Engine API")
+	fmt.Println("\n Test 1: GPU Search Engine API")
 	testGPUSearchEngineAPI()
 
 	// Test 2: Performance Comparison
-	fmt.Println("\n📋 Test 2: GPU vs CPU Performance")
+	fmt.Println("\n Test 2: GPU vs CPU Performance")
 	testPerformanceComparison()
 
 	// Test 3: Large Dataset Handling
-	fmt.Println("\n📋 Test 3: Large Dataset GPU Acceleration")
+	fmt.Println("\n Test 3: Large Dataset GPU Acceleration")
 	testLargeDataset()
 
-	fmt.Println("\n✅ All tests completed successfully!")
-	fmt.Println("   🚀 GPU acceleration working with Go API")
-	fmt.Println("   📊 Significant performance improvements verified")
-	fmt.Println("   🎯 Production-ready for real-world use")
+	fmt.Println("\n All tests completed successfully!")
+	fmt.Println("    GPU acceleration working with Go API")
+	fmt.Println("    Significant performance improvements verified")
+	fmt.Println("    Production-ready for real-world use")
 }
 
 func testGPUSearchEngineAPI() {
@@ -40,7 +40,7 @@ func testGPUSearchEngineAPI() {
 	}
 
 	// Create GPU search engine using new API
-	fmt.Println("🏗️ Creating GPU search engine...")
+	fmt.Println("🏗 Creating GPU search engine...")
 	engine := gobed.NewGPUSearchEngine(model)
 	defer engine.Close()
 
@@ -60,28 +60,28 @@ func testGPUSearchEngineAPI() {
 	for i, doc := range docs {
 		_, err := engine.IndexWithID(i, doc)
 		if err != nil {
-			fmt.Printf("⚠️  Indexing error (falling back to CPU): %v\n", err)
+			fmt.Printf("  Indexing error (falling back to CPU): %v\n", err)
 			break
 		}
 	}
 	
 	indexTime := time.Since(start)
-	fmt.Printf("✅ Indexed %d documents in %v\n", len(docs), indexTime)
+	fmt.Printf(" Indexed %d documents in %v\n", len(docs), indexTime)
 
 	// Search
-	fmt.Println("🔍 Performing search...")
+	fmt.Println(" Performing search...")
 	results, err := engine.Search("artificial intelligence and machine learning", 3)
 	if err != nil {
-		fmt.Printf("⚠️  Search error: %v\n", err)
+		fmt.Printf("  Search error: %v\n", err)
 		return
 	}
 
-	fmt.Printf("📊 Search results: %d found\n", len(results))
+	fmt.Printf(" Search results: %d found\n", len(results))
 	for i, result := range results {
 		fmt.Printf("   [%d] Score: %.4f | %s\n", i+1, result.Score, result.Text[:50]+"...")
 	}
 
-	fmt.Printf("📈 Engine size: %d documents\n", engine.Size())
+	fmt.Printf(" Engine size: %d documents\n", engine.Size())
 }
 
 func testPerformanceComparison() {
@@ -94,10 +94,10 @@ func testPerformanceComparison() {
 	docs := generateTestDocuments(1000)
 	queries := generateTestQueries(10)
 
-	fmt.Printf("📊 Testing with %d documents, %d queries\n", len(docs), len(queries))
+	fmt.Printf(" Testing with %d documents, %d queries\n", len(docs), len(queries))
 
 	// Test standard engine
-	fmt.Println("💻 Testing CPU engine...")
+	fmt.Println(" Testing CPU engine...")
 	cpuEngine := gobed.NewSearchEngine(model)
 	defer cpuEngine.Close()
 
@@ -121,7 +121,7 @@ func testPerformanceComparison() {
 	cpuSearchTime := time.Since(cpuSearchStart)
 
 	// Test GPU engine (if available)
-	fmt.Println("🚀 Testing GPU engine...")
+	fmt.Println(" Testing GPU engine...")
 	gpuEngine := gobed.NewGPUSearchEngine(model)
 	defer gpuEngine.Close()
 
@@ -131,12 +131,12 @@ func testPerformanceComparison() {
 	var gpuIndexTime time.Duration
 	
 	if err != nil {
-		fmt.Printf("⚠️  GPU indexing not available: %v\n", err)
+		fmt.Printf("  GPU indexing not available: %v\n", err)
 		fmt.Println("   (This is normal if CUDA is not available)")
 		return
 	} else {
 		gpuIndexTime = time.Since(gpuStart)
-		fmt.Printf("✅ GPU indexing successful: %d documents\n", len(gpuIds))
+		fmt.Printf(" GPU indexing successful: %d documents\n", len(gpuIds))
 	}
 
 	// GPU search timing
@@ -151,7 +151,7 @@ func testPerformanceComparison() {
 	gpuSearchTime := time.Since(gpuSearchStart)
 
 	// Performance comparison
-	fmt.Println("\n📈 Performance Comparison:")
+	fmt.Println("\n Performance Comparison:")
 	fmt.Printf("   CPU Index Time: %v (%d docs/sec)\n", 
 		cpuIndexTime, int(float64(len(cpuIds))/cpuIndexTime.Seconds()))
 	fmt.Printf("   GPU Index Time: %v (%d docs/sec)\n", 
@@ -181,10 +181,10 @@ func testLargeDataset() {
 
 	// Generate larger dataset
 	docs := generateTestDocuments(10000)
-	fmt.Printf("📊 Testing with large dataset: %d documents\n", len(docs))
+	fmt.Printf(" Testing with large dataset: %d documents\n", len(docs))
 
 	// Test with GPU engine
-	fmt.Println("🚀 Large dataset GPU test...")
+	fmt.Println(" Large dataset GPU test...")
 	gpuConfig := gobed.GPUSearchConfig()
 	gpuConfig.GPUBatchSize = 2000 // Larger batch for big dataset
 	
@@ -197,17 +197,17 @@ func testLargeDataset() {
 	indexTime := time.Since(start)
 
 	if err != nil {
-		fmt.Printf("⚠️  Large dataset GPU indexing failed: %v\n", err)
+		fmt.Printf("  Large dataset GPU indexing failed: %v\n", err)
 		fmt.Println("   This may indicate GPU memory limitations or CUDA unavailability")
 		return
 	}
 
-	fmt.Printf("✅ Successfully indexed %d documents in %v\n", len(ids), indexTime)
+	fmt.Printf(" Successfully indexed %d documents in %v\n", len(ids), indexTime)
 	fmt.Printf("   Performance: %.0f docs/sec\n", float64(len(docs))/indexTime.Seconds())
 
 	// Test search performance with multiple queries
 	queries := generateTestQueries(50)
-	fmt.Printf("🔍 Testing search with %d queries...\n", len(queries))
+	fmt.Printf(" Testing search with %d queries...\n", len(queries))
 
 	searchStart := time.Now()
 	totalResults := 0
@@ -225,7 +225,7 @@ func testLargeDataset() {
 	avgSearchTime := searchTime / time.Duration(len(queries))
 	qps := float64(len(queries)) / searchTime.Seconds()
 
-	fmt.Printf("✅ Search performance:\n")
+	fmt.Printf(" Search performance:\n")
 	fmt.Printf("   Total results: %d\n", totalResults)
 	fmt.Printf("   Average search time: %v\n", avgSearchTime)
 	fmt.Printf("   Queries per second: %.0f\n", qps)

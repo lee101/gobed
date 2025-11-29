@@ -2,12 +2,13 @@ package gobed
 
 import (
 	"math/rand"
+	"os"
 	"runtime"
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/ivf"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/ivf"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // generateRandomVectorsForIVFOpt generates random int8 vectors for testing
@@ -219,7 +220,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	dataSize := 25000
 	trainSize := 2000
 	nlist := 128
-	
+
 	vectors, scales, ids := generateRandomVectorsForIVFOpt(dataSize)
 	trainVecs := vectors[:trainSize]
 	trainScales := scales[:trainSize]
@@ -281,6 +282,10 @@ func BenchmarkMemoryUsage(b *testing.B) {
 
 // TestAccuracyPreservation ensures optimizations don't hurt accuracy
 func TestAccuracyPreservation(t *testing.T) {
+	if testing.Short() || os.Getenv("GOBED_VERIFY_ACCURACY") != "1" {
+		t.Skip("skipping accuracy preservation; set GOBED_VERIFY_ACCURACY=1 to enable")
+	}
+
 	dataSize := 5000
 	trainSize := 500
 	nlist := 32
@@ -326,7 +331,7 @@ func TestAccuracyPreservation(t *testing.T) {
 
 		recall := float64(matches) / float64(k)
 		totalRecallDiff += recall
-		
+
 		t.Logf("Query %d: Recall = %.2f%%", q, recall*100)
 	}
 

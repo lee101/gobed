@@ -96,7 +96,7 @@ func TestCacheSkipsReindexing(t *testing.T) {
 		t.Errorf("Save time unexpectedly slow: %v", saveTime)
 	}
 
-	t.Logf("✅ Cache test passed - Load: %v, Save: %v", loadTime, saveTime)
+	t.Logf(" Cache test passed - Load: %v, Save: %v", loadTime, saveTime)
 }
 
 // TestCachingPerformance benchmarks the performance improvement from caching
@@ -149,7 +149,7 @@ func TestCachingPerformance(t *testing.T) {
 
 	// Calculate speedup
 	speedup := float64(indexTime) / float64(loadTime)
-	t.Logf("🚀 Speedup from caching: %.1fx faster", speedup)
+	t.Logf(" Speedup from caching: %.1fx faster", speedup)
 
 	if speedup < 2.0 {
 		t.Errorf("Expected significant speedup from caching, got only %.1fx", speedup)

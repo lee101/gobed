@@ -1,0 +1,32 @@
+[
+  {
+    "query": "gpu accelerated vector search",
+    "relevance": {
+      "ai_gpu_research.txt": 3,
+      "gpu_vector_search.txt": 2,
+      "machine_learning_notes.txt": 1
+    }
+  },
+  {
+    "query": "studio ghibli anime films",
+    "relevance": {
+      "anime_studio_history.txt": 3,
+      "manga_landscape.txt": 2
+    }
+  },
+  {
+    "query": "deep learning research notes",
+    "relevance": {
+      "machine_learning_notes.txt": 3,
+      "ai_gpu_research.txt": 2,
+      "gpu_vector_search.txt": 1
+    }
+  },
+  {
+    "query": "martian exploration missions",
+    "relevance": {
+      "space_mars_program.txt": 3,
+      "ai_gpu_research.txt": 1
+    }
+  }
+]

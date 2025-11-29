@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -61,20 +63,20 @@ type GPUIndexer struct {
 
 // NewGPUIndexer creates a new GPU-accelerated indexer
 func NewGPUIndexer(embedDim int64, maxVectors int, precision PrecisionMode) (*GPUIndexer, error) {
-	log.Printf("🚀 Initializing GPU Indexer with %s precision...", precision)
+	log.Printf(" Initializing GPU Indexer with %s precision...", precision)
 
 	// Determine device (prefer CUDA if available)
 	device := gotch.CPU
 	if gotch.CudaIfAvailable() {
 		device = gotch.CudaIfAvailable()
-		log.Printf("✅ CUDA device available - using GPU acceleration")
+		log.Printf(" CUDA device available - using GPU acceleration")
 
 		// Log GPU info
 		if cudaCount := gotch.CudaDeviceCount(); cudaCount > 0 {
-			log.Printf("📊 Found %d CUDA device(s)", cudaCount)
+			log.Printf(" Found %d CUDA device(s)", cudaCount)
 		}
 	} else {
-		log.Printf("💻 No CUDA device found - using CPU")
+		log.Printf(" No CUDA device found - using CPU")
 	}
 
 	indexer := &GPUIndexer{
@@ -94,23 +96,23 @@ func NewGPUIndexer(embedDim int64, maxVectors int, precision PrecisionMode) (*GP
 
 // allocateTensors pre-allocates GPU memory for efficient operations
 func (idx *GPUIndexer) allocateTensors() {
-	log.Printf("📦 Pre-allocating GPU tensors for %d vectors of dimension %d", idx.maxVectors, idx.embedDim)
+	log.Printf(" Pre-allocating GPU tensors for %d vectors of dimension %d", idx.maxVectors, idx.embedDim)
 
 	// Allocate based on precision mode
 	switch idx.precision {
 	case INT8:
 		// For INT8, we allocate int8 tensor
 		idx.int8Vectors = ts.MustZeros([]int64{int64(idx.maxVectors), idx.embedDim}, gotch.Int8, idx.device)
-		log.Printf("✅ Allocated INT8 tensor: [%d, %d]", idx.maxVectors, idx.embedDim)
+		log.Printf(" Allocated INT8 tensor: [%d, %d]", idx.maxVectors, idx.embedDim)
 
 	case FP16:
 		// For FP16, allocate half precision tensor
 		idx.vectorsTensor = ts.MustZeros([]int64{int64(idx.maxVectors), idx.embedDim}, gotch.Half, idx.device)
-		log.Printf("✅ Allocated FP16 tensor: [%d, %d]", idx.maxVectors, idx.embedDim)
+		log.Printf(" Allocated FP16 tensor: [%d, %d]", idx.maxVectors, idx.embedDim)
 
 	default: // FP32
 		idx.vectorsTensor = ts.MustZeros([]int64{int64(idx.maxVectors), idx.embedDim}, gotch.Float, idx.device)
-		log.Printf("✅ Allocated FP32 tensor: [%d, %d]", idx.maxVectors, idx.embedDim)
+		log.Printf(" Allocated FP32 tensor: [%d, %d]", idx.maxVectors, idx.embedDim)
 	}
 
 	// Pre-allocate query and scores tensors
@@ -143,7 +145,7 @@ func (idx *GPUIndexer) quantizeToInt8(vectors [][]float32) {
 	idx.scale = (maxVal - minVal) / 255.0
 	idx.zeroPoint = int8(-math.Round(float64(minVal / idx.scale)))
 
-	log.Printf("📊 Quantization params - Scale: %.6f, Zero point: %d", idx.scale, idx.zeroPoint)
+	log.Printf(" Quantization params - Scale: %.6f, Zero point: %d", idx.scale, idx.zeroPoint)
 
 	// Quantize vectors to INT8
 	int8Data := make([]int8, len(vectors)*int(idx.embedDim))
@@ -204,7 +206,7 @@ func (idx *GPUIndexer) AddVectors(vectors [][]float32) error {
 	uploadTime := time.Since(startTime)
 
 	throughput := float64(len(vectors)) / uploadTime.Seconds()
-	log.Printf("✅ Added %d vectors in %.3fms (%.0f vectors/sec)",
+	log.Printf(" Added %d vectors in %.3fms (%.0f vectors/sec)",
 		len(vectors), float64(uploadTime.Nanoseconds())/1e6, throughput)
 
 	return nil
@@ -272,7 +274,7 @@ func (idx *GPUIndexer) SearchInt8(query []float32, k int) ([]int, []float32, err
 	}
 
 	searchTime := time.Since(startTime)
-	log.Printf("🔍 INT8 search completed in %.3fμs", float64(searchTime.Nanoseconds())/1e3)
+	log.Printf(" INT8 search completed in %.3fμs", float64(searchTime.Nanoseconds())/1e3)
 
 	return resultIndices, resultScores, nil
 }
@@ -320,7 +322,7 @@ func (idx *GPUIndexer) SearchFP32(query []float32, k int) ([]int, []float32, err
 	}
 
 	searchTime := time.Since(startTime)
-	log.Printf("🔍 FP32 search completed in %.3fμs", float64(searchTime.Nanoseconds())/1e3)
+	log.Printf(" FP32 search completed in %.3fμs", float64(searchTime.Nanoseconds())/1e3)
 
 	return resultIndices, resultScores, nil
 }
@@ -356,7 +358,7 @@ func (idx *GPUIndexer) BatchSearch(queries [][]float32, k int) ([][]int, [][]flo
 	batchTime := time.Since(startTime)
 	throughput := float64(len(queries)) / batchTime.Seconds()
 
-	log.Printf("⚡ Batch search: %d queries in %.2fms (%.0f queries/sec)",
+	log.Printf(" Batch search: %d queries in %.2fms (%.0f queries/sec)",
 		len(queries), float64(batchTime.Nanoseconds())/1e6, throughput)
 
 	return results, scores, nil
@@ -380,7 +382,7 @@ func (idx *GPUIndexer) Close() {
 		idx.scoresTensor.MustDrop()
 	}
 
-	log.Printf("🧹 GPU resources released")
+	log.Printf(" GPU resources released")
 }
 
 // generateRandomVectors creates random test vectors
@@ -409,13 +411,13 @@ func generateRandomVectors(count int, dim int) [][]float32 {
 // benchmarkIndexing tests indexing performance
 func benchmarkIndexing(precision PrecisionMode, numVectors int, dim int) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 80))
-	fmt.Printf("📊 INDEXING BENCHMARK - %s PRECISION\n", precision)
+	fmt.Printf(" INDEXING BENCHMARK - %s PRECISION\n", precision)
 	fmt.Printf("%s\n", strings.Repeat("=", 80))
 
 	// Create indexer
 	indexer, err := NewGPUIndexer(int64(dim), numVectors*2, precision)
 	if err != nil {
-		log.Printf("❌ Failed to create indexer: %v", err)
+		log.Printf(" Failed to create indexer: %v", err)
 		return
 	}
 	defer indexer.Close()
@@ -436,7 +438,7 @@ func benchmarkIndexing(precision PrecisionMode, numVectors int, dim int) {
 		indexer.vectors = nil
 		indexer.currentSize = 0
 
-		fmt.Printf("\n📦 Batch size: %d\n", batchSize)
+		fmt.Printf("\n Batch size: %d\n", batchSize)
 
 		totalTime := time.Duration(0)
 		numBatches := 0
@@ -453,7 +455,7 @@ func benchmarkIndexing(precision PrecisionMode, numVectors int, dim int) {
 			elapsed := time.Since(startTime)
 
 			if err != nil {
-				log.Printf("❌ Failed to add batch: %v", err)
+				log.Printf(" Failed to add batch: %v", err)
 				break
 			}
 
@@ -473,13 +475,13 @@ func benchmarkIndexing(precision PrecisionMode, numVectors int, dim int) {
 // benchmarkSearch tests search performance
 func benchmarkSearch(precision PrecisionMode, numVectors int, dim int, numQueries int) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 80))
-	fmt.Printf("🔍 SEARCH BENCHMARK - %s PRECISION\n", precision)
+	fmt.Printf(" SEARCH BENCHMARK - %s PRECISION\n", precision)
 	fmt.Printf("%s\n", strings.Repeat("=", 80))
 
 	// Create and populate indexer
 	indexer, err := NewGPUIndexer(int64(dim), numVectors, precision)
 	if err != nil {
-		log.Printf("❌ Failed to create indexer: %v", err)
+		log.Printf(" Failed to create indexer: %v", err)
 		return
 	}
 	defer indexer.Close()
@@ -489,7 +491,7 @@ func benchmarkSearch(precision PrecisionMode, numVectors int, dim int, numQuerie
 	vectors := generateRandomVectors(numVectors, dim)
 	err = indexer.AddVectors(vectors)
 	if err != nil {
-		log.Printf("❌ Failed to build index: %v", err)
+		log.Printf(" Failed to build index: %v", err)
 		return
 	}
 
@@ -498,13 +500,13 @@ func benchmarkSearch(precision PrecisionMode, numVectors int, dim int, numQuerie
 	k := 10
 
 	// Warmup
-	fmt.Printf("🔥 Warming up...\n")
+	fmt.Printf(" Warming up...\n")
 	for i := 0; i < 5; i++ {
 		_, _, _ = indexer.Search(queries[0], k)
 	}
 
 	// Single query benchmark
-	fmt.Printf("\n⚡ Single query performance (k=%d):\n", k)
+	fmt.Printf("\n Single query performance (k=%d):\n", k)
 	singleTimes := make([]time.Duration, numQueries)
 
 	for i := 0; i < numQueries; i++ {
@@ -513,7 +515,7 @@ func benchmarkSearch(precision PrecisionMode, numVectors int, dim int, numQuerie
 		elapsed := time.Since(startTime)
 
 		if err != nil {
-			log.Printf("❌ Search failed: %v", err)
+			log.Printf(" Search failed: %v", err)
 			continue
 		}
 
@@ -545,7 +547,7 @@ func benchmarkSearch(precision PrecisionMode, numVectors int, dim int, numQuerie
 	fmt.Printf("   Throughput: %.0f queries/sec\n", qps)
 
 	// Batch query benchmark
-	fmt.Printf("\n🚀 Batch query performance:\n")
+	fmt.Printf("\n Batch query performance:\n")
 	batchSizes := []int{10, 50, 100}
 
 	for _, batchSize := range batchSizes {
@@ -559,7 +561,7 @@ func benchmarkSearch(precision PrecisionMode, numVectors int, dim int, numQuerie
 		elapsed := time.Since(startTime)
 
 		if err != nil {
-			log.Printf("❌ Batch search failed: %v", err)
+			log.Printf(" Batch search failed: %v", err)
 			continue
 		}
 
@@ -574,7 +576,7 @@ func benchmarkSearch(precision PrecisionMode, numVectors int, dim int, numQuerie
 // compareAccuracy compares accuracy between precisions
 func compareAccuracy(numVectors int, dim int) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("🎯 ACCURACY COMPARISON - INT8 vs FP32\n")
+	fmt.Printf(" ACCURACY COMPARISON - INT8 vs FP32\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	// Generate test vectors
@@ -592,7 +594,7 @@ func compareAccuracy(numVectors int, dim int) {
 	defer int8Indexer.Close()
 	int8Indexer.AddVectors(vectors)
 
-	fmt.Printf("📊 Comparing top-%d results for %d queries:\n", k, len(queries))
+	fmt.Printf(" Comparing top-%d results for %d queries:\n", k, len(queries))
 
 	totalRecall := float32(0)
 
@@ -629,21 +631,21 @@ func compareAccuracy(numVectors int, dim int) {
 	}
 
 	avgRecall := totalRecall / float32(len(queries))
-	fmt.Printf("\n📈 Overall Recall@%d: %.2f%%\n", k, avgRecall*100)
+	fmt.Printf("\n Overall Recall@%d: %.2f%%\n", k, avgRecall*100)
 
 	if avgRecall >= 0.9 {
-		fmt.Printf("✅ INT8 quantization maintains excellent accuracy (>90%% recall)\n")
+		fmt.Printf(" INT8 quantization maintains excellent accuracy (>90%% recall)\n")
 	} else if avgRecall >= 0.8 {
-		fmt.Printf("⚠️  INT8 quantization shows good accuracy (>80%% recall)\n")
+		fmt.Printf("  INT8 quantization shows good accuracy (>80%% recall)\n")
 	} else {
-		fmt.Printf("❌ INT8 quantization may need tuning (%.0f%% recall)\n", avgRecall*100)
+		fmt.Printf(" INT8 quantization may need tuning (%.0f%% recall)\n", avgRecall*100)
 	}
 }
 
 // benchmarkMemoryUsage compares memory usage between precisions
 func benchmarkMemoryUsage(numVectors int, dim int) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("💾 MEMORY USAGE COMPARISON\n")
+	fmt.Printf(" MEMORY USAGE COMPARISON\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	vectors := generateRandomVectors(numVectors, dim)
@@ -653,7 +655,7 @@ func benchmarkMemoryUsage(numVectors int, dim int) {
 	fp16Size := numVectors * dim * 2 // 2 bytes per float16
 	int8Size := numVectors * dim * 1 // 1 byte per int8
 
-	fmt.Printf("📊 Theoretical memory usage for %d vectors of dimension %d:\n", numVectors, dim)
+	fmt.Printf(" Theoretical memory usage for %d vectors of dimension %d:\n", numVectors, dim)
 	fmt.Printf("   FP32: %.2f MB\n", float64(fp32Size)/(1024*1024))
 	fmt.Printf("   FP16: %.2f MB (%.1fx reduction)\n",
 		float64(fp16Size)/(1024*1024), float64(fp32Size)/float64(fp16Size))
@@ -671,13 +673,13 @@ func benchmarkMemoryUsage(numVectors int, dim int) {
 
 		indexer, err := NewGPUIndexer(int64(dim), numVectors, precision)
 		if err != nil {
-			log.Printf("❌ Failed to create %s indexer: %v", precision, err)
+			log.Printf(" Failed to create %s indexer: %v", precision, err)
 			continue
 		}
 
 		err = indexer.AddVectors(vectors)
 		if err != nil {
-			log.Printf("❌ Failed to add vectors to %s indexer: %v", precision, err)
+			log.Printf(" Failed to add vectors to %s indexer: %v", precision, err)
 			indexer.Close()
 			continue
 		}
@@ -694,7 +696,7 @@ func benchmarkMemoryUsage(numVectors int, dim int) {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 GPU LIBTORCH INDEXING BENCHMARK WITH INT8 QUANTIZATION")
+	fmt.Println(" GPU LIBTORCH INDEXING BENCHMARK WITH INT8 QUANTIZATION")
 	fmt.Println("================================================================================")
 	fmt.Printf("System: %d CPUs, CUDA: %v\n", runtime.NumCPU(), gotch.CudaIfAvailable())
 	fmt.Println()
@@ -711,12 +713,12 @@ func main() {
 	benchmarkMemoryUsage(numVectors, dim)
 
 	// 2. Indexing performance benchmarks
-	fmt.Printf("\n🏃 Running indexing benchmarks with %d vectors...\n", numVectors)
+	fmt.Printf("\n Running indexing benchmarks with %d vectors...\n", numVectors)
 	benchmarkIndexing(FP32, numVectors, dim)
 	benchmarkIndexing(INT8, numVectors, dim)
 
 	// 3. Search performance benchmarks
-	fmt.Printf("\n🔍 Running search benchmarks...\n")
+	fmt.Printf("\n Running search benchmarks...\n")
 	benchmarkSearch(FP32, numVectors, dim, numQueries)
 	benchmarkSearch(INT8, numVectors, dim, numQueries)
 
@@ -725,7 +727,7 @@ func main() {
 
 	// Summary
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("✅ BENCHMARK COMPLETED\n")
+	fmt.Printf(" BENCHMARK COMPLETED\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 	fmt.Printf("Key Findings:\n")
 	fmt.Printf("  • INT8 quantization provides ~4x memory reduction\n")

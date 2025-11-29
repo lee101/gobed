@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -154,7 +156,7 @@ type BenchmarkResult struct {
 
 func printBenchmarkTable(results []BenchmarkResult) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 120))
-	fmt.Printf("📊 CPU vs GPU PERFORMANCE COMPARISON\n")
+	fmt.Printf(" CPU vs GPU PERFORMANCE COMPARISON\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 120))
 
 	fmt.Printf("%-30s | %12s | %12s | %10s | %15s | %15s\n",
@@ -173,7 +175,7 @@ func printBenchmarkTable(results []BenchmarkResult) {
 
 func benchmarkEmbeddings() []BenchmarkResult {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("⚡ EMBEDDING OPERATIONS: CPU vs GPU\n")
+	fmt.Printf(" EMBEDDING OPERATIONS: CPU vs GPU\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	vocabSize := 250002
@@ -194,7 +196,7 @@ func benchmarkEmbeddings() []BenchmarkResult {
 	results := []BenchmarkResult{}
 
 	// CPU Embeddings
-	fmt.Printf("\n📊 CPU Embedding Performance:\n")
+	fmt.Printf("\n CPU Embedding Performance:\n")
 	cpuEmbed := NewCPUEmbeddings(vocabSize, embedDim)
 
 	// Single sequence
@@ -232,7 +234,7 @@ func benchmarkEmbeddings() []BenchmarkResult {
 		batchSize, float64(cpuBatchTime.Nanoseconds())/1e6, cpuBatchThroughput)
 
 	// GPU Embeddings
-	fmt.Printf("\n📊 GPU Embedding Performance:\n")
+	fmt.Printf("\n GPU Embedding Performance:\n")
 
 	device := gotch.CPU
 	if gotch.CudaIfAvailable() {
@@ -354,7 +356,7 @@ func benchmarkEmbeddings() []BenchmarkResult {
 
 func benchmarkSearch() []BenchmarkResult {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("🔍 SEARCH OPERATIONS: CPU vs GPU\n")
+	fmt.Printf(" SEARCH OPERATIONS: CPU vs GPU\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	dim := 384
@@ -397,7 +399,7 @@ func benchmarkSearch() []BenchmarkResult {
 	results := []BenchmarkResult{}
 
 	// CPU Search
-	fmt.Printf("\n📊 CPU Search Performance:\n")
+	fmt.Printf("\n CPU Search Performance:\n")
 	cpuIndex := NewCPUSearch(dim)
 	cpuIndex.Add(vectors)
 
@@ -412,7 +414,7 @@ func benchmarkSearch() []BenchmarkResult {
 		numQueries, float64(cpuSearchTime.Nanoseconds())/1e6, cpuSearchThroughput)
 
 	// GPU Search
-	fmt.Printf("\n📊 GPU Search Performance:\n")
+	fmt.Printf("\n GPU Search Performance:\n")
 
 	device := gotch.CPU
 	if gotch.CudaIfAvailable() {
@@ -450,7 +452,7 @@ func benchmarkSearch() []BenchmarkResult {
 		numQueries, float64(gpuSearchTime.Nanoseconds())/1e6, gpuSearchThroughput)
 
 	// Batch search on GPU
-	fmt.Printf("\n📊 GPU Batch Search:\n")
+	fmt.Printf("\n GPU Batch Search:\n")
 
 	// Upload all queries at once
 	flatQueries := make([]float32, numQueries*dim)
@@ -508,7 +510,7 @@ func benchmarkSearch() []BenchmarkResult {
 
 func benchmarkScaling() {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("📈 SCALING ANALYSIS: CPU vs GPU\n")
+	fmt.Printf(" SCALING ANALYSIS: CPU vs GPU\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	dim := 384
@@ -579,12 +581,12 @@ func benchmarkScaling() {
 			speedup)
 	}
 
-	fmt.Printf("\n📊 Observation: GPU speedup increases with dataset size!\n")
+	fmt.Printf("\n Observation: GPU speedup increases with dataset size!\n")
 }
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("⚡ COMPREHENSIVE CPU vs GPU BENCHMARK")
+	fmt.Println(" COMPREHENSIVE CPU vs GPU BENCHMARK")
 	fmt.Println("================================================================================")
 	fmt.Printf("System Configuration:\n")
 	fmt.Printf("  CPUs: %d\n", runtime.NumCPU())
@@ -617,7 +619,7 @@ func main() {
 
 	// Final summary
 	fmt.Printf("\n%s\n", strings.Repeat("=", 100))
-	fmt.Printf("🎯 KEY INSIGHTS\n")
+	fmt.Printf(" KEY INSIGHTS\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 100))
 
 	avgSpeedup := float64(0)
@@ -626,18 +628,18 @@ func main() {
 	}
 	avgSpeedup /= float64(len(allResults))
 
-	fmt.Printf("\n📊 Performance Summary:\n")
+	fmt.Printf("\n Performance Summary:\n")
 	fmt.Printf("  • Average GPU speedup: %.1fx\n", avgSpeedup)
 	fmt.Printf("  • Best for: Large batch operations and vector search\n")
 	fmt.Printf("  • GPU excels at: Parallel matrix operations\n")
 	fmt.Printf("  • Speedup scales with: Dataset size and batch size\n")
 
-	fmt.Printf("\n⚡ Optimization Recommendations:\n")
+	fmt.Printf("\n Optimization Recommendations:\n")
 	fmt.Printf("  1. Use GPU for embedding lookup + pooling (not matrix mul)\n")
 	fmt.Printf("  2. Batch operations for maximum GPU utilization\n")
 	fmt.Printf("  3. Keep data on GPU to avoid transfer overhead\n")
 	fmt.Printf("  4. Use INT8 quantization for 4x memory savings\n")
 	fmt.Printf("  5. Implement approximate search (IVF/HNSW) for large datasets\n")
 
-	fmt.Printf("\n✅ GPU acceleration provides massive speedups for vector operations!\n")
+	fmt.Printf("\n GPU acceleration provides massive speedups for vector operations!\n")
 }

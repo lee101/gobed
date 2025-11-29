@@ -2,7 +2,7 @@
 
 package gobed
 
-import "github.com/lee101/gobed/ann/simd"
+import "github.com/lee101/gobed/pkg/ann/simd"
 
 // createGPUIndexConfig creates IndexConfig for non-GPU builds
 func createGPUIndexConfig(deviceID int) IndexConfig {

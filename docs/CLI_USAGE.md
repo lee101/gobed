@@ -1,6 +1,6 @@
 # CLI Distance Calculator - Real Embeddings
 
-## ✅ WORKING IMPLEMENTATION 
+##  WORKING IMPLEMENTATION 
 
 You now have a **real** CLI that calculates semantic distance between texts using:
 - **Real safetensors weights** from static-retrieval-mrl-en-v1 model
@@ -48,12 +48,12 @@ Distance: 0.722311
 
 ## Semantic Understanding Demonstrated
 
-✅ **Clear Separation**: 
+ **Clear Separation**: 
 - Related texts: 0.18-0.28 similarity
 - Unrelated texts: 0.05 similarity  
 - Tech concepts: 0.28 similarity (highest)
 
-✅ **Model Performance**:
+ **Model Performance**:
 - Load time: ~300ms
 - Embedding dimensions: 1,024
 - Vocabulary: 30,522 tokens

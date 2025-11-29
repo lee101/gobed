@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lee101/gobed/ann/search"
+	"github.com/lee101/gobed/pkg/ann/search"
 )
 
 // PersistenceFormat represents the format for saving/loading indexes

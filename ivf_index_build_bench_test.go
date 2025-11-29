@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/ivf"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/ivf"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // generateRandomVectors generates random int8 vectors for testing

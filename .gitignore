@@ -16,6 +16,8 @@ model/
 gobed_cuda
 *.out
 *.test
+*.o
+*.a
 
 # Python caches
 __pycache__/
@@ -28,6 +30,78 @@ gosec.sarif
 gpu_search/cuda_ops/build/
 gpu_search/*.so
 *.so
+
+# Cache directories
 .gocache
 .gomodcache
+.cache/
+.gopath
+
+# CLI binaries
 bed-cli
+
+# Server logs
+server.log
+
+# Binary executables in bed directory
+bed/bed
+bed/bed_real
+bed/bed_perf
+bed/bed_*
+bed/model/
+
+# Test data
+testdata/
+test_anime.txt
+ai.txt
+
+# Generated test files
+test/
+
+# Benchmark directories
+cmd/test_cuda/
+
+# Docker and scripts
+docker-compose.yml
+gpu_env.sh
+
+# Docker configs
+Dockerfile.*
+
+# Test binaries
+test_cagra
+test_cagra_simple
+test_quality_no_cgo
+bed/test_gpu_benchmark
+tmp_check_cuda
+
+# Compiled binaries
+bed/benchmark_final
+bed/final_gpu_benchmark
+bed/test_bench/bed_chunked
+bed/test_bench/bed_simple
+bed/test_bench/massive_scale_benchmark
+bed/test_bench/optimized_benchmark
+bed/test_bench/scalable_benchmark
+bed/test_bench/simple_benchmark
+bed/test_full_200k
+bed/test_gpu_real
+cuvs_c_test/test_*
+tests/test_fused_cagra_quality
+
+# Backup files
+*.backup
+
+# Temp directories
+tmp_*/
+test_dup/
+
+# Model symlinks
+bed/model
+test_dup/model
+tmp_bed_test/model
+
+# Result/plan files
+*_results.txt
+*_plan.md
+benchmark-results/

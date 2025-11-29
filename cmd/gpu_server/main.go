@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -37,30 +39,30 @@ func main() {
 	)
 	flag.Parse()
 
-	fmt.Println("🚀 Starting GPU-Accelerated GoBeD Server")
+	fmt.Println(" Starting GPU-Accelerated GoBeD Server")
 	fmt.Println("========================================")
 
 	// Check GPU availability
 	if !gobed.IsCUDAAvailable() {
-		log.Fatal("❌ CUDA is not available. Please ensure NVIDIA drivers and CUDA are installed.")
+		log.Fatal(" CUDA is not available. Please ensure NVIDIA drivers and CUDA are installed.")
 	}
 
 	gpuCount := gobed.GetCUDADeviceCount()
 	cudaVersion := gobed.GetCUDAVersion()
 	
-	fmt.Printf("✅ CUDA Available: %s\n", cudaVersion)
+	fmt.Printf(" CUDA Available: %s\n", cudaVersion)
 	fmt.Printf("   GPU Devices: %d\n", gpuCount)
 	fmt.Printf("   Using Device: %d\n", *gpuDevice)
 
 	if *gpuDevice >= gpuCount {
-		log.Fatalf("❌ Invalid GPU device %d. Available devices: 0-%d", *gpuDevice, gpuCount-1)
+		log.Fatalf(" Invalid GPU device %d. Available devices: 0-%d", *gpuDevice, gpuCount-1)
 	}
 
 	// Load embedding model
 	fmt.Println("\n📚 Loading Embedding Model...")
 	model, err := gobed.LoadModel()
 	if err != nil {
-		log.Fatalf("❌ Failed to load model: %v", err)
+		log.Fatalf(" Failed to load model: %v", err)
 	}
 
 	// Initialize GPU memory manager
@@ -70,7 +72,7 @@ func main() {
 	
 	memManager, err := gobed.NewGPUMemoryManager(memConfig)
 	if err != nil {
-		log.Fatalf("❌ Failed to create GPU memory manager: %v", err)
+		log.Fatalf(" Failed to create GPU memory manager: %v", err)
 	}
 	defer memManager.Close()
 
@@ -92,31 +94,31 @@ func main() {
 	serverConfig.EnableGPUFallback = *cpuFallback
 
 	// Create GPU-accelerated server
-	fmt.Println("\n🚀 Creating GPU-Accelerated Server...")
+	fmt.Println("\n Creating GPU-Accelerated Server...")
 	server, err := gobed.NewGPUSearchServer(model, serverConfig)
 	if err != nil {
-		log.Fatalf("❌ Failed to create GPU server: %v", err)
+		log.Fatalf(" Failed to create GPU server: %v", err)
 	}
 
 	// Run demonstration mode if requested
 	if *demoMode {
-		fmt.Println("\n🎪 Running Demonstration Mode...")
+		fmt.Println("\n Running Demonstration Mode...")
 		if err := runDemonstration(model, server, *demoVectors, *demoQueries); err != nil {
-			log.Printf("⚠️  Demo failed: %v", err)
+			log.Printf("  Demo failed: %v", err)
 		}
 	}
 
 	// Start the server
 	fmt.Println("\n🌐 Starting HTTP Server...")
 	if err := server.Start(); err != nil {
-		log.Fatalf("❌ Failed to start server: %v", err)
+		log.Fatalf(" Failed to start server: %v", err)
 	}
 
 	// Run load test if requested
 	if *loadTest {
 		go func() {
 			time.Sleep(2 * time.Second) // Give server time to start
-			fmt.Println("\n⚡ Running Load Test...")
+			fmt.Println("\n Running Load Test...")
 			runLoadTest(*port, 1000, 10) // 1000 requests, 10 concurrent
 		}()
 	}
@@ -134,20 +136,20 @@ func main() {
 	}
 
 	// Display server info
-	fmt.Printf("\n✅ GPU-Accelerated GoBeD Server Running\n")
+	fmt.Printf("\n GPU-Accelerated GoBeD Server Running\n")
 	fmt.Printf("   🌐 HTTP API: http://localhost:%d\n", *port)
-	fmt.Printf("   🔍 Search: POST /search\n")
-	fmt.Printf("   📦 Batch Search: POST /batch_search\n")
+	fmt.Printf("    Search: POST /search\n")
+	fmt.Printf("    Batch Search: POST /batch_search\n")
 	fmt.Printf("   📚 Index: POST /index\n")
-	fmt.Printf("   📊 Stats: GET /gpu_stats\n")
-	fmt.Printf("   🔧 Health: GET /health\n")
-	fmt.Printf("   📈 Metrics: GET /metrics\n")
+	fmt.Printf("    Stats: GET /gpu_stats\n")
+	fmt.Printf("    Health: GET /health\n")
+	fmt.Printf("    Metrics: GET /metrics\n")
 	
 	if *enableProfiling {
 		fmt.Printf("   🐛 Profiling: http://localhost:%d/debug/pprof/\n", *port)
 	}
 
-	fmt.Println("\n⚡ GPU Acceleration Features:")
+	fmt.Println("\n GPU Acceleration Features:")
 	fmt.Println("   • CUDA-accelerated similarity search")
 	fmt.Println("   • GPU memory pooling and management")
 	fmt.Println("   • Batch processing optimization")
@@ -158,20 +160,20 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	fmt.Println("\n🎯 Ready to serve! Press Ctrl+C to stop.")
+	fmt.Println("\n Ready to serve! Press Ctrl+C to stop.")
 	<-sigChan
 
 	fmt.Println("\n🛑 Shutting down gracefully...")
 	if err := server.Stop(); err != nil {
-		log.Printf("⚠️  Server shutdown error: %v", err)
+		log.Printf("  Server shutdown error: %v", err)
 	}
 
-	fmt.Println("✅ Goodbye!")
+	fmt.Println(" Goodbye!")
 }
 
 // runDemonstration runs a comprehensive demonstration of GPU acceleration
 func runDemonstration(model *gobed.EmbeddingModel, server *gobed.GPUSearchServer, numVectors, numQueries int) error {
-	fmt.Printf("🎪 Demonstration: %d vectors, %d queries\n", numVectors, numQueries)
+	fmt.Printf(" Demonstration: %d vectors, %d queries\n", numVectors, numQueries)
 
 	// Generate sample texts for indexing
 	sampleTexts := generateSampleTexts(numVectors)
@@ -183,7 +185,7 @@ func runDemonstration(model *gobed.EmbeddingModel, server *gobed.GPUSearchServer
 	}
 
 	// Generate embeddings and time the process
-	fmt.Printf("\n⚡ Generating embeddings using GPU acceleration...\n")
+	fmt.Printf("\n Generating embeddings using GPU acceleration...\n")
 	start := time.Now()
 
 	var allEmbeddings [][]int8
@@ -215,15 +217,15 @@ func runDemonstration(model *gobed.EmbeddingModel, server *gobed.GPUSearchServer
 	}
 
 	embeddingTime := time.Since(start)
-	fmt.Printf("✅ Generated %d embeddings in %v\n", len(allEmbeddings), embeddingTime)
+	fmt.Printf(" Generated %d embeddings in %v\n", len(allEmbeddings), embeddingTime)
 	fmt.Printf("   Rate: %.1f embeddings/second\n", float64(len(allEmbeddings))/embeddingTime.Seconds())
 
 	// Create sample queries
 	queryTexts := generateQueryTexts(numQueries)
-	fmt.Printf("\n🔍 Generated %d sample queries\n", len(queryTexts))
+	fmt.Printf("\n Generated %d sample queries\n", len(queryTexts))
 
 	// Run search demonstration
-	fmt.Println("\n🎯 Demonstrating search capabilities...")
+	fmt.Println("\n Demonstrating search capabilities...")
 	searchStart := time.Now()
 	
 	totalSearchTime := time.Duration(0)
@@ -250,7 +252,7 @@ func runDemonstration(model *gobed.EmbeddingModel, server *gobed.GPUSearchServer
 	}
 
 	searchTime := time.Since(searchStart)
-	fmt.Printf("✅ Completed %d searches in %v\n", successfulSearches, searchTime)
+	fmt.Printf(" Completed %d searches in %v\n", successfulSearches, searchTime)
 	if successfulSearches > 0 {
 		avgSearchTime := totalSearchTime / time.Duration(successfulSearches)
 		fmt.Printf("   Average search time: %v\n", avgSearchTime)
@@ -263,7 +265,7 @@ func runDemonstration(model *gobed.EmbeddingModel, server *gobed.GPUSearchServer
 
 // runLoadTest runs a simple load test against the server
 func runLoadTest(port, requests, concurrent int) {
-	fmt.Printf("⚡ Load Test: %d requests, %d concurrent\n", requests, concurrent)
+	fmt.Printf(" Load Test: %d requests, %d concurrent\n", requests, concurrent)
 	
 	// This would implement actual HTTP load testing
 	// For now, just simulate the output
@@ -275,7 +277,7 @@ func runLoadTest(port, requests, concurrent int) {
 	duration := time.Since(start)
 	rps := float64(requests) / duration.Seconds()
 	
-	fmt.Printf("✅ Load test completed:\n")
+	fmt.Printf(" Load test completed:\n")
 	fmt.Printf("   Duration: %v\n", duration)
 	fmt.Printf("   Rate: %.1f requests/second\n", rps)
 	fmt.Printf("   Success rate: 100%%\n")
@@ -283,7 +285,7 @@ func runLoadTest(port, requests, concurrent int) {
 
 // displayDetailedStats shows comprehensive system statistics
 func displayDetailedStats(memManager *gobed.GPUMemoryManager, server *gobed.GPUSearchServer) {
-	fmt.Println("\n📊 Detailed System Statistics")
+	fmt.Println("\n Detailed System Statistics")
 	fmt.Println("=============================")
 
 	// GPU Memory stats
@@ -296,7 +298,7 @@ func displayDetailedStats(memManager *gobed.GPUMemoryManager, server *gobed.GPUS
 	fmt.Printf("   Usage: %.1f%%\n", memStats.AllocatedGB/memStats.TotalMemoryGB*100)
 
 	// Memory pools
-	fmt.Printf("\n📦 Memory Pools:\n")
+	fmt.Printf("\n Memory Pools:\n")
 	pools := []gobed.PoolStats{memStats.VectorPoolStats, memStats.QueryPoolStats, memStats.ResultPoolStats}
 	for _, pool := range pools {
 		fmt.Printf("   %s: %d/%d blocks (%.1fMB each)\n", 
@@ -306,7 +308,7 @@ func displayDetailedStats(memManager *gobed.GPUMemoryManager, server *gobed.GPUS
 	// System info
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	fmt.Printf("\n💾 System Memory:\n")
+	fmt.Printf("\n System Memory:\n")
 	fmt.Printf("   Go Allocated: %.1f MB\n", float64(m.Alloc)/1024/1024)
 	fmt.Printf("   Go System: %.1f MB\n", float64(m.Sys)/1024/1024)
 	fmt.Printf("   Goroutines: %d\n", runtime.NumGoroutine())

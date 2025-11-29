@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -10,17 +12,16 @@ import (
 
 func main() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("🚀 GOBED: Text Embedding Similarity Examples")
+	fmt.Println("GOBED: Text Embedding Similarity Examples")
 	fmt.Println(strings.Repeat("=", 80))
 
-	// Load model
-	fmt.Println("\n📦 Loading embedding model...")
+	fmt.Println("\nLoading embedding model...")
 	model, err := gobed.LoadModel()
 	if err != nil {
-		fmt.Printf("❌ Error loading model: %v\n", err)
+		fmt.Printf(" Error loading model: %v\n", err)
 		return
 	}
-	fmt.Printf("✅ Model loaded: %d vocab × %d dims\n", model.VocabSize, model.EmbedDim)
+	fmt.Printf(" Model loaded: %d vocab × %d dims\n", model.VocabSize, model.EmbedDim)
 
 	// Get available texts for testing
 	availableTexts := model.GetAvailableTexts()
@@ -52,12 +53,12 @@ func main() {
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 SIMILARITY WITHIN GROUPS (Related Texts)")
+	fmt.Println(" SIMILARITY WITHIN GROUPS (Related Texts)")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Test similarity within groups (should be higher)
 	for groupName, texts := range testGroups {
-		fmt.Printf("\n🏷️  Group: %s\n", groupName)
+		fmt.Printf("\n🏷  Group: %s\n", groupName)
 		fmt.Println(strings.Repeat("-", 50))
 
 		validTexts := []string{}
@@ -72,7 +73,7 @@ func main() {
 		}
 
 		if len(validTexts) < 2 {
-			fmt.Printf("⚠️  Not enough texts available in this group\n")
+			fmt.Printf("  Not enough texts available in this group\n")
 			continue
 		}
 
@@ -99,12 +100,12 @@ func main() {
 
 		if len(similarities) > 0 {
 			avg := average(similarities)
-			fmt.Printf("  📊 Average similarity within %s: %.4f\n", groupName, avg)
+			fmt.Printf("   Average similarity within %s: %.4f\n", groupName, avg)
 		}
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 SIMILARITY ACROSS GROUPS (Unrelated Texts)")
+	fmt.Println(" SIMILARITY ACROSS GROUPS (Unrelated Texts)")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Test similarity across groups (should be lower)
@@ -157,7 +158,7 @@ func main() {
 
 	if len(crossSimilarities) > 0 {
 		avgCross := average(crossSimilarities)
-		fmt.Printf("\n📊 Average cross-group similarity: %.4f\n", avgCross)
+		fmt.Printf("\n Average cross-group similarity: %.4f\n", avgCross)
 	}
 
 	// Distance metrics
@@ -217,7 +218,7 @@ func main() {
 
 	// Performance test
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("⚡ PERFORMANCE TEST")
+	fmt.Println(" PERFORMANCE TEST")
 	fmt.Println(strings.Repeat("=", 80))
 
 	if len(availableTexts) > 0 {
@@ -243,7 +244,7 @@ func main() {
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("✅ Example completed!")
+	fmt.Println(" Example completed!")
 }
 
 func truncateText(text string, maxLen int) string {

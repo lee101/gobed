@@ -116,10 +116,10 @@ def main():
     print("🔄 Loading Float32 weights...")
     weights_f32 = load_safetensors(model_path)
     vocab_size, embed_dim = weights_f32.shape
-    print(f"✅ Loaded weights: shape={weights_f32.shape}, dtype={weights_f32.dtype}")
+    print(f" Loaded weights: shape={weights_f32.shape}, dtype={weights_f32.dtype}")
     
     # Quantize to INT8
-    print("\n⚡ Quantizing to INT8...")
+    print("\n Quantizing to INT8...")
     weights_int8, scale, zero_point = quantize_to_int8(weights_f32)
     print(f"  Scale: {scale:.6f}")
     print(f"  Zero point: {zero_point}")
@@ -132,7 +132,7 @@ def main():
         ("Python", [7145]),
     ]
     
-    print("\n📊 Computing embeddings:")
+    print("\n Computing embeddings:")
     embeddings_f32 = []
     embeddings_int8 = []
     
@@ -169,7 +169,7 @@ def main():
             print(f"    Diff:    {abs(sim_f32 - sim_int8):.4f}")
     
     # Memory comparison
-    print("\n💾 Memory usage:")
+    print("\n Memory usage:")
     f32_size = vocab_size * embed_dim * 4 / (1024 * 1024)
     int8_size = vocab_size * embed_dim * 1 / (1024 * 1024)
     print(f"  Float32: {f32_size:.2f} MB")
@@ -177,7 +177,7 @@ def main():
     print(f"  Reduction: {(1 - int8_size/f32_size)*100:.1f}%")
     
     # Quantization error analysis
-    print("\n📈 Quantization error analysis:")
+    print("\n Quantization error analysis:")
     
     # Sample some weights for comparison
     sample_idx = np.random.choice(vocab_size, 100)
@@ -197,13 +197,13 @@ def main():
     
     # Overall statistics
     total_weights = vocab_size * embed_dim
-    print(f"\n📊 Statistics:")
+    print(f"\n Statistics:")
     print(f"  Total weights: {total_weights:,}")
     print(f"  Compression ratio: 4x")
     print(f"  Theoretical speedup: 2-4x (with SIMD)")
     
-    print("\n✅ Python INT8 test completed!")
-    print("✅ Results can be compared with Go implementation")
+    print("\n Python INT8 test completed!")
+    print(" Results can be compared with Go implementation")
 
 if __name__ == "__main__":
     main()

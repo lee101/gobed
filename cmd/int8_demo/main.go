@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -40,15 +42,14 @@ func main() {
 	fmt.Println("using INT8 quantized embeddings with AVX-512 acceleration.")
 	fmt.Println()
 
-	// Load the model
 	fmt.Println("Loading INT8 model...")
 	start := time.Now()
 	model, err := gobed.LoadModelInt8(true)
 	if err != nil {
-		fmt.Printf("❌ Error loading model: %v\n", err)
+		fmt.Printf(" Error loading model: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("✅ Model loaded in %v\n", time.Since(start))
+	fmt.Printf(" Model loaded in %v\n", time.Since(start))
 
 	// Try to load tokenizer
 	var tk *tokenizers.Tokenizer
@@ -62,9 +63,9 @@ func main() {
 
 	tk, err = tokenizers.FromFile(tokenizerPath)
 	if err != nil {
-		fmt.Printf("⚠️  Could not load tokenizer, will use predefined examples only\n")
+		fmt.Printf("  Could not load tokenizer, will use predefined examples only\n")
 	} else {
-		fmt.Printf("✅ Tokenizer loaded from %s\n", tokenizerPath)
+		fmt.Printf(" Tokenizer loaded from %s\n", tokenizerPath)
 	}
 	fmt.Println()
 
@@ -86,7 +87,7 @@ func main() {
 		switch option {
 		case "1":
 			if tk == nil {
-				fmt.Println("❌ Tokenizer not available. Please use predefined examples.")
+				fmt.Println(" Tokenizer not available. Please use predefined examples.")
 				continue
 			}
 			handleCustomText(reader, model, tk)
@@ -117,20 +118,20 @@ func handleCustomText(reader *bufio.Reader, model *gobed.EmbeddingModelInt8, tk 
 	text2 = strings.TrimSpace(text2)
 
 	if text1 == "" || text2 == "" {
-		fmt.Println("⚠️  Please enter non-empty texts")
+		fmt.Println("  Please enter non-empty texts")
 		return
 	}
 
 	// Tokenize
 	tokens1, err := tk.Encode(text1, false)
 	if err != nil {
-		fmt.Printf("❌ Error tokenizing text 1: %v\n", err)
+		fmt.Printf(" Error tokenizing text 1: %v\n", err)
 		return
 	}
 
 	tokens2, err := tk.Encode(text2, false)
 	if err != nil {
-		fmt.Printf("❌ Error tokenizing text 2: %v\n", err)
+		fmt.Printf(" Error tokenizing text 2: %v\n", err)
 		return
 	}
 
@@ -179,7 +180,7 @@ func handlePredefinedExamples(reader *bufio.Reader, model *gobed.EmbeddingModelI
 	fmt.Sscanf(strings.TrimSpace(idx2Str), "%d", &idx2)
 
 	if idx1 < 1 || idx1 > len(predefinedExamples) || idx2 < 1 || idx2 > len(predefinedExamples) {
-		fmt.Println("❌ Invalid selection")
+		fmt.Println(" Invalid selection")
 		return
 	}
 
@@ -187,7 +188,7 @@ func handlePredefinedExamples(reader *bufio.Reader, model *gobed.EmbeddingModelI
 	ex2 := predefinedExamples[idx2-1]
 
 	if ex1.TokenIDs == nil || ex2.TokenIDs == nil {
-		fmt.Println("❌ Examples not tokenized. Tokenizer required.")
+		fmt.Println(" Examples not tokenized. Tokenizer required.")
 		return
 	}
 
@@ -206,7 +207,7 @@ func handleReferenceTokens(reader *bufio.Reader, model *gobed.EmbeddingModelInt8
 
 	file, err := os.ReadFile(tokensPath)
 	if err != nil {
-		fmt.Printf("❌ Could not load reference tokens: %v\n", err)
+		fmt.Printf(" Could not load reference tokens: %v\n", err)
 		return
 	}
 
@@ -214,7 +215,7 @@ func handleReferenceTokens(reader *bufio.Reader, model *gobed.EmbeddingModelInt8
 		TokenIDs []int `json:"token_ids"`
 	}
 	if err := json.Unmarshal(file, &refTokens); err != nil {
-		fmt.Printf("❌ Error parsing reference tokens: %v\n", err)
+		fmt.Printf(" Error parsing reference tokens: %v\n", err)
 		return
 	}
 
@@ -241,7 +242,7 @@ func handleReferenceTokens(reader *bufio.Reader, model *gobed.EmbeddingModelInt8
 	fmt.Sscanf(strings.TrimSpace(idx2Str), "%d", &idx2)
 
 	if idx1 < 1 || idx1 > len(texts) || idx2 < 1 || idx2 > len(texts) {
-		fmt.Println("❌ Invalid selection")
+		fmt.Println(" Invalid selection")
 		return
 	}
 
@@ -255,21 +256,21 @@ func handleReferenceTokens(reader *bufio.Reader, model *gobed.EmbeddingModelInt8
 
 func computeAndDisplaySimilarity(model *gobed.EmbeddingModelInt8, text1, text2 string, tokens1, tokens2 []int) {
 	fmt.Println("\n🔄 Processing...")
-	fmt.Printf("📝 Text 1: %d tokens\n", len(tokens1))
-	fmt.Printf("📝 Text 2: %d tokens\n", len(tokens2))
+	fmt.Printf(" Text 1: %d tokens\n", len(tokens1))
+	fmt.Printf(" Text 2: %d tokens\n", len(tokens2))
 
 	// Compute embeddings
 	startEmbed := time.Now()
 
 	embed1, err := model.ComputeEmbeddingFromTokens(tokens1)
 	if err != nil {
-		fmt.Printf("❌ Error computing embedding 1: %v\n", err)
+		fmt.Printf(" Error computing embedding 1: %v\n", err)
 		return
 	}
 
 	embed2, err := model.ComputeEmbeddingFromTokens(tokens2)
 	if err != nil {
-		fmt.Printf("❌ Error computing embedding 2: %v\n", err)
+		fmt.Printf(" Error computing embedding 2: %v\n", err)
 		return
 	}
 
@@ -284,12 +285,12 @@ func computeAndDisplaySimilarity(model *gobed.EmbeddingModelInt8, text1, text2 s
 	similarityFallback := gobed.CosineSimilarityInt8Fallback(embed1, embed2)
 
 	// Display results
-	fmt.Println("\n📊 Results:")
+	fmt.Println("\n Results:")
 	fmt.Println("═══════════════════════════════════════════")
 	fmt.Printf("Text 1: \"%s\"\n", text1)
 	fmt.Printf("Text 2: \"%s\"\n", text2)
-	fmt.Printf("\n🎯 Cosine Similarity (AVX-512): %.6f\n", similarity)
-	fmt.Printf("🎯 Cosine Similarity (Fallback): %.6f\n", similarityFallback)
+	fmt.Printf("\n Cosine Similarity (AVX-512): %.6f\n", similarity)
+	fmt.Printf(" Cosine Similarity (Fallback): %.6f\n", similarityFallback)
 	fmt.Printf("   Difference: %.6f\n", similarity-similarityFallback)
 
 	// Interpret similarity
@@ -307,9 +308,9 @@ func computeAndDisplaySimilarity(model *gobed.EmbeddingModelInt8, text1, text2 s
 	} else {
 		interpretation = "Unrelated or opposite"
 	}
-	fmt.Printf("\n📈 Interpretation: %s\n", interpretation)
+	fmt.Printf("\n Interpretation: %s\n", interpretation)
 
-	fmt.Printf("\n⏱️  Performance:\n")
+	fmt.Printf("\n  Performance:\n")
 	fmt.Printf("   • Embedding computation: %v\n", embedTime)
 	fmt.Printf("   • Similarity computation: %v\n", simTime)
 	fmt.Printf("   • Total: %v\n", embedTime+simTime)

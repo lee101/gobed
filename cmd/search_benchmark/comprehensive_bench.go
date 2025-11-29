@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -7,7 +9,7 @@ import (
 	"time"
 
 	"github.com/lee101/gobed"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 func main() {
@@ -56,7 +58,7 @@ type TestResult struct {
 }
 
 func testStandard(model *gobed.EmbeddingModel, docs []string, queries []string) TestResult {
-	fmt.Println("\n📊 Standard Search Engine")
+	fmt.Println("\n Standard Search Engine")
 	fmt.Println("-------------------------")
 
 	config := gobed.DefaultSearchConfig()
@@ -102,7 +104,7 @@ func testStandard(model *gobed.EmbeddingModel, docs []string, queries []string) 
 }
 
 func testAsync(model *gobed.EmbeddingModel, docs []string, queries []string) TestResult {
-	fmt.Println("\n⚡ Async Search Engine")
+	fmt.Println("\n Async Search Engine")
 	fmt.Println("----------------------")
 
 	config := gobed.AsyncSearchConfig()
@@ -244,7 +246,7 @@ func testSharedMemory(model *gobed.EmbeddingModel, docs []string, queries []stri
 }
 
 func printResults(size int, standard, async, shared TestResult) {
-	fmt.Printf("\n📈 Performance Summary (%d documents)\n", size)
+	fmt.Printf("\n Performance Summary (%d documents)\n", size)
 	fmt.Println("=====================================")
 
 	fmt.Println("\n| Metric         | Standard    | Async       | Shared Memory |")
@@ -266,7 +268,7 @@ func printResults(size int, standard, async, shared TestResult) {
 		standard.MemoryMB, async.MemoryMB, shared.MemoryMB)
 
 	// Calculate improvements
-	fmt.Println("\n📊 Improvements vs Standard:")
+	fmt.Println("\n Improvements vs Standard:")
 
 	asyncIndexSpeedup := standard.IndexTime.Seconds() / async.IndexTime.Seconds()
 	sharedIndexSpeedup := standard.IndexTime.Seconds() / shared.IndexTime.Seconds()

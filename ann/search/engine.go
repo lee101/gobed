@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lee101/gobed/ann/flat"
-	"github.com/lee101/gobed/ann/hnsw"
-	"github.com/lee101/gobed/ann/ivf"
-	"github.com/lee101/gobed/ann/pq"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/flat"
+	"github.com/lee101/gobed/pkg/ann/hnsw"
+	"github.com/lee101/gobed/pkg/ann/ivf"
+	"github.com/lee101/gobed/pkg/ann/pq"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // Engine is the main search engine combining IVF-HNSW-PQ with reranking
@@ -59,7 +59,7 @@ type Config struct {
 // DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		MaxFlatSize: 1500, // Optimized based on benchmarks - best balance
+		MaxFlatSize: 1500, // Tuned default based on recent optimization runs
 		NList:       4096,
 		NProbe:      8,
 		M:           64,
@@ -76,7 +76,7 @@ func DefaultConfig() Config {
 func NewEngine(config Config) *Engine {
 	// Validate and set defaults
 	if config.MaxFlatSize <= 0 {
-		config.MaxFlatSize = 1500 // Optimized default
+		config.MaxFlatSize = 1500
 	}
 	if config.NList <= 0 {
 		config.NList = 4096
@@ -227,13 +227,9 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 	e.ids = append(e.ids, ids...)
 
 	// Add to index
-	if e.size+n <= e.config.MaxFlatSize {
-		e.flatIndex.AddBatch(vectors, scales, ids)
-	} else {
-		if e.ivfIndex == nil {
-			return fmt.Errorf("index not trained for large dataset")
-		}
-
+	// For large datasets, always use IVF if it exists (was trained)
+	if e.ivfIndex != nil && e.trained {
+		// Use IVF index for large datasets
 		e.ivfIndex.AddBatch(vectors, scales, ids)
 
 		// Batch encode with PQ
@@ -245,6 +241,13 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 			codes := e.pq.EncodeBatch(floatVectors)
 			e.pqCodes = append(e.pqCodes, codes...)
 		}
+	} else if e.size+n <= e.config.MaxFlatSize {
+		// Use flat index for small datasets
+		e.flatIndex.AddBatch(vectors, scales, ids)
+	} else {
+		// This shouldn't happen - large dataset without trained IVF
+		return fmt.Errorf("index not properly trained for large dataset (size=%d, n=%d, MaxFlatSize=%d, trained=%v, ivfIndex=%v)",
+			e.size, n, e.config.MaxFlatSize, e.trained, e.ivfIndex != nil)
 	}
 
 	e.size += n

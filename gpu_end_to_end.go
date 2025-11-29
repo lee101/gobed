@@ -108,7 +108,7 @@ func NewGPUEndToEndPipeline(model *EmbeddingModel) (*GPUEndToEndPipeline, error)
 	// Set finalizer
 	runtime.SetFinalizer(pipeline, (*GPUEndToEndPipeline).destroy)
 	
-	log.Printf("🚀 GPU End-to-End Pipeline created (dim=%d, vocab=%d)", vectorDim, vocabSize)
+	log.Printf(" GPU End-to-End Pipeline created (dim=%d, vocab=%d)", vectorDim, vocabSize)
 	return pipeline, nil
 }
 
@@ -140,7 +140,7 @@ func (p *GPUEndToEndPipeline) LoadEmbeddingsToGPU() error {
 	}
 	
 	p.embeddingsLoaded = true
-	log.Printf("✅ Loaded %d embeddings to GPU", p.vocabSize)
+	log.Printf(" Loaded %d embeddings to GPU", p.vocabSize)
 	return nil
 }
 
@@ -407,12 +407,12 @@ func (p *GPUEndToEndPipeline) destroy() {
 // Close explicitly releases GPU resources
 func (p *GPUEndToEndPipeline) Close() {
 	p.destroy()
-	log.Println("🧹 GPU pipeline closed")
+	log.Println(" GPU pipeline closed")
 }
 
 // RunLoadTest performs a comprehensive load test of the GPU pipeline
 func (p *GPUEndToEndPipeline) RunLoadTest(numDocuments int, numQueries int, k int) error {
-	log.Printf("🔥 Starting GPU pipeline load test: %d documents, %d queries, k=%d", 
+	log.Printf("Starting GPU pipeline load test: %d documents, %d queries, k=%d",
 		numDocuments, numQueries, k)
 	
 	// Generate test documents
@@ -449,7 +449,7 @@ func (p *GPUEndToEndPipeline) RunLoadTest(numDocuments int, numQueries int, k in
 	
 	indexDuration := time.Since(indexStart)
 	indexThroughput := float64(totalIndexed) / indexDuration.Seconds()
-	log.Printf("✅ Indexing complete: %d documents in %v (%.0f docs/sec)", 
+	log.Printf("Indexing complete: %d documents in %v (%.0f docs/sec)",
 		totalIndexed, indexDuration, indexThroughput)
 	
 	// Phase 2: Search load test
@@ -501,7 +501,7 @@ func (p *GPUEndToEndPipeline) RunLoadTest(numDocuments int, numQueries int, k in
 	searchDuration := time.Since(searchStart)
 	searchThroughput := float64(searchCount) / searchDuration.Seconds()
 	
-	log.Printf("✅ Search test complete: %d searches in %v (%.0f QPS)", 
+	log.Printf("Search test complete: %d searches in %v (%.0f QPS)",
 		searchCount, searchDuration, searchThroughput)
 	
 	// Phase 3: Batch search test
@@ -532,12 +532,12 @@ func (p *GPUEndToEndPipeline) RunLoadTest(numDocuments int, numQueries int, k in
 	batchSearchDuration := time.Since(batchSearchStart)
 	batchThroughput := float64(numQueries) / batchSearchDuration.Seconds()
 	
-	log.Printf("✅ Batch search complete: %d queries in %v (%.0f QPS)", 
+	log.Printf("Batch search complete: %d queries in %v (%.0f QPS)",
 		numQueries, batchSearchDuration, batchThroughput)
 	
 	// Print final statistics
 	stats := p.GetStats()
-	log.Println("\n📊 GPU Pipeline Statistics:")
+	log.Println("\nGPU Pipeline Statistics:")
 	log.Printf("  Total Embeddings: %d", stats.TotalEmbeddings)
 	log.Printf("  Total Searches: %d", stats.TotalSearches)
 	log.Printf("  Total Index Ops: %d", stats.TotalIndexOps)

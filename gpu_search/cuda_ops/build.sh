@@ -103,7 +103,7 @@ echo "Building library..."
 cmake --build . -j$(nproc) --verbose
 
 echo ""
-echo "✅ Successfully built libgobed_ann_ops.so (LibTorch-free)"
+echo " Successfully built libgobed_ann_ops.so (LibTorch-free)"
 echo "Library location: $(pwd)/libgobed_ann_ops.so"
 
 # Copy to a standard location
@@ -111,13 +111,13 @@ echo ""
 echo "Installing library..."
 if [ -w /usr/local/lib ]; then
     sudo cp libgobed_ann_ops.so /usr/local/lib/ 2>/dev/null && \
-        echo "✅ Installed to /usr/local/lib/" || \
-        echo "⚠ Could not install to /usr/local/lib/ (permission denied)"
+        echo " Installed to /usr/local/lib/" || \
+        echo " Could not install to /usr/local/lib/ (permission denied)"
 fi
 
 # Always copy to parent directory for local use
 cp libgobed_ann_ops.so ../../ 
-echo "✅ Copied to parent directory for local use"
+echo " Copied to parent directory for local use"
 
 echo ""
 echo "Build Summary:"

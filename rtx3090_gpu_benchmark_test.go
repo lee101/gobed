@@ -32,7 +32,7 @@ func BenchmarkRTX3090GPUIndexing(b *testing.B) {
 	// Document counts for testing
 	docCounts := []int{1000, 5000, 10000, 25000, 50000}
 
-	fmt.Printf("\n🚀 RTX 3090 GPU Indexing Benchmark\n")
+	fmt.Printf("\nRTX 3090 GPU Indexing Benchmark\n")
 	fmt.Printf("   GPU: NVIDIA RTX 3090 (24GB VRAM)\n")
 	fmt.Printf("   CPU Cores: %d\n", runtime.NumCPU())
 	fmt.Printf("   Testing batch sizes: %v\n", batchSizes)
@@ -113,7 +113,7 @@ func BenchmarkRTX3090GPUIndexing(b *testing.B) {
 	}
 
 	if bestConfig.docsPerSec > 0 {
-		fmt.Printf("\n🏆 Best Configuration for RTX 3090:\n")
+		fmt.Printf("\nBest Configuration for RTX 3090:\n")
 		fmt.Printf("   Batch Size: %d\n", bestConfig.batchSize)
 		fmt.Printf("   Worker Threads: %d\n", bestConfig.workers)
 		fmt.Printf("   Document Count: %d\n", bestConfig.docCount)
@@ -147,7 +147,7 @@ func BenchmarkRTX3090ParallelScaling(b *testing.B) {
 		filteredWorkers = append(filteredWorkers, maxWorkers)
 	}
 
-	fmt.Printf("\n📊 RTX 3090 Parallel Scaling Test\n")
+	fmt.Printf("\nRTX 3090 Parallel Scaling Test\n")
 	fmt.Printf("   Testing worker counts: %v\n", filteredWorkers)
 	fmt.Printf("   Documents per test: %d\n\n", docCount)
 
@@ -199,7 +199,7 @@ func BenchmarkRTX3090ParallelScaling(b *testing.B) {
 	}
 
 	// Print scaling summary
-	fmt.Printf("\n📈 Scaling Summary:\n")
+	fmt.Printf("\n Scaling Summary:\n")
 	if baseline, ok := results[1]; ok {
 		for workers, docsPerSec := range results {
 			if workers > 1 {
@@ -231,7 +231,7 @@ func BenchmarkRTX3090ProgressMonitoring(b *testing.B) {
 
 	docCounts := []int{10000, 25000, 50000}
 
-	fmt.Printf("\n📊 RTX 3090 Progress Monitoring Benchmark\n")
+	fmt.Printf("\nRTX 3090 Progress Monitoring Benchmark\n")
 
 	for _, docCount := range docCounts {
 		b.Run(fmt.Sprintf("Progress_Docs%d", docCount), func(b *testing.B) {

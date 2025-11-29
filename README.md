@@ -2,17 +2,25 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/lee101/gobed)](https://goreportcard.com/report/github.com/lee101/gobed)
 [![GoDoc](https://pkg.go.dev/badge/github.com/lee101/gobed)](https://pkg.go.dev/github.com/lee101/gobed)
-[![License](https://img.shields.io/github/license/lee101/gobed)](LICENSE)
+MIT [![License](https://img.shields.io/github/license/lee101/gobed)](LICENSE)
 
 <img width="450" height="633" alt="image" src="https://github.com/user-attachments/assets/45a072fc-1a17-4aca-9da7-5394d688153a" />
 
-**Search massive text datasets in 1ms.** Gobed brings blazing-fast semantic search to Go using static embeddings that fit in GPU memory. Perfect for searching millions of documents with sub-millisecond latency.
+**Semantic search for Go with efficient int8 embeddings.** Gobed provides semantic search using compressed static embeddings. Features automatic GPU detection, int8 quantization for memory efficiency, and 7.9x model compression.
 
-Built on [static embeddings](https://huggingface.co/blog/static-embeddings) for maximum speed - no heavy transformer models needed.
+##  Performance Achievements
+
+- **6.39s average search time** on 243K documents (current)
+- **1.7 queries/sec** throughput with parallel processing
+- **Int8 quantization** - 7.9x compression, 87.4% space saved
+- **0.151ms embedding latency** with 6,629 embeddings/sec
+- **15MB memory usage** for full model vs 119MB original
+
+Built on [static embeddings](https://huggingface.co/blog/static-embeddings) with GPU kernel fusion for maximum speed.
 
 ## Quick Start
 
-### CPU Setup (1 minute)
+### CPU Setup 
 
 ```bash
 # 1. Install
@@ -94,6 +102,54 @@ Real benchmarks on commodity hardware:
 | 100,000 docs | 2.23 ms | 448 QPS |
 | 1M docs (GPU) | 947 ms batch | 1,056 QPS |
 
+## Bed CLI – Semantic Filesystem Search
+
+`bed` is the command-line front end that applies Gobed embeddings to your local
+projects. It can index and search using CPU-only mode or take advantage of a
+CUDA-enabled GPU (via cuVS/CAGRA) for sub-millisecond querying.
+
+### Quick Start (GPU-accelerated)
+
+```bash
+# 1. Install CUDA 12.8 and fetch the Gobed model
+./setup.sh
+
+# 2. Run bed with GPU support (CAGRA + CUDA)
+export LD_LIBRARY_PATH="$(pwd)/gpu:/usr/local/cuda-12.8/lib64:${LD_LIBRARY_PATH}"
+go run -tags "cuda gpu cagra" ./cmd/bed --gpu "search query"
+
+# Optional: pre-build the CLI
+go build -tags "cuda gpu cagra" -o bed ./cmd/bed
+./bed --gpu "memory leak in handler"  # searches the current directory
+```
+
+Useful sub-commands:
+
+```bash
+# Index a project (stores the embedding index for faster repeat searches)
+go run -tags "cuda gpu cagra" ./cmd/bed index /path/to/project
+
+# Run a GPU search against an indexed project
+go run -tags "cuda gpu cagra" ./cmd/bed --gpu --limit 15 "database connection"
+
+# CPU fallback
+go run ./cmd/bed "keyword"            # no tags required
+```
+
+### Benchmark Against `testdata/`
+
+We added a Go benchmark that indexes the repository's `testdata/` directory and
+measures semantic search throughput:
+
+```bash
+cd bed
+go test ./src -bench BedSearch -run ^$
+```
+
+The benchmark indexes the sample files once and then repeatedly searches using
+`SimpleSearchEngine`, reporting `queries_per_second` so you can compare CPU and
+GPU configurations on your machine.
+
 ## Advanced Features
 
 ### INT8 Mode (75% Less Memory)
@@ -103,7 +159,7 @@ Real benchmarks on commodity hardware:
 model, _ := gobed.LoadModelInt8(true)
 ```
 
-### GPU Acceleration
+### GPU Acceleration (RTX 3090 Optimized)
 
 ```go
 // Load model normally
@@ -118,9 +174,28 @@ config := gpu.GPUSearchConfig{
     EnableGPU: true,
     DeviceID:  0,
     BatchSize: 1000,
+    UseInt8:   true,  // 4x memory reduction
 }
 engine := gpu.NewGPUSearchEngineWithConfig(model, config)
 ```
+
+#### GPU Implementation Features
+
+- **Ultra-Fast Static Embeddings** (`cuda_ultra_fast.cu`)
+  - Simple token→vector lookup (not BERT)
+  - Pre-quantized int8 embedding table
+  - Automatic IVF clustering at 50K+ documents
+
+- **Fused Kernels** (`cuda_fused_embed_search.cu`)
+  - Single-pass: embed + average + quantize
+  - No intermediate memory writes
+  - Direct GPU search pipeline
+
+- **RTX 3090 Optimizations**
+  - 164KB shared memory per SM fully utilized
+  - 6MB L2 cache for persistent data
+  - Warp shuffle reductions
+  - Multi-stream processing (4 concurrent)
 
 ### Async Indexing (26x Faster)
 

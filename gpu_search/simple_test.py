@@ -12,16 +12,16 @@ import numpy as np
 def test_gpu_search():
     """Test GPU search using PyTorch built-in ops."""
     
-    print("🚀 GPU Search Test (PyTorch)")
+    print(" GPU Search Test (PyTorch)")
     print("="*50)
     
     # Check CUDA availability
     if not torch.cuda.is_available():
-        print("❌ CUDA not available")
+        print(" CUDA not available")
         return
     
     device = torch.device("cuda")
-    print(f"✅ Using GPU: {torch.cuda.get_device_name()}")
+    print(f" Using GPU: {torch.cuda.get_device_name()}")
     print(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     
     # Test configurations
@@ -33,7 +33,7 @@ def test_gpu_search():
     ]
     
     for n_vectors, label in configs:
-        print(f"\n📊 Testing {label} ({n_vectors:,} vectors):")
+        print(f"\n Testing {label} ({n_vectors:,} vectors):")
         
         # Create random INT8 database
         db = torch.randint(-128, 127, (n_vectors, 512), dtype=torch.int8, device=device)
@@ -82,7 +82,7 @@ def test_gpu_search():
         print(f"   Batch throughput: {batch_throughput:.0f} QPS")
     
     # Test custom INT8 computation
-    print("\n🔥 Testing optimized INT8 computation:")
+    print("\n Testing optimized INT8 computation:")
     n = 100_000
     db = torch.randint(-128, 127, (n, 512), dtype=torch.int8, device=device)
     query = torch.randint(-128, 127, (512,), dtype=torch.int8, device=device)
@@ -108,10 +108,10 @@ def test_gpu_search():
     print(f"   Int32 matmul: {t2:.2f} ms")
     print(f"   Speedup: {t1/t2:.2f}x")
     
-    print("\n✅ GPU search test complete!")
+    print("\n GPU search test complete!")
     
     # Estimate for 1M vectors
-    print("\n📈 Estimates for 1M vectors:")
+    print("\n Estimates for 1M vectors:")
     est_latency = avg_latency * (1_000_000 / n_vectors)
     print(f"   Expected latency: {est_latency:.1f} ms")
     print(f"   Expected QPS: {1000/est_latency:.0f}")

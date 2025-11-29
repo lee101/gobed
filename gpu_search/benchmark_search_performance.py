@@ -11,7 +11,7 @@ from typing import Tuple, List
 # Load the LibTorch-free library
 lib_path = os.path.join(os.path.dirname(__file__), 'cuda_ops/build/libgobed_ann_ops.so')
 if not os.path.exists(lib_path):
-    print(f"❌ Library not found: {lib_path}")
+    print(f" Library not found: {lib_path}")
     sys.exit(1)
 
 lib = ctypes.CDLL(lib_path)
@@ -206,7 +206,7 @@ def benchmark_indexing_performance():
     engine = LibTorchFreeSearchEngine()
 
     for N in sizes:
-        print(f"📊 Indexing {N:,} vectors (512D, INT8)")
+        print(f" Indexing {N:,} vectors (512D, INT8)")
 
         # Generate random data
         vectors = np.random.randint(-128, 128, size=(N, 512), dtype=np.int8)
@@ -226,7 +226,7 @@ def benchmark_indexing_performance():
             print()
 
         except Exception as e:
-            print(f"  ❌ Error: {e}")
+            print(f"   Error: {e}")
             print()
 
 def benchmark_search_performance():
@@ -246,7 +246,7 @@ def benchmark_search_performance():
     k_values = [10, 50, 100, 500, 1000]
 
     for k in k_values:
-        print(f"📊 Single query search (k={k})")
+        print(f" Single query search (k={k})")
 
         query = np.random.randint(-128, 128, size=(512,), dtype=np.int8)
 
@@ -286,7 +286,7 @@ def benchmark_batch_search():
     k = 100
 
     for B in batch_sizes:
-        print(f"📊 Batch search: {B} queries, k={k}")
+        print(f" Batch search: {B} queries, k={k}")
 
         queries = np.random.randint(-128, 128, size=(B, 512), dtype=np.int8)
 
@@ -320,7 +320,7 @@ def benchmark_throughput_scaling():
     k = 100
 
     for N in dataset_sizes:
-        print(f"📊 Dataset: {N:,} vectors, batch: {batch_size}, k={k}")
+        print(f" Dataset: {N:,} vectors, batch: {batch_size}, k={k}")
 
         vectors = np.random.randint(-128, 128, size=(N, 512), dtype=np.int8)
         queries = np.random.randint(-128, 128, size=(batch_size, 512), dtype=np.int8)
@@ -350,11 +350,11 @@ def benchmark_throughput_scaling():
             print()
 
         except Exception as e:
-            print(f"  ❌ Error: {e}")
+            print(f"   Error: {e}")
             print()
 
 def main():
-    print("🚀 LibTorch-Free GPU Search Engine Benchmark")
+    print(" LibTorch-Free GPU Search Engine Benchmark")
     print("=" * 60)
     print()
 
@@ -365,10 +365,10 @@ def main():
         benchmark_batch_search()
         benchmark_throughput_scaling()
 
-        print("✅ All benchmarks completed!")
+        print(" All benchmarks completed!")
 
     except Exception as e:
-        print(f"❌ Benchmark failed: {e}")
+        print(f" Benchmark failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

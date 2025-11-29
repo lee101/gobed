@@ -1,16 +1,21 @@
-# Makefile for gobed project
+# Makefile for gobed project - GPU-accelerated semantic search
 
 # Variables
 BINARY_NAME=gobed
 DOCKER_IMAGE=gobed
-VERSION=$(shell git describe --tags --always --dirty)
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 GO=go
 GOFLAGS=-v
 LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION)"
 COVERAGE_FILE=coverage.out
 
+# Auto-detect CUDA if gpu_env.sh exists
+ifneq (,$(wildcard ./gpu_env.sh))
+    include gpu_env.sh
+endif
+
 # GPU/CUDA Variables
-CUDA_PATH=/usr/local/cuda-12.0
+CUDA_PATH ?= /usr/local/cuda-12.9
 GPU_LIB_PATH=./gpu
 GPU_LIB_NAME=libtorch_cgo_wrapper.so
 NVCC_FLAGS=-std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC
@@ -19,6 +24,14 @@ NVCC_FLAGS=-std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC
 CMD_DIR=./cmd
 BIN_DIR=./bin
 DIST_DIR=./dist
+TEST_DIR=./test
+BENCHMARK_DIR=./benchmark-results
+
+# Colors for output
+RED := \033[0;31m
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+NC := \033[0m
 
 # Default target
 .PHONY: all

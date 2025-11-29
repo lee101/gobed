@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -141,7 +143,7 @@ func main_disabled() {
 		fmt.Printf("Index Throughput: %.0f docs/sec\n", indexThroughput)
 		fmt.Printf("Search Latency:   %v", avgSearchLatency)
 		if avgSearchLatency < time.Millisecond {
-			fmt.Printf(" ✨ SUB-MILLISECOND!")
+			fmt.Printf("  SUB-MILLISECOND!")
 		}
 		fmt.Println()
 		fmt.Printf("Search QPS:       %.0f queries/sec\n", searchThroughput)
@@ -157,7 +159,7 @@ func main_disabled() {
 	for _, r := range allResults {
 		latencyStr := fmt.Sprintf("%v", r.SearchLatency)
 		if r.SearchLatency < time.Millisecond {
-			latencyStr += " ✨"
+			latencyStr += " "
 		}
 
 		fmt.Printf("| %7d | %-10s | %10v | %14s | %4.0f | %6.1f MB |\n",
@@ -220,7 +222,7 @@ func main_disabled() {
 	fmt.Printf("\nSpeedup: %.2fx faster with approximate search!\n", speedup)
 
 	if approxLatency < time.Millisecond {
-		fmt.Println("✅ Achieved sub-millisecond approximate search!")
+		fmt.Println(" Achieved sub-millisecond approximate search!")
 	}
 
 	// Performance recommendations

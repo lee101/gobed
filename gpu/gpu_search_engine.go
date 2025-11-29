@@ -110,7 +110,7 @@ func (gse *GPUSearchEngine) IndexBatch(texts []string) ([]int, error) {
 		return nil, fmt.Errorf("CUDA is not available")
 	}
 
-	fmt.Printf("🚀 GPU batch indexing %d documents...\n", len(texts))
+	fmt.Printf(" GPU batch indexing %d documents...\n", len(texts))
 	start := time.Now()
 
 	// Generate embeddings for all texts
@@ -138,7 +138,7 @@ func (gse *GPUSearchEngine) IndexBatch(texts []string) ([]int, error) {
 	}
 
 	embedTime := time.Since(start)
-	fmt.Printf("✅ Generated embeddings in %v\n", embedTime)
+	fmt.Printf(" Generated embeddings in %v\n", embedTime)
 
 	// Initialize GPU indexer if needed
 	if !gse.initialized {
@@ -158,7 +158,7 @@ func (gse *GPUSearchEngine) IndexBatch(texts []string) ([]int, error) {
 	indexTime := time.Since(indexStart)
 	totalTime := time.Since(start)
 
-	fmt.Printf("✅ GPU indexing completed:\n")
+	fmt.Printf(" GPU indexing completed:\n")
 	fmt.Printf("   Documents: %d\n", len(texts))
 	fmt.Printf("   Embedding time: %v\n", embedTime)
 	fmt.Printf("   GPU indexing time: %v\n", indexTime)
@@ -181,7 +181,7 @@ func (gse *GPUSearchEngine) Search(query string, k int) ([]GPUSearchResult, erro
 		return nil, fmt.Errorf("GPU acceleration is disabled")
 	}
 
-	fmt.Printf("🔍 GPU search: \"%s\" (k=%d)\n", query, k)
+	fmt.Printf(" GPU search: \"%s\" (k=%d)\n", query, k)
 	start := time.Now()
 
 	// Generate query embedding
@@ -232,7 +232,7 @@ func (gse *GPUSearchEngine) Search(query string, k int) ([]GPUSearchResult, erro
 	// Free result memory
 	C.torch_search_result_free(&searchResult)
 
-	fmt.Printf("⚡ GPU search completed in %v\n", searchTime)
+	fmt.Printf(" GPU search completed in %v\n", searchTime)
 	fmt.Printf("   Results: %d/%d\n", len(results), k)
 	if len(results) > 0 {
 		fmt.Printf("   Top score: %.4f\n", results[0].Score)
@@ -258,7 +258,7 @@ func (gse *GPUSearchEngine) Close() error {
 		gse.indexer = nil
 	}
 
-	fmt.Println("🧹 GPU resources released")
+	fmt.Println(" GPU resources released")
 	return nil
 }
 
@@ -324,7 +324,7 @@ func (gse *GPUSearchEngine) initializeGPUIndex(estimatedSize int) error {
 		return nil
 	}
 
-	fmt.Printf("🏗️ Initializing GPU index (estimated size: %d)...\n", estimatedSize)
+	fmt.Printf("🏗 Initializing GPU index (estimated size: %d)...\n", estimatedSize)
 
 	// Create GPU indexer config
 	config := C.IndexConfig{
@@ -343,7 +343,7 @@ func (gse *GPUSearchEngine) initializeGPUIndex(estimatedSize int) error {
 		return fmt.Errorf("failed to create GPU indexer")
 	}
 
-	fmt.Printf("✅ GPU indexer created (device: %d)\n", gse.config.DeviceID)
+	fmt.Printf(" GPU indexer created (device: %d)\n", gse.config.DeviceID)
 	gse.initialized = true
 
 	return nil

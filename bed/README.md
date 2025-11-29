@@ -79,7 +79,7 @@ go run cmd/test_ndcg/main.go
 
 Output:
 ```
-✓ NDCG@5: 0.9995
-✓ Recall@5: 1.0000
-✓ P50: 0.08ms, QPS: 11988.1
+NDCG@5: 0.9995
+Recall@5: 1.0000
+P50: 0.08ms, QPS: 11988.1
 ```

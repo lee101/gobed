@@ -46,7 +46,7 @@ print("EMBEDDING COMPARISON - REAL MODEL VERIFICATION")
 print("="*60)
 
 for i, text in enumerate(texts):
-    print(f"\n📝 Text {i+1}: '{text}'")
+    print(f"\n Text {i+1}: '{text}'")
     print(f"   Shape: Go={go_embeddings[i].shape}, Python={py_embeddings[i].shape}")
 
     # Compare first 5 values
@@ -58,7 +58,7 @@ for i, text in enumerate(texts):
 
     # Calculate difference
     if len(go_embeddings[i]) == 0:
-        print("   ⚠️  Go could not encode this text (tokenizer/path issue)")
+        print("     Go could not encode this text (tokenizer/path issue)")
         continue
     diff = np.abs(go_embeddings[i] - py_embeddings[i])
     max_diff = np.max(diff)
@@ -68,13 +68,13 @@ for i, text in enumerate(texts):
     print(f"   Mean difference: {mean_diff:.8f}")
 
     if max_diff < 0.0001:
-        print(f"   ✅ PERFECT MATCH! Using real safetensors model!")
+        print(f"    PERFECT MATCH! Using real safetensors model!")
     elif max_diff < 0.001:
-        print(f"   ✅ Excellent match (within float32 precision)")
+        print(f"    Excellent match (within float32 precision)")
     elif max_diff < 0.01:
-        print(f"   ⚠️  Good match but some differences")
+        print(f"     Good match but some differences")
     else:
-        print(f"   ❌ Significant differences detected")
+        print(f"    Significant differences detected")
 
 # Calculate cosine similarities to double-check
 print("\n" + "="*60)
@@ -94,7 +94,7 @@ print(f"   Python implementation: {py_sim:.6f}")
 print(f"   Difference:            {abs(go_sim - py_sim):.8f}")
 
 if abs(go_sim - py_sim) < 0.0001:
-    print("   ✅ Similarities match perfectly!")
+    print("    Similarities match perfectly!")
 
 print("\n" + "="*60)
 print("CONCLUSION")
@@ -104,11 +104,11 @@ all_diffs = [np.max(np.abs(go_embeddings[i] - py_embeddings[i])) for i in range(
 overall_max = max(all_diffs)
 
 if overall_max < 0.001:
-    print("✅ SUCCESS: Go is using the REAL safetensors model!")
+    print(" SUCCESS: Go is using the REAL safetensors model!")
     print("   The embeddings match Python perfectly (within float32 precision)")
     print("   We are definitely using sentence-transformers/static-retrieval-mrl-en-v1")
 else:
-    print("⚠️  Some differences detected, but may still be using real model")
+    print("  Some differences detected, but may still be using real model")
     print(f"   Maximum difference: {overall_max:.8f}")
 
 print("="*60)

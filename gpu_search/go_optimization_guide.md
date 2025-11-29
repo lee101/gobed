@@ -1,12 +1,12 @@
 # Go GPU Performance Optimization Guide
 
-## 🎯 Problem Analysis
+##  Problem Analysis
 
 Your current performance: **699-717 texts/sec**
 GPU capability: **249,000+ texts/sec** 
 **Bottleneck: Only using 0.3% of GPU capacity!**
 
-## 🚀 Immediate Optimizations
+##  Immediate Optimizations
 
 ### 1. Increase Batch Size (Easy Fix)
 
@@ -56,7 +56,7 @@ func IndexTextsParallel(pipeline *gpu.Pipeline, texts []string, chunkSize int) e
                 return
             }
             
-            log.Printf("✅ Chunk %d/%d complete", chunkNum+1, len(chunks))
+            log.Printf(" Chunk %d/%d complete", chunkNum+1, len(chunks))
         }(i, chunk)
     }
     
@@ -79,7 +79,7 @@ func IndexTextsParallel(pipeline *gpu.Pipeline, texts []string, chunkSize int) e
 // Replace lines 77-83 in main.go with:
 
 func optimizedIndexing(pipeline *gpu.Pipeline, texts []string) {
-    log.Println("🚀 Starting optimized GPU indexing...")
+    log.Println(" Starting optimized GPU indexing...")
     start := time.Now()
     
     // Use much larger chunks for GPU efficiency
@@ -92,14 +92,14 @@ func optimizedIndexing(pipeline *gpu.Pipeline, texts []string) {
     indexTime := time.Since(start)
     throughput := float64(len(texts)) / indexTime.Seconds()
     
-    log.Printf("✅ Optimized indexing complete!")
+    log.Printf(" Optimized indexing complete!")
     log.Printf("   Total time: %v", indexTime)
     log.Printf("   Throughput: %.0f texts/sec", throughput)
     log.Printf("   Improvement: %.1fx faster", throughput/700) // vs current
 }
 ```
 
-## 📊 Performance Predictions
+##  Performance Predictions
 
 | Optimization | Current | Optimized | Improvement |
 |--------------|---------|-----------|-------------|
@@ -107,7 +107,7 @@ func optimizedIndexing(pipeline *gpu.Pipeline, texts []string) {
 | Sequential   | 1 thread| 8 parallel| 5-8x        |
 | **Combined** | **717/sec** | **4,500-7,000/sec** | **6-10x** |
 
-## 🔧 Implementation Steps
+##  Implementation Steps
 
 ### Step 1: Quick Fix (5 minutes)
 ```bash
@@ -133,7 +133,7 @@ go run main.go --interactive
 # Should see 3,000-7,000 texts/sec instead of 700!
 ```
 
-## 🎯 Advanced Optimizations
+##  Advanced Optimizations
 
 ### GPU Memory Pre-allocation
 ```go
@@ -167,7 +167,7 @@ func StreamingIndexer(pipeline *gpu.Pipeline, textsChan <-chan []string) {
 }
 ```
 
-## 📈 Monitoring GPU Utilization
+##  Monitoring GPU Utilization
 
 Add this to monitor actual GPU usage:
 
@@ -184,7 +184,7 @@ func MonitorGPU() {
         util, _ := device.GetUtilizationRates()
         memInfo, _ := device.GetMemoryInfo()
         
-        log.Printf("🔧 GPU: %d%% util, %d MB memory", 
+        log.Printf(" GPU: %d%% util, %d MB memory", 
                    util.Gpu, memInfo.Used/1024/1024)
         
         time.Sleep(time.Second)
@@ -192,7 +192,7 @@ func MonitorGPU() {
 }
 ```
 
-## 🏆 Expected Results
+##  Expected Results
 
 After optimization:
 - **Indexing speed: 4,500-7,000 texts/sec** (6-10x improvement)
@@ -200,7 +200,7 @@ After optimization:
 - **Memory efficiency: Better batching**
 - **Scalability: Handles larger datasets**
 
-## 🔥 Pro Tips
+##  Pro Tips
 
 1. **Monitor GPU utilization** - should be >50% during indexing
 2. **Adjust maxConcurrent** based on GPU memory (8 for 16GB GPU)

@@ -29,11 +29,11 @@ def init_gpu():
     global device, tokenizer, model
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        logger.info(f"✅ Using GPU: {torch.cuda.get_device_name()}")
+        logger.info(f" Using GPU: {torch.cuda.get_device_name()}")
         logger.info(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     else:
         device = torch.device("cpu")
-        logger.warning("⚠️  CUDA not available, using CPU")
+        logger.warning("  CUDA not available, using CPU")
     
     # Load embedding model on GPU
     try:
@@ -42,9 +42,9 @@ def init_gpu():
         tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
         model = AutoModel.from_pretrained(model_name, trust_remote_code=True).to(device)
         model.eval()  # Set to eval mode for inference
-        logger.info("✅ Embedding model loaded on GPU")
+        logger.info(" Embedding model loaded on GPU")
     except Exception as e:
-        logger.warning(f"⚠️  Could not load embedding model: {e}")
+        logger.warning(f"  Could not load embedding model: {e}")
         tokenizer = None
         model = None
     
@@ -260,7 +260,7 @@ def clear_database():
     if device.type == 'cuda':
         torch.cuda.empty_cache()
     
-    logger.info(f"🗑️  Database cleared, freed {memory_freed:.1f} MB GPU memory")
+    logger.info(f"🗑  Database cleared, freed {memory_freed:.1f} MB GPU memory")
     
     return jsonify({
         "status": "cleared",

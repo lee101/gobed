@@ -2,6 +2,9 @@
   "permissions": {
     "additionalDirectories": [
       "/home/lee/code/gobedexample"
+    ],
+    "allow": [
+      "Bash(awk:*)"
     ]
   }
 }

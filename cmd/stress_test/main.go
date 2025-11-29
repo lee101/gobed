@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -18,9 +20,9 @@ func main() {
 	fmt.Println("Loading model...")
 	model, err := gobed.LoadModel()
 	if err != nil {
-		log.Fatalf("❌ Error loading model: %v", err)
+		log.Fatalf(" Error loading model: %v", err)
 	}
-	fmt.Println("✅ Model loaded successfully\n")
+	fmt.Println(" Model loaded successfully\n")
 
 	// Run all stress tests
 	runBasicStressTests(model)
@@ -31,11 +33,11 @@ func main() {
 	runEncodingTests(model)
 	runPerformanceStressTest(model)
 
-	fmt.Println("\n🎉 All stress tests completed!")
+	fmt.Println("\n All stress tests completed!")
 }
 
 func runBasicStressTests(model *gobed.EmbeddingModel) {
-	fmt.Println("📋 BASIC STRESS TESTS")
+	fmt.Println(" BASIC STRESS TESTS")
 	fmt.Println(strings.Repeat("-", 50))
 
 	basicTests := []struct {
@@ -64,16 +66,16 @@ func runBasicStressTests(model *gobed.EmbeddingModel) {
 		elapsed := time.Since(start)
 
 		if err != nil {
-			fmt.Printf("❌ ERROR: %v\n", err)
+			fmt.Printf(" ERROR: %v\n", err)
 		} else {
-			fmt.Printf("✅ %d dims, %v\n", len(emb), elapsed)
+			fmt.Printf(" %d dims, %v\n", len(emb), elapsed)
 		}
 	}
 	fmt.Println()
 }
 
 func runUnicodeStressTests(model *gobed.EmbeddingModel) {
-	fmt.Println("🌍 UNICODE STRESS TESTS")
+	fmt.Println(" UNICODE STRESS TESTS")
 	fmt.Println(strings.Repeat("-", 50))
 
 	unicodeTests := []struct {
@@ -89,8 +91,8 @@ func runUnicodeStressTests(model *gobed.EmbeddingModel) {
 		{"Hebrew", "שלום עולם"},
 		{"Hindi", "नमस्ते दुनिया"},
 		{"Thai", "สวัสดีชาวโลก"},
-		{"Emoji only", "🌍🔥💯🚀⭐"},
-		{"Mixed emoji", "Hello 🌍 World 🚀"},
+		{"Emoji only", "💯"},
+		{"Mixed emoji", "Hello  World "},
 		{"Mathematical symbols", "∑∞∂∇∫∮∯∰"},
 		{"Currency symbols", "¥€$£₹₽¢"},
 		{"Arrows", "←→↑↓↔↕⇄⇅"},
@@ -107,7 +109,7 @@ func runUnicodeStressTests(model *gobed.EmbeddingModel) {
 
 		// Check if text is valid UTF-8
 		if !utf8.ValidString(test.text) {
-			fmt.Printf("❌ INVALID UTF-8\n")
+			fmt.Printf(" INVALID UTF-8\n")
 			continue
 		}
 
@@ -116,16 +118,16 @@ func runUnicodeStressTests(model *gobed.EmbeddingModel) {
 		elapsed := time.Since(start)
 
 		if err != nil {
-			fmt.Printf("❌ ERROR: %v\n", err)
+			fmt.Printf(" ERROR: %v\n", err)
 		} else {
-			fmt.Printf("✅ %d dims, %v\n", len(emb), elapsed)
+			fmt.Printf(" %d dims, %v\n", len(emb), elapsed)
 		}
 	}
 	fmt.Println()
 }
 
 func runEdgeCaseTests(model *gobed.EmbeddingModel) {
-	fmt.Println("⚠️  EDGE CASE TESTS")
+	fmt.Println("  EDGE CASE TESTS")
 	fmt.Println(strings.Repeat("-", 50))
 
 	edgeCases := []struct {
@@ -135,7 +137,7 @@ func runEdgeCaseTests(model *gobed.EmbeddingModel) {
 		{"Null bytes", "hello\x00world"},
 		{"Control chars", "hello\x01\x02\x03world"},
 		{"Very long word", strings.Repeat("a", 1000)},
-		{"Repeated chars", strings.Repeat("🔥", 100)},
+		{"Repeated chars", strings.Repeat("", 100)},
 		{"Only punctuation", "!@#$%^&*()_+-=[]{}|;':\",./<>?"},
 		{"Only numbers", "0123456789"},
 		{"Scientific notation", "1.23e-45 6.78E+90"},
@@ -160,9 +162,9 @@ func runEdgeCaseTests(model *gobed.EmbeddingModel) {
 		elapsed := time.Since(start)
 
 		if err != nil {
-			fmt.Printf("❌ ERROR: %v\n", err)
+			fmt.Printf(" ERROR: %v\n", err)
 		} else {
-			fmt.Printf("✅ %d dims, %v\n", len(emb), elapsed)
+			fmt.Printf(" %d dims, %v\n", len(emb), elapsed)
 		}
 	}
 	fmt.Println()
@@ -200,9 +202,9 @@ func runSpecialCharacterTests(model *gobed.EmbeddingModel) {
 		elapsed := time.Since(start)
 
 		if err != nil {
-			fmt.Printf("❌ ERROR: %v\n", err)
+			fmt.Printf(" ERROR: %v\n", err)
 		} else {
-			fmt.Printf("✅ %d dims, %v\n", len(emb), elapsed)
+			fmt.Printf(" %d dims, %v\n", len(emb), elapsed)
 		}
 	}
 	fmt.Println()
@@ -224,9 +226,9 @@ func runLengthStressTests(model *gobed.EmbeddingModel) {
 		elapsed := time.Since(start)
 
 		if err != nil {
-			fmt.Printf("❌ ERROR: %v\n", err)
+			fmt.Printf(" ERROR: %v\n", err)
 		} else {
-			fmt.Printf("✅ %d dims, %v\n", len(emb), elapsed)
+			fmt.Printf(" %d dims, %v\n", len(emb), elapsed)
 		}
 	}
 	fmt.Println()
@@ -281,9 +283,9 @@ func runEncodingTests(model *gobed.EmbeddingModel) {
 			errors = append(errors, err)
 
 			if err != nil {
-				fmt.Printf("  %d. ❌ ERROR: %v\n", i+1, err)
+				fmt.Printf("  %d.  ERROR: %v\n", i+1, err)
 			} else {
-				fmt.Printf("  %d. ✅ %d dims\n", i+1, len(emb))
+				fmt.Printf("  %d.  %d dims\n", i+1, len(emb))
 			}
 		}
 
@@ -298,7 +300,7 @@ func runEncodingTests(model *gobed.EmbeddingModel) {
 }
 
 func runPerformanceStressTest(model *gobed.EmbeddingModel) {
-	fmt.Println("⚡ PERFORMANCE STRESS TEST")
+	fmt.Println(" PERFORMANCE STRESS TEST")
 	fmt.Println(strings.Repeat("-", 50))
 
 	// Test rapid-fire encoding
@@ -323,11 +325,11 @@ func runPerformanceStressTest(model *gobed.EmbeddingModel) {
 	elapsed := time.Since(start)
 
 	fmt.Printf("Results:\n")
-	fmt.Printf("  ✅ Successful: %d\n", successCount)
-	fmt.Printf("  ❌ Errors: %d\n", errorCount)
-	fmt.Printf("  ⏱️  Total time: %v\n", elapsed)
-	fmt.Printf("  📊 Avg per encoding: %v\n", elapsed/time.Duration(iterations))
-	fmt.Printf("  🚀 Encodings/sec: %.0f\n", float64(successCount)/elapsed.Seconds())
+	fmt.Printf("   Successful: %d\n", successCount)
+	fmt.Printf("   Errors: %d\n", errorCount)
+	fmt.Printf("    Total time: %v\n", elapsed)
+	fmt.Printf("   Avg per encoding: %v\n", elapsed/time.Duration(iterations))
+	fmt.Printf("   Encodings/sec: %.0f\n", float64(successCount)/elapsed.Seconds())
 
 	fmt.Println()
 }

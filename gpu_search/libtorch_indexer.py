@@ -47,12 +47,12 @@ class LibTorchIndexer(nn.Module):
         self.is_trained = False
         self.index_built = False
         
-        print(f"🚀 Initialized LibTorchIndexer on {self.device}")
+        print(f" Initialized LibTorchIndexer on {self.device}")
         print(f"   Config: {config.num_subquantizers}x{config.codebook_size} PQ, {config.ivf_clusters} IVF")
     
     def train_index(self, training_vectors: torch.Tensor) -> None:
         """Train the IVF and PQ components using training data"""
-        print(f"🔧 Training index with {training_vectors.shape[0]} vectors...")
+        print(f" Training index with {training_vectors.shape[0]} vectors...")
         
         training_vectors = training_vectors.to(self.device, dtype=torch.int8)
         n_train, dim = training_vectors.shape
@@ -68,7 +68,7 @@ class LibTorchIndexer(nn.Module):
         self.pq_codebooks = self._train_pq_codebooks(training_vectors)
         
         self.is_trained = True
-        print("✅ Index training completed")
+        print(" Index training completed")
     
     def _train_ivf_centroids(self, vectors: torch.Tensor) -> torch.Tensor:
         """Train IVF centroids using k-means clustering"""
@@ -182,7 +182,7 @@ class LibTorchIndexer(nn.Module):
         self.num_vectors += n
         self.index_built = True
         
-        print(f"✅ Added vectors. Total: {self.num_vectors}")
+        print(f" Added vectors. Total: {self.num_vectors}")
     
     def _assign_to_ivf_lists(self, vectors: torch.Tensor) -> torch.Tensor:
         """Assign vectors to IVF lists"""
@@ -343,7 +343,7 @@ class LibTorchIndexer(nn.Module):
             'index_built': self.index_built
         }, path)
         
-        print(f"💾 Saved index to {path}")
+        print(f" Saved index to {path}")
     
     def load_index(self, path: str) -> None:
         """Load a trained index"""
@@ -370,7 +370,7 @@ def create_test_vectors(n: int, d: int, device: str = "cuda:0") -> torch.Tensor:
 
 def benchmark_indexer():
     """Comprehensive benchmark of the LibTorch indexer"""
-    print("🔥 LibTorch Indexer Benchmark")
+    print(" LibTorch Indexer Benchmark")
     print("=" * 40)
     
     # Configuration
@@ -386,7 +386,7 @@ def benchmark_indexer():
     )
     
     # Create test data
-    print("🎯 Creating test data...")
+    print(" Creating test data...")
     train_vectors = create_test_vectors(10000, 512)  # Training set
     index_vectors = create_test_vectors(100000, 512)  # Vectors to index
     query_vectors = create_test_vectors(100, 512)     # Query vectors
@@ -395,14 +395,14 @@ def benchmark_indexer():
     indexer = LibTorchIndexer(config)
     
     # Benchmark training
-    print("\n⏱️  Training benchmark...")
+    print("\n  Training benchmark...")
     start_time = time.time()
     indexer.train_index(train_vectors)
     train_time = time.time() - start_time
     print(f"   Training time: {train_time:.2f}s")
     
     # Benchmark indexing
-    print("\n⏱️  Indexing benchmark...")
+    print("\n  Indexing benchmark...")
     start_time = time.time()
     indexer.add_vectors(index_vectors)
     index_time = time.time() - start_time
@@ -411,7 +411,7 @@ def benchmark_indexer():
     print(f"   Indexing rate: {index_rate:.0f} vectors/sec")
     
     # Benchmark search
-    print("\n⏱️  Search benchmark...")
+    print("\n  Search benchmark...")
     k = 10
     search_times = []
     
@@ -433,7 +433,7 @@ def benchmark_indexer():
     print(f"   Queries per second: {qps:.0f}")
     
     # Print statistics
-    print("\n📊 Index Statistics:")
+    print("\n Index Statistics:")
     stats = indexer.get_stats()
     for key, value in stats.items():
         print(f"   {key}: {value}")
@@ -448,12 +448,12 @@ if __name__ == "__main__":
     # Set CUDA device
     if torch.cuda.is_available():
         torch.cuda.set_device(0)
-        print(f"🎯 Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f" Using GPU: {torch.cuda.get_device_name(0)}")
     else:
-        print("❌ CUDA not available")
+        print(" CUDA not available")
         exit(1)
     
     # Run benchmark
     indexer = benchmark_indexer()
     
-    print("\n✅ LibTorch indexer benchmark completed!")
+    print("\n LibTorch indexer benchmark completed!")

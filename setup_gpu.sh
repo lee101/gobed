@@ -4,7 +4,7 @@
 
 set -e  # Exit on error
 
-echo "🚀 Gobed GPU Search Setup"
+echo " Gobed GPU Search Setup"
 echo "========================"
 echo
 
@@ -17,19 +17,19 @@ NC='\033[0m' # No Color
 
 # Helper functions
 success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN} $1${NC}"
 }
 
 warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}  $1${NC}"
 }
 
 error() {
-    echo -e "${RED}❌ $1${NC}"
+    echo -e "${RED} $1${NC}"
 }
 
 info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
+    echo -e "${BLUE}ℹ  $1${NC}"
 }
 
 # Check if running on Linux
@@ -39,7 +39,7 @@ if [[ "$OSTYPE" != "linux-gnu"* ]]; then
 fi
 
 # 1. Check NVIDIA GPU availability
-echo "🔍 Checking GPU availability..."
+echo " Checking GPU availability..."
 if ! command -v nvidia-smi &> /dev/null; then
     error "nvidia-smi not found. Please install NVIDIA drivers first."
     echo "   Visit: https://www.nvidia.com/Download/index.aspx"
@@ -56,7 +56,7 @@ success "GPU detected: $GPU_INFO"
 
 # 2. Check CUDA installation
 echo
-echo "🔍 Checking CUDA installation..."
+echo " Checking CUDA installation..."
 if command -v nvcc &> /dev/null; then
     CUDA_VERSION=$(nvcc --version | grep "release" | sed 's/.*release \([0-9]*\.[0-9]*\).*/\1/')
     success "CUDA found: version $CUDA_VERSION"
@@ -92,7 +92,7 @@ if ! command -v pip3 &> /dev/null && ! python3 -m pip --version &> /dev/null; th
 fi
 
 # Install PyTorch with CUDA support
-echo "📦 Installing PyTorch with CUDA support..."
+echo " Installing PyTorch with CUDA support..."
 if python3 -c "import torch; print('PyTorch already installed:', torch.__version__)" 2>/dev/null; then
     # Check if CUDA is available in PyTorch
     if python3 -c "import torch; print('CUDA available:', torch.cuda.is_available())" 2>/dev/null | grep -q "True"; then
@@ -107,7 +107,7 @@ else
 fi
 
 # Install additional Python dependencies
-echo "📦 Installing additional Python dependencies..."
+echo " Installing additional Python dependencies..."
 pip3 install transformers tokenizers numpy
 
 # Verify PyTorch CUDA installation
@@ -121,7 +121,7 @@ fi
 
 # 4. Check/Install system dependencies
 echo
-echo "🔧 Checking system dependencies..."
+echo " Checking system dependencies..."
 
 # Check for CMake
 if ! command -v cmake &> /dev/null; then
@@ -179,7 +179,7 @@ fi
 
 # Configure environment variables
 echo
-echo "⚙️  Configuring environment..."
+echo "  Configuring environment..."
 ENV_FILE="$HOME/.bashrc"
 
 # Add LibTorch environment variables if not already present
@@ -197,7 +197,7 @@ fi
 
 # 6. Build CUDA components
 echo
-echo "🔨 Building CUDA components..."
+echo " Building CUDA components..."
 cd gpu_search/cuda_ops
 
 if [ ! -d "build" ]; then
@@ -234,7 +234,7 @@ cd ../../..
 
 # 7. Export TorchScript model
 echo
-echo "📦 Exporting TorchScript model..."
+echo " Exporting TorchScript model..."
 cd gpu_search
 
 if python3 simple_search_module.py > export_output.log 2>&1; then
@@ -280,7 +280,7 @@ fi
 
 # 9. Performance test (optional)
 echo
-echo "🎯 Running quick performance test..."
+echo " Running quick performance test..."
 cd ../gobedexample
 
 if timeout 30s go run achievement_summary.go > test_output.log 2>&1; then
@@ -295,7 +295,7 @@ cd ../gobed
 
 # 10. Summary and next steps
 echo
-echo "🎉 GPU Setup Complete!"
+echo " GPU Setup Complete!"
 echo "====================="
 echo
 success "Components installed:"
@@ -311,14 +311,14 @@ echo "   2. Test GPU search: cd ../gobedexample && go run achievement_summary.go
 echo "   3. Start GPU server: python3 gpu_search/gpu_search_server.py"
 echo "   4. Run examples: cd ../gobedexample && go run main.go --benchmark"
 echo
-success "Ready for GPU-accelerated text search! 🚀"
+success "Ready for GPU-accelerated text search! "
 echo
 echo "📚 Documentation:"
 echo "   • Main guide: README_GPU.md"
 echo "   • Examples: ../gobedexample/README.md"
 echo "   • Performance tuning: Check batch sizes and GPU memory"
 echo
-echo "🔧 Troubleshooting:"
+echo " Troubleshooting:"
 echo "   • Out of memory: Reduce batch size in config"
 echo "   • CUDA errors: Check nvidia-smi and GPU compatibility"
 echo "   • Build issues: Verify GCC version compatibility"

@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -37,18 +39,18 @@ func compareEmbeddings(a, b []float32) float64 {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🔍 SIMPLE EMBEDDING VALIDATION TEST")
+	fmt.Println(" SIMPLE EMBEDDING VALIDATION TEST")
 	fmt.Println("================================================================================")
 
 	// Load model
-	fmt.Printf("📦 Loading embedding model...\n")
+	fmt.Printf(" Loading embedding model...\n")
 	model, err := gobed.LoadModel()
 	if err != nil {
 		log.Fatalf("Failed to load model: %v", err)
 	}
 	// model.Close() not needed for current implementation
 
-	fmt.Printf("✅ Model loaded successfully\n\n")
+	fmt.Printf(" Model loaded successfully\n\n")
 
 	// Test basic embedding generation
 	testTexts := []string{
@@ -64,7 +66,7 @@ func main() {
 		elapsed := time.Since(start)
 
 		if err != nil {
-			log.Printf("❌ Failed to encode text %d: %v", i+1, err)
+			log.Printf(" Failed to encode text %d: %v", i+1, err)
 			continue
 		}
 
@@ -106,9 +108,9 @@ func main() {
 	fmt.Printf("   Scale: %.6f\n", int8Result.Scale)
 
 	if similarity > 0.95 {
-		fmt.Printf("   ✅ High fidelity quantization\n")
+		fmt.Printf("    High fidelity quantization\n")
 	} else {
-		fmt.Printf("   ⚠️  Quantization may need tuning\n")
+		fmt.Printf("     Quantization may need tuning\n")
 	}
 
 	// Test vector indexing (CPU only)
@@ -146,7 +148,7 @@ func main() {
 	searchTime := time.Since(start)
 
 	if err != nil {
-		log.Printf("❌ Search failed: %v", err)
+		log.Printf(" Search failed: %v", err)
 	} else {
 		fmt.Printf("   Search \"%s\" in %.2fms, %d results\n",
 			query, float64(searchTime.Nanoseconds())/1e6, len(results))
@@ -157,8 +159,8 @@ func main() {
 		}
 	}
 
-	fmt.Println("\n✅ Basic functionality validated!")
-	fmt.Println("💡 To test GPU acceleration:")
+	fmt.Println("\n Basic functionality validated!")
+	fmt.Println(" To test GPU acceleration:")
 	fmt.Println("   1. Install libtorch for your system")
 	fmt.Println("   2. Run: go run cmd/bulk_gpu_demo/main.go")
 }

@@ -84,7 +84,7 @@ func NewTorchNativeIndexer(config TorchNativeConfig) (*TorchNativeIndexer, error
 	// Set finalizer to ensure cleanup
 	runtime.SetFinalizer(indexer, (*TorchNativeIndexer).finalize)
 
-	fmt.Printf("🚀 Created LibTorch native indexer\n")
+	fmt.Printf(" Created LibTorch native indexer\n")
 	fmt.Printf("   Vector dim: %d\n", config.VectorDim)
 	fmt.Printf("   PQ: %dx%d\n", config.NumSubquantizers, config.CodebookSize)
 	fmt.Printf("   IVF clusters: %d\n", config.IVFClusters)
@@ -125,7 +125,7 @@ func (t *TorchNativeIndexer) TrainIndex(vectors [][]int8) error {
 		return errors.New("failed to train index")
 	}
 
-	fmt.Printf("✅ Trained index with %d vectors\n", n)
+	fmt.Printf(" Trained index with %d vectors\n", n)
 	return nil
 }
 
@@ -281,7 +281,7 @@ func (p *TorchNativePipeline) TrainPipeline(trainingTexts []string) error {
 		return errors.New("empty training texts")
 	}
 
-	fmt.Printf("🔧 Training pipeline with %d texts...\n", len(trainingTexts))
+	fmt.Printf(" Training pipeline with %d texts...\n", len(trainingTexts))
 
 	// Generate embeddings for training
 	vectors := make([][]int8, len(trainingTexts))

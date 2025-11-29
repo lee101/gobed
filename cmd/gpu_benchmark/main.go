@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 /*
@@ -26,20 +28,20 @@ type GPUBenchmarkConfig struct {
 }
 
 type GPUBenchmarkResult struct {
-	Config         GPUBenchmarkConfig
-	TrainTime      time.Duration
-	IndexTime      time.Duration
-	SearchTime     time.Duration
-	IndexRate      float64 // vectors/sec
-	QueryRate      float64 // queries/sec
-	AvgSearchTime  float64 // ms per query
-	MemoryUsage    float64 // MB
-	TotalTime      time.Duration
-	UsingGPU       bool
+	Config        GPUBenchmarkConfig
+	TrainTime     time.Duration
+	IndexTime     time.Duration
+	SearchTime    time.Duration
+	IndexRate     float64 // vectors/sec
+	QueryRate     float64 // queries/sec
+	AvgSearchTime float64 // ms per query
+	MemoryUsage   float64 // MB
+	TotalTime     time.Duration
+	UsingGPU      bool
 }
 
 func main() {
-	fmt.Println("🚀 GPU LibTorch Comprehensive Benchmark")
+	fmt.Println(" GPU LibTorch Comprehensive Benchmark")
 	fmt.Println("=======================================")
 
 	// Check system info
@@ -47,7 +49,7 @@ func main() {
 	cudaAvailable := C.torch_cuda_is_available() != 0
 	deviceCount := int(C.torch_cuda_device_count())
 
-	fmt.Printf("📊 System Information:\n")
+	fmt.Printf(" System Information:\n")
 	fmt.Printf("   LibTorch version: %s\n", version)
 	fmt.Printf("   CUDA available: %v\n", cudaAvailable)
 	fmt.Printf("   Device count: %d\n", deviceCount)
@@ -55,7 +57,7 @@ func main() {
 	fmt.Printf("   CPU cores: %d\n", runtime.NumCPU())
 
 	if !cudaAvailable {
-		log.Fatal("❌ CUDA not available - this benchmark requires GPU")
+		log.Fatal(" CUDA not available - this benchmark requires GPU")
 	}
 
 	// Focus on 512D and 1024D as requested
@@ -63,13 +65,13 @@ func main() {
 		// 512D benchmarks - Production scale
 		{VectorDim: 512, TrainingSize: 5000, IndexSize: 50000, QueryCount: 1000, K: 10, Name: "512D-50K"},
 		{VectorDim: 512, TrainingSize: 5000, IndexSize: 100000, QueryCount: 1000, K: 10, Name: "512D-100K"},
-		
-		// 1024D benchmarks - Large scale  
+
+		// 1024D benchmarks - Large scale
 		{VectorDim: 1024, TrainingSize: 5000, IndexSize: 25000, QueryCount: 500, K: 10, Name: "1024D-25K"},
 		{VectorDim: 1024, TrainingSize: 5000, IndexSize: 50000, QueryCount: 500, K: 10, Name: "1024D-50K"},
 	}
 
-	fmt.Printf("\n🚀 Running GPU Performance Benchmarks...\n")
+	fmt.Printf("\n Running GPU Performance Benchmarks...\n")
 	fmt.Printf("\n%-12s %-8s %-8s %-8s %-12s %-10s %-10s %-8s %-6s\n",
 		"Config", "Dim", "Index", "Queries", "Index/sec", "Query/ms", "QPS", "Memory", "GPU")
 	fmt.Println("------------------------------------------------------------------------------------")
@@ -78,7 +80,7 @@ func main() {
 
 	for i, config := range configs {
 		fmt.Printf("\nRunning benchmark %d/%d: %s...\n", i+1, len(configs), config.Name)
-		
+
 		result := runGPUBenchmark(config)
 		results = append(results, result)
 
@@ -100,7 +102,7 @@ func main() {
 	}
 
 	// Print detailed summary
-	fmt.Println("\n📈 Detailed Performance Analysis:")
+	fmt.Println("\n Detailed Performance Analysis:")
 	fmt.Println("=================================")
 
 	for i, result := range results {
@@ -108,13 +110,13 @@ func main() {
 		fmt.Printf("\n%d. %s (%dD vectors, %d indexed):\n", i+1, config.Name, config.VectorDim, config.IndexSize)
 		fmt.Printf("   Training: %v (%d vectors)\n", result.TrainTime, config.TrainingSize)
 		fmt.Printf("   Indexing: %v (%.0f vectors/sec)\n", result.IndexTime, result.IndexRate)
-		fmt.Printf("   Search: %v (%d queries, %.2f ms/query, %.0f QPS)\n", 
+		fmt.Printf("   Search: %v (%d queries, %.2f ms/query, %.0f QPS)\n",
 			result.SearchTime, config.QueryCount, result.AvgSearchTime, result.QueryRate)
 		fmt.Printf("   Memory: %.1f MB GPU\n", result.MemoryUsage)
 		fmt.Printf("   Total: %v\n", result.TotalTime)
 	}
 
-	fmt.Println("\n✅ GPU Benchmark completed!")
+	fmt.Println("\n GPU Benchmark completed!")
 }
 
 func runGPUBenchmark(config GPUBenchmarkConfig) GPUBenchmarkResult {
@@ -127,8 +129,8 @@ func runGPUBenchmark(config GPUBenchmarkConfig) GPUBenchmarkResult {
 		codebook_size:     C.int(256),
 		ivf_clusters:      C.int(1024),
 		probe_lists:       C.int(32),
-		rerank_k:         C.int(200),
-		device_id:        C.int(0), // Force GPU usage
+		rerank_k:          C.int(200),
+		device_id:         C.int(0), // Force GPU usage
 	}
 
 	handle := C.torch_indexer_create(cConfig)
@@ -184,7 +186,7 @@ func runGPUBenchmark(config GPUBenchmarkConfig) GPUBenchmarkResult {
 
 	// Search benchmark
 	searchStart := time.Now()
-	
+
 	for i := 0; i < config.QueryCount; i++ {
 		searchResult := C.torch_indexer_search(
 			handle,
@@ -201,7 +203,7 @@ func runGPUBenchmark(config GPUBenchmarkConfig) GPUBenchmarkResult {
 		// Free search results
 		C.torch_search_result_free(&searchResult)
 	}
-	
+
 	searchTime := time.Since(searchStart)
 	queryRate := float64(config.QueryCount) / searchTime.Seconds()
 	avgSearchTime := searchTime.Seconds() * 1000 / float64(config.QueryCount) // ms

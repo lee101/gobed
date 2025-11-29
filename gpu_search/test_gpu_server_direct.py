@@ -63,7 +63,7 @@ def test_gpu_server_sequential(texts: List[str], batch_size: int = 256) -> float
     total_time = time.perf_counter() - start_time
     throughput = len(texts) / total_time
     
-    print(f"✅ Sequential complete:")
+    print(f" Sequential complete:")
     print(f"   Time: {total_time:.2f}s")
     print(f"   Throughput: {throughput:.0f} texts/sec")
     
@@ -71,7 +71,7 @@ def test_gpu_server_sequential(texts: List[str], batch_size: int = 256) -> float
 
 def test_gpu_server_parallel(texts: List[str], batch_size: int = 4096, max_workers: int = 4) -> float:
     """Test parallel processing (optimized approach)"""
-    print(f"\n🚀 Testing PARALLEL processing")
+    print(f"\n Testing PARALLEL processing")
     print(f"   Batch size: {batch_size}")
     print(f"   Total texts: {len(texts)}")
     print(f"   Max workers: {max_workers}")
@@ -88,7 +88,7 @@ def test_gpu_server_parallel(texts: List[str], batch_size: int = 4096, max_worke
             total_time = time.perf_counter() - start_time
             throughput = len(texts) / total_time
             
-            print(f"✅ Parallel complete:")
+            print(f" Parallel complete:")
             print(f"   Time: {total_time:.2f}s")
             print(f"   Throughput: {throughput:.0f} texts/sec")
             
@@ -111,7 +111,7 @@ def benchmark_gpu_optimization():
     test_sizes = [1000, 2000, 5000]
     
     for num_texts in test_sizes:
-        print(f"\n📊 TESTING WITH {num_texts:,} TEXTS")
+        print(f"\n TESTING WITH {num_texts:,} TEXTS")
         print("-" * 60)
         
         # Load texts
@@ -129,44 +129,44 @@ def benchmark_gpu_optimization():
             improvement = parallel_throughput / sequential_throughput
             time_saved = (num_texts / sequential_throughput) - (num_texts / parallel_throughput)
             
-            print(f"\n📈 PERFORMANCE COMPARISON:")
+            print(f"\n PERFORMANCE COMPARISON:")
             print(f"   Sequential:  {sequential_throughput:,.0f} texts/sec")
             print(f"   Parallel:    {parallel_throughput:,.0f} texts/sec")
             print(f"   Improvement: {improvement:.1f}x faster")
             print(f"   Time saved:  {time_saved:.1f} seconds")
             
             if improvement > 3.0:
-                print("   🚀 EXCELLENT optimization!")
+                print("    EXCELLENT optimization!")
             elif improvement > 2.0:
-                print("   ✅ Good optimization")
+                print("    Good optimization")
             elif improvement > 1.5:
-                print("   ✅ Moderate optimization")
+                print("    Moderate optimization")
             else:
-                print("   ⚠️  Limited improvement")
+                print("     Limited improvement")
 
 def test_server_health():
     """Test if GPU server is responding"""
-    print("🔧 Testing GPU server health...")
+    print(" Testing GPU server health...")
     
     try:
         response = requests.get('http://localhost:5000/health', timeout=5)
         if response.status_code == 200:
             stats = response.json()
-            print("✅ GPU server is running")
+            print(" GPU server is running")
             print(f"   GPU device: {stats.get('device', 'Unknown')}")
             print(f"   GPU memory: {stats.get('gpu_memory_total_mb', 0)/1024:.1f} GB")
             return True
         else:
-            print(f"❌ Server error: {response.status_code}")
+            print(f" Server error: {response.status_code}")
             return False
     except Exception as e:
-        print(f"❌ Server not responding: {e}")
+        print(f" Server not responding: {e}")
         return False
 
 if __name__ == "__main__":
     # Test server first
     if not test_server_health():
-        print("\n❌ GPU server not available. Please start it with:")
+        print("\n GPU server not available. Please start it with:")
         print("   cd /home/lee/code/gobed/gpu_search")
         print("   python3 gpu_search_server.py")
         exit(1)
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     benchmark_gpu_optimization()
     
     print("\n" + "=" * 80)
-    print("💡 OPTIMIZATION INSIGHTS")
+    print(" OPTIMIZATION INSIGHTS")
     print("=" * 80)
     print("This test shows the GPU server's raw performance capability.")
     print("The Go optimization should provide similar improvements by:")

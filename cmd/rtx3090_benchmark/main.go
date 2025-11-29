@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -13,7 +15,7 @@ import (
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 RTX 3090 ULTIMATE GPU INDEXING BENCHMARK")
+	fmt.Println(" RTX 3090 ULTIMATE GPU INDEXING BENCHMARK")
 	fmt.Println("================================================================================")
 	fmt.Printf("GPU: NVIDIA RTX 3090 (24GB VRAM)\n")
 	fmt.Printf("CPU: %d cores\n", runtime.NumCPU())
@@ -25,7 +27,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("✅ Model loaded successfully\n")
+	fmt.Println(" Model loaded successfully\n")
 
 	// Test configurations optimized for RTX 3090
 	configs := []struct {
@@ -98,7 +100,7 @@ func main() {
 				_, err := engine.IndexBatch(batch)
 				if err != nil {
 					atomic.AddInt64(&errorCount, 1)
-					fmt.Printf("  ⚠️  Batch %d error: %v\n", batchIdx, err)
+					fmt.Printf("    Batch %d error: %v\n", batchIdx, err)
 				} else {
 					atomic.AddInt64(&indexedCount, int64(len(batch)))
 				}
@@ -118,7 +120,7 @@ func main() {
 		stats := engine.Stats()
 
 		// Display results
-		fmt.Printf("\n📊 Results:\n")
+		fmt.Printf("\n Results:\n")
 		fmt.Printf("  ✓ Indexed: %d documents\n", totalIndexed)
 		fmt.Printf("  ✓ Time: %v\n", elapsed)
 		fmt.Printf("  ✓ Throughput: %.0f docs/sec\n", docsPerSec)
@@ -126,7 +128,7 @@ func main() {
 		fmt.Printf("  ✓ Memory Usage: %.2f MB\n", stats.MemoryUsageMB)
 		fmt.Printf("  ✓ Index Type: %s\n", stats.IndexType)
 		if errors > 0 {
-			fmt.Printf("  ⚠️  Errors: %d\n", errors)
+			fmt.Printf("    Errors: %d\n", errors)
 		}
 
 		if docsPerSec > bestThroughput {
@@ -135,7 +137,7 @@ func main() {
 		}
 
 		// Run search benchmark
-		fmt.Printf("\n🔍 Search Performance:\n")
+		fmt.Printf("\n Search Performance:\n")
 		queries := []string{
 			"machine learning algorithms",
 			"deep neural networks",
@@ -161,14 +163,14 @@ func main() {
 		fmt.Printf("  ✓ Search QPS: %.0f\n", searchQPS)
 		fmt.Printf("  ✓ Avg Latency: %v\n", avgSearchLatency)
 		if searchErrors > 0 {
-			fmt.Printf("  ⚠️  Search Errors: %d\n", searchErrors)
+			fmt.Printf("    Search Errors: %d\n", searchErrors)
 		}
 	}
 
 	// Final summary
 	fmt.Printf("\n================================================================================\n")
-	fmt.Printf("🏆 BEST CONFIGURATION: %s\n", bestConfig)
-	fmt.Printf("🚀 BEST THROUGHPUT: %.0f docs/sec\n", bestThroughput)
+	fmt.Printf(" BEST CONFIGURATION: %s\n", bestConfig)
+	fmt.Printf(" BEST THROUGHPUT: %.0f docs/sec\n", bestThroughput)
 	fmt.Printf("================================================================================\n")
 }
 

@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -69,9 +71,9 @@ func LoadModel(modelPath, tokenizerPath, referenceTokensPath string, precision P
 	device := gotch.CPU
 	if gotch.CudaIfAvailable() {
 		device = gotch.CudaIfAvailable()
-		log.Printf("🚀 Using CUDA acceleration")
+		log.Printf(" Using CUDA acceleration")
 	} else {
-		log.Printf("💻 Using CPU")
+		log.Printf(" Using CPU")
 	}
 
 	// Load tokenizer
@@ -82,7 +84,7 @@ func LoadModel(modelPath, tokenizerPath, referenceTokensPath string, precision P
 		if err != nil {
 			return nil, fmt.Errorf("failed to load tokenizer: %v", err)
 		}
-		log.Printf("✅ Tokenizer loaded")
+		log.Printf(" Tokenizer loaded")
 	}
 
 	// Load reference tokens
@@ -103,7 +105,7 @@ func LoadModel(modelPath, tokenizerPath, referenceTokensPath string, precision P
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse reference tokens: %v", err)
 		}
-		log.Printf("✅ Reference tokens loaded for %d sentences", len(referenceTokens))
+		log.Printf(" Reference tokens loaded for %d sentences", len(referenceTokens))
 	}
 
 	// Load model weights from safetensors and create embedding layer
@@ -129,8 +131,8 @@ func LoadModel(modelPath, tokenizerPath, referenceTokensPath string, precision P
 	}
 
 	loadTime := time.Since(loadStart)
-	log.Printf("✅ Model loaded successfully in %v", loadTime)
-	log.Printf("📊 Model specs: vocab_size=%d, embed_dim=%d, precision=%s", vocabSize, embedDim, precision)
+	log.Printf(" Model loaded successfully in %v", loadTime)
+	log.Printf(" Model specs: vocab_size=%d, embed_dim=%d, precision=%s", vocabSize, embedDim, precision)
 
 	return model, nil
 }
@@ -153,7 +155,7 @@ func loadEmbeddingFromSafetensors(safetensorsPath string, device gotch.Device, p
 	// This would involve parsing the safetensors format and loading the weights
 	// For now, we'll use the initialized weights
 
-	log.Printf("📦 Created embedding layer: [%d, %d]", vocabSize, embedDim)
+	log.Printf(" Created embedding layer: [%d, %d]", vocabSize, embedDim)
 
 	// Apply precision conversion if needed
 	if precision == FP16 {
@@ -172,7 +174,7 @@ func (m *LibtorchEmbedding) Close() error {
 	if m.inputTensor != nil {
 		m.inputTensor.MustDrop()
 	}
-	log.Println("🧹 Model resources cleaned up")
+	log.Println(" Model resources cleaned up")
 	return nil
 }
 
@@ -310,7 +312,7 @@ func CosineSimilarity(a, b []float32) float32 {
 // benchmarkInference benchmarks pure inference performance
 func benchmarkInference(model *LibtorchEmbedding, precision PrecisionMode) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 70))
-	fmt.Printf("🚀 LIBTORCH INFERENCE BENCHMARK - %s PRECISION\n", precision)
+	fmt.Printf(" LIBTORCH INFERENCE BENCHMARK - %s PRECISION\n", precision)
 	fmt.Printf("%s\n", strings.Repeat("=", 70))
 
 	// Test sentences for benchmarking
@@ -330,7 +332,7 @@ func benchmarkInference(model *LibtorchEmbedding, precision PrecisionMode) {
 	fmt.Printf("Benchmarking %d sentences with %s precision...\n", len(sentences), precision)
 
 	// Warmup runs
-	fmt.Println("\n🔥 Warmup runs...")
+	fmt.Println("\n Warmup runs...")
 	for i := 0; i < 3; i++ {
 		_, err := model.EncodeText(sentences[0])
 		if err != nil {
@@ -338,10 +340,10 @@ func benchmarkInference(model *LibtorchEmbedding, precision PrecisionMode) {
 			return
 		}
 	}
-	fmt.Println("✅ Warmup completed")
+	fmt.Println(" Warmup completed")
 
 	// Benchmark individual inference times
-	fmt.Println("\n⏱️  Pure inference benchmarks:")
+	fmt.Println("\n  Pure inference benchmarks:")
 	times := make([]time.Duration, len(sentences))
 	embeddings := make([][]float32, len(sentences))
 
@@ -378,7 +380,7 @@ func benchmarkInference(model *LibtorchEmbedding, precision PrecisionMode) {
 	avgTime := totalTime / time.Duration(len(times))
 	throughput := float64(len(sentences)) / totalTime.Seconds()
 
-	fmt.Printf("\n📊 Performance Summary:\n")
+	fmt.Printf("\n Performance Summary:\n")
 	fmt.Printf("   Total inference time: %v\n", totalTime)
 	fmt.Printf("   Average per inference: %v\n", avgTime)
 	fmt.Printf("   Throughput: %.2f inferences/sec\n", throughput)
@@ -424,7 +426,7 @@ func testPrecisionModes() {
 		// Load model with current precision
 		model, err := LoadModel(modelPath, tokenizerPath, referenceTokensPath, precision)
 		if err != nil {
-			log.Printf("❌ Failed to load model with %s precision: %v", precision, err)
+			log.Printf(" Failed to load model with %s precision: %v", precision, err)
 			continue
 		}
 
@@ -438,7 +440,7 @@ func testPrecisionModes() {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 LIBTORCH GO EMBEDDING - OPTIMIZED INFERENCE BENCHMARKING")
+	fmt.Println(" LIBTORCH GO EMBEDDING - OPTIMIZED INFERENCE BENCHMARKING")
 	fmt.Println("================================================================================")
 	fmt.Println("Features: Separated loading, FP16/INT8 support, Pure inference timing")
 	fmt.Println("")
@@ -447,6 +449,6 @@ func main() {
 	testPrecisionModes()
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("✅ Benchmark completed! LibTorch inference ready for production.")
+	fmt.Println(" Benchmark completed! LibTorch inference ready for production.")
 	fmt.Println(strings.Repeat("=", 80))
 }

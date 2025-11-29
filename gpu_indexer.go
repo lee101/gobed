@@ -1,4 +1,4 @@
-// +build gpu
+//go:build gpu
 
 package gobed
 
@@ -18,24 +18,25 @@ import (
 
 // GPUIndexer provides CUDA-accelerated indexing and search using pure CUDA
 type GPUIndexer struct {
-	handle       unsafe.Pointer
-	config       IndexConfig
-	mutex        sync.RWMutex
-	vectorDim    int
-	vocabSize    int
-	embedDim     int
-	deviceID     int
-	isReady      bool
-	embeddings   []float32
-	numVectors   int
+	handle            unsafe.Pointer
+	config            IndexConfig
+	mutex             sync.RWMutex
+	vectorDim         int
+	vocabSize         int
+	embedDim          int
+	deviceID          int
+	isReady           bool
+	embeddings        []float32
+	numVectors        int
+	actualMemoryUsage uint64 // Track actual indexer memory usage
 }
 
 // IndexConfig configures the GPU indexer
 type IndexConfig struct {
-	VectorDim        int
-	VocabSize        int  // For token embeddings
-	EmbedDim         int  // Embedding dimension
-	DeviceID         int
+	VectorDim int
+	VocabSize int // For token embeddings
+	EmbedDim  int // Embedding dimension
+	DeviceID  int
 }
 
 // DefaultGPUConfig returns an optimal configuration for GPU indexing
@@ -98,7 +99,6 @@ func NewGPUIndexer(config IndexConfig) (*GPUIndexer, error) {
 	// Set finalizer to ensure cleanup
 	runtime.SetFinalizer(indexer, (*GPUIndexer).destroy)
 
-	// Indexer created successfully
 	return indexer, nil
 }
 
@@ -122,15 +122,10 @@ func (g *GPUIndexer) LoadEmbeddings(embeddings []float32) error {
 	}
 
 	g.embeddings = embeddings
-	// Embeddings loaded to GPU
 	return nil
 }
 
 // LoadEmbeddingsInt8 loads quantized int8 embeddings to GPU for faster processing
-// This reduces memory usage by 75% and improves performance through:
-// - 4x less memory bandwidth usage
-// - Better cache utilization
-// - Vectorized int8 operations
 func (g *GPUIndexer) LoadEmbeddingsInt8(embeddings []int8, scales []float32) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
@@ -155,7 +150,6 @@ func (g *GPUIndexer) LoadEmbeddingsInt8(embeddings []int8, scales []float32) err
 		return fmt.Errorf("failed to load int8 embeddings to GPU")
 	}
 
-	// Int8 embeddings loaded to GPU
 	return nil
 }
 
@@ -175,7 +169,7 @@ func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	// Flatten vectors for C interface
 	numVectors := len(vectors)
 	flatVectors := make([]int8, numVectors*g.vectorDim)
-	
+
 	for i, vec := range vectors {
 		if len(vec) != g.vectorDim {
 			return fmt.Errorf("vector dimension mismatch at index %d: expected %d, got %d",
@@ -196,7 +190,6 @@ func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	}
 
 	g.numVectors += numVectors
-	// Vectors added to GPU index
 	return nil
 }
 
@@ -272,8 +265,27 @@ func (g *GPUIndexer) Search(query []int8, queryScale float32, k int) ([]int32, [
 	return g.SearchWithEmbedding(query, queryScale, k)
 }
 
-// GetMemoryUsage returns current GPU memory usage
+// GetMemoryUsage returns actual indexer memory usage (not total GPU memory)
 func (g *GPUIndexer) GetMemoryUsage() uint64 {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	// Calculate actual memory used by this indexer
+	vectorMemory := uint64(g.numVectors * g.vectorDim)
+	scaleMemory := uint64(g.numVectors * 4)
+	embeddingMemory := uint64(0)
+	if len(g.embeddings) > 0 {
+		embeddingMemory = uint64(len(g.embeddings) * 4)
+	}
+
+	totalMemory := vectorMemory + scaleMemory + embeddingMemory
+	g.actualMemoryUsage = totalMemory
+
+	return totalMemory
+}
+
+// GetTotalGPUMemoryUsage returns total GPU memory usage (for debugging)
+func (g *GPUIndexer) GetTotalGPUMemoryUsage() uint64 {
 	return GetCUDAMemoryUsage()
 }
 
@@ -281,28 +293,26 @@ func (g *GPUIndexer) GetMemoryUsage() uint64 {
 func (g *GPUIndexer) SetMaxTokens(maxTokens int) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	
+
 	C.cuda_set_max_tokens(g.handle, C.int(maxTokens))
-	// Max tokens updated
 }
 
 // BulkIndexTokens indexes multiple token sequences in batch on GPU
-// This is optimized for bulk indexing - keeps everything on GPU
 func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int) (int, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	
+
 	if len(tokenSequences) == 0 {
 		return 0, fmt.Errorf("no token sequences provided")
 	}
-	
+
 	if len(seqLengths) != len(tokenSequences) {
-		return 0, fmt.Errorf("sequence lengths mismatch: %d sequences, %d lengths", 
+		return 0, fmt.Errorf("sequence lengths mismatch: %d sequences, %d lengths",
 			len(tokenSequences), len(seqLengths))
 	}
-	
+
 	batchSize := len(tokenSequences)
-	
+
 	// Find max sequence length
 	maxSeqLen := 0
 	for _, seq := range tokenSequences {
@@ -310,7 +320,7 @@ func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int)
 			maxSeqLen = len(seq)
 		}
 	}
-	
+
 	// Flatten token sequences into a single array
 	flatTokens := make([]int32, batchSize*maxSeqLen)
 	for i, seq := range tokenSequences {
@@ -318,13 +328,13 @@ func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int)
 			flatTokens[i*maxSeqLen+j] = token
 		}
 	}
-	
+
 	// Convert to C types
 	cSeqLengths := make([]C.int, len(seqLengths))
 	for i, l := range seqLengths {
 		cSeqLengths[i] = C.int(l)
 	}
-	
+
 	result := C.cuda_bulk_index_tokens(
 		g.handle,
 		(*C.int)(unsafe.Pointer(&flatTokens[0])),
@@ -332,11 +342,11 @@ func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int)
 		C.int(batchSize),
 		C.int(maxSeqLen),
 	)
-	
+
 	if result == 0 {
 		return 0, fmt.Errorf("bulk indexing failed on GPU")
 	}
-	
+
 	g.numVectors += int(result)
 	return int(result), nil
 }
@@ -346,7 +356,6 @@ func (g *GPUIndexer) destroy() {
 	if g.handle != nil {
 		C.cuda_index_destroy(g.handle)
 		g.handle = nil
-		// CUDA indexer destroyed
 	}
 }
 

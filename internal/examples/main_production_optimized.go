@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -68,9 +70,9 @@ func LoadModel(safetensorsPath, referenceTokensPath string) (*ProductionEmbeddin
 	}
 
 	loadTime := time.Since(loadStart)
-	log.Printf("✅ Model loaded successfully in %v", loadTime)
-	log.Printf("📊 Model specs: vocab_size=%d, embed_dim=%d", vocabSize, embedDim)
-	log.Printf("📦 Reference tokens: %d sentences", len(referenceTokens))
+	log.Printf(" Model loaded successfully in %v", loadTime)
+	log.Printf(" Model specs: vocab_size=%d, embed_dim=%d", vocabSize, embedDim)
+	log.Printf(" Reference tokens: %d sentences", len(referenceTokens))
 
 	return model, nil
 }
@@ -217,7 +219,7 @@ func loadSafetensorsWeights(safetensorsPath string) ([][]float32, int, int, erro
 		}
 	}
 
-	log.Printf("✅ Loaded safetensors weights: [%d, %d]", rows, cols)
+	log.Printf(" Loaded safetensors weights: [%d, %d]", rows, cols)
 	return weights, rows, cols, nil
 }
 
@@ -240,7 +242,7 @@ func loadReferenceTokens(referenceTokensPath string) (map[string]TokenData, erro
 		return nil, fmt.Errorf("failed to parse reference tokens: %v", err)
 	}
 
-	log.Printf("✅ Loaded reference tokens for %d sentences", len(referenceTokens))
+	log.Printf(" Loaded reference tokens for %d sentences", len(referenceTokens))
 	return referenceTokens, nil
 }
 
@@ -273,7 +275,7 @@ func CosineSimilarity(a, b []float32) float32 {
 // benchmarkPureInference benchmarks only the inference performance
 func benchmarkPureInference(model *ProductionEmbeddingModel) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 70))
-	fmt.Printf("🚀 PRODUCTION INFERENCE BENCHMARK\n")
+	fmt.Printf(" PRODUCTION INFERENCE BENCHMARK\n")
 	fmt.Printf("%s\n", strings.Repeat("=", 70))
 
 	// Get test sentences from reference tokens
@@ -286,14 +288,14 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 	}
 
 	if len(sentences) == 0 {
-		log.Printf("❌ No reference sentences available for benchmarking")
+		log.Printf(" No reference sentences available for benchmarking")
 		return
 	}
 
 	fmt.Printf("Benchmarking %d sentences with optimized inference...\n", len(sentences))
 
 	// Warmup runs
-	fmt.Println("\n🔥 Warmup runs...")
+	fmt.Println("\n Warmup runs...")
 	for i := 0; i < 5; i++ {
 		_, err := model.EncodeText(sentences[0])
 		if err != nil {
@@ -301,10 +303,10 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 			return
 		}
 	}
-	fmt.Println("✅ Warmup completed")
+	fmt.Println(" Warmup completed")
 
 	// Individual inference benchmarks
-	fmt.Println("\n⏱️  Pure inference benchmarks:")
+	fmt.Println("\n  Pure inference benchmarks:")
 	times := make([]time.Duration, len(sentences))
 	embeddings := make([][]float32, len(sentences))
 
@@ -339,14 +341,14 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 	}
 
 	if len(times) == 0 {
-		log.Printf("❌ No successful inferences to analyze")
+		log.Printf(" No successful inferences to analyze")
 		return
 	}
 
 	avgTime := totalTime / time.Duration(len(times))
 	throughput := float64(len(sentences)) / totalTime.Seconds()
 
-	fmt.Printf("\n📊 Performance Summary:\n")
+	fmt.Printf("\n Performance Summary:\n")
 	fmt.Printf("   Total inference time: %v\n", totalTime)
 	fmt.Printf("   Average per inference: %v\n", avgTime)
 	fmt.Printf("   Throughput: %.0f inferences/sec\n", throughput)
@@ -371,7 +373,7 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 	}
 
 	// Test batch processing
-	fmt.Println("\n📦 Testing batch processing...")
+	fmt.Println("\n Testing batch processing...")
 	batchStart := time.Now()
 	_, batchErr := model.BatchEncodeTexts(sentences)
 	batchTime := time.Since(batchStart)
@@ -386,7 +388,7 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 
 	// Accuracy verification - compare with expected values
 	if len(embeddings) > 0 && len(embeddings[0]) >= 5 {
-		fmt.Println("\n🎯 Accuracy verification:")
+		fmt.Println("\n Accuracy verification:")
 		expected := []float32{3.483, -2.513, 3.576, -0.724, 1.369}
 		maxDiff := float32(0.0)
 
@@ -415,11 +417,11 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 			fmt.Printf("   Max diff: %.6f\n", maxDiff)
 
 			if maxDiff < 0.001 {
-				fmt.Printf("   ✅ PERFECT MATCH!\n")
+				fmt.Printf("    PERFECT MATCH!\n")
 			} else if maxDiff < 0.01 {
-				fmt.Printf("   ✅ EXCELLENT MATCH!\n")
+				fmt.Printf("    EXCELLENT MATCH!\n")
 			} else {
-				fmt.Printf("   ⚠️  Moderate match\n")
+				fmt.Printf("     Moderate match\n")
 			}
 		}
 	}
@@ -433,7 +435,7 @@ func benchmarkPureInference(model *ProductionEmbeddingModel) {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 PRODUCTION GO EMBEDDING - OPTIMIZED INFERENCE")
+	fmt.Println(" PRODUCTION GO EMBEDDING - OPTIMIZED INFERENCE")
 	fmt.Println("================================================================================")
 	fmt.Println("Model: sentence-transformers/static-retrieval-mrl-en-v1")
 	fmt.Println("Approach: Optimized safetensors + separated loading + pure inference timing")
@@ -458,11 +460,11 @@ func main() {
 	}
 
 	if safetensorsPath == "" {
-		log.Fatalf("❌ No safetensors model file found. Tried paths: %v", possiblePaths)
+		log.Fatalf(" No safetensors model file found. Tried paths: %v", possiblePaths)
 	}
 
 	if _, err := os.Stat(referenceTokensPath); os.IsNotExist(err) {
-		log.Fatalf("❌ Reference tokens file not found: %s", referenceTokensPath)
+		log.Fatalf(" Reference tokens file not found: %s", referenceTokensPath)
 	}
 
 	fmt.Printf("📂 Using model: %s\n", safetensorsPath)
@@ -472,15 +474,15 @@ func main() {
 	// Load model (one-time cost - separated from inference)
 	model, err := LoadModel(safetensorsPath, referenceTokensPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to load model: %v", err)
+		log.Fatalf(" Failed to load model: %v", err)
 	}
 
 	// Benchmark pure inference performance
 	benchmarkPureInference(model)
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("✅ Production benchmark completed!")
-	fmt.Println("🎯 Key insights: Model loading separated, inference optimized")
-	fmt.Println("⚡ Ready for Python performance comparison")
+	fmt.Println(" Production benchmark completed!")
+	fmt.Println(" Key insights: Model loading separated, inference optimized")
+	fmt.Println(" Ready for Python performance comparison")
 	fmt.Println(strings.Repeat("=", 80))
 }

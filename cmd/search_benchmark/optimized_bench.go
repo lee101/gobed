@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -313,7 +315,7 @@ func printComparisonTable(results []BenchmarkResult) {
 	for _, r := range results {
 		latencyStr := fmt.Sprintf("%v", r.SearchLatency)
 		if r.SearchLatency < time.Millisecond {
-			latencyStr += " ✨"
+			latencyStr += " "
 		}
 
 		fmt.Printf("| %-16s | %6d | %10v | %10.0f | %14s | %9.2f | %-10s |\n",
@@ -343,10 +345,10 @@ func printPerformanceInsights(results []BenchmarkResult) {
 		}
 	}
 
-	fmt.Printf("🚀 **Best Indexing Performance**: %s with %,.0f docs/sec\n",
+	fmt.Printf(" **Best Indexing Performance**: %s with %,.0f docs/sec\n",
 		bestIndexing.Configuration, bestIndexing.IndexThroughput)
 
-	fmt.Printf("⚡ **Best Search Performance**: %s with %v latency\n",
+	fmt.Printf(" **Best Search Performance**: %s with %v latency\n",
 		bestSearch.Configuration, bestSearch.SearchLatency)
 
 	// Compare standard vs async
@@ -362,7 +364,7 @@ func printPerformanceInsights(results []BenchmarkResult) {
 
 	if standard != nil && async != nil {
 		indexImprovement := (async.IndexThroughput - standard.IndexThroughput) / standard.IndexThroughput * 100
-		fmt.Printf("\n📈 **Async vs Standard (10K docs)**:\n")
+		fmt.Printf("\n **Async vs Standard (10K docs)**:\n")
 		fmt.Printf("   • Indexing: %.1f%% improvement\n", indexImprovement)
 
 		if async.SearchLatency < standard.SearchLatency {
@@ -372,14 +374,14 @@ func printPerformanceInsights(results []BenchmarkResult) {
 	}
 
 	// Memory efficiency analysis
-	fmt.Printf("\n💾 **Memory Efficiency**:\n")
+	fmt.Printf("\n **Memory Efficiency**:\n")
 	for _, r := range results {
 		docsPerMB := float64(r.DocumentCount) / r.MemoryMB
 		fmt.Printf("   • %s: %,.0f docs/MB\n", r.Configuration, docsPerMB)
 	}
 
 	// Scalability analysis
-	fmt.Printf("\n📊 **Scalability Analysis**:\n")
+	fmt.Printf("\n **Scalability Analysis**:\n")
 	smallDataset := findResult(results, "Standard", 10000)
 	largeDataset := findResult(results, "Large_Dataset", 50000)
 
@@ -392,21 +394,21 @@ func printPerformanceInsights(results []BenchmarkResult) {
 		fmt.Printf("   • Search latency scaling: %.1fx\n", latencyRatio)
 
 		if throughputRatio > 0.8*scalingFactor {
-			fmt.Printf("   ✅ Excellent linear scaling performance\n")
+			fmt.Printf("    Excellent linear scaling performance\n")
 		} else if throughputRatio > 0.5*scalingFactor {
-			fmt.Printf("   ✅ Good scaling performance\n")
+			fmt.Printf("    Good scaling performance\n")
 		} else {
-			fmt.Printf("   ⚠️  Scaling could be improved\n")
+			fmt.Printf("     Scaling could be improved\n")
 		}
 	}
 
-	fmt.Printf("\n🎯 **Key Optimizations Demonstrated**:\n")
-	fmt.Printf("   ✅ Embedding caching for duplicate text handling\n")
-	fmt.Printf("   ✅ Async indexing with worker pools\n")
-	fmt.Printf("   ✅ Pre-allocated memory to reduce GC pressure\n")
-	fmt.Printf("   ✅ Automatic index selection (flat vs IVF vs PQ)\n")
-	fmt.Printf("   ✅ SIMD-optimized vector operations\n")
-	fmt.Printf("   ✅ Real training data vs synthetic for better clustering\n")
+	fmt.Printf("\n **Key Optimizations Demonstrated**:\n")
+	fmt.Printf("    Embedding caching for duplicate text handling\n")
+	fmt.Printf("    Async indexing with worker pools\n")
+	fmt.Printf("    Pre-allocated memory to reduce GC pressure\n")
+	fmt.Printf("    Automatic index selection (flat vs IVF vs PQ)\n")
+	fmt.Printf("    SIMD-optimized vector operations\n")
+	fmt.Printf("    Real training data vs synthetic for better clustering\n")
 
 	fmt.Println()
 }

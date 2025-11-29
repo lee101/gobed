@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -7,8 +9,8 @@ import (
 	"time"
 
 	"github.com/lee101/gobed"
-	"github.com/lee101/gobed/ann/search"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/search"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 func main() {

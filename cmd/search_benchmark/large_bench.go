@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -328,9 +330,9 @@ func main_disabled() {
 	fmt.Printf("  Throughput: %.1f QPS\n", searchQPS)
 
 	if avgSearchLatency < time.Millisecond {
-		fmt.Println("\n✅ SUB-MILLISECOND SEARCH ACHIEVED!")
+		fmt.Println("\n SUB-MILLISECOND SEARCH ACHIEVED!")
 	} else if avgSearchLatency < 2*time.Millisecond {
-		fmt.Println("\n✅ Target latency achieved (<2ms)")
+		fmt.Println("\n Target latency achieved (<2ms)")
 	}
 
 	fmt.Println("\n✓ Benchmark completed successfully!")

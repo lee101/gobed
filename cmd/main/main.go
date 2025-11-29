@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -38,18 +40,18 @@ func main() {
 // RunSimilarityDemo shows similarity and distance examples
 func RunSimilarityDemo() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("🚀 Text Embedding Similarity & Distance Examples")
+	fmt.Println(" Text Embedding Similarity & Distance Examples")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Load model
 	model, err := gobed.LoadModel()
 	if err != nil {
-		fmt.Printf("❌ Error: %v\\n", err)
+		fmt.Printf(" Error: %v\\n", err)
 		return
 	}
 
 	// Test similar texts
-	fmt.Println("\\n📊 SIMILARITY BETWEEN RELATED TEXTS")
+	fmt.Println("\\n SIMILARITY BETWEEN RELATED TEXTS")
 	fmt.Println(strings.Repeat("-", 70))
 
 	similarPairs := [][]string{
@@ -71,7 +73,7 @@ func RunSimilarityDemo() {
 	}
 
 	// Test unrelated texts
-	fmt.Println("\\n📊 SIMILARITY BETWEEN UNRELATED TEXTS")
+	fmt.Println("\\n SIMILARITY BETWEEN UNRELATED TEXTS")
 	fmt.Println(strings.Repeat("-", 70))
 
 	unrelatedPairs := [][]string{
@@ -91,13 +93,13 @@ func RunSimilarityDemo() {
 		fmt.Printf("  → Similarity: %.4f | Distance: %.4f\\n", sim, distance)
 	}
 
-	fmt.Println("\\n✅ Demo completed!")
+	fmt.Println("\\n Demo completed!")
 }
 
 // RunDemo runs the original demonstration of the embedding model
 func RunDemo() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 Gobed: Real Embedding Model Demo")
+	fmt.Println(" Gobed: Real Embedding Model Demo")
 	fmt.Println("================================================================================")
 	fmt.Println("Model: sentence-transformers/static-retrieval-mrl-en-v1 (REAL WEIGHTS)")
 	fmt.Println("")
@@ -105,19 +107,19 @@ func RunDemo() {
 	// Load the real model
 	model, err := gobed.LoadModel()
 	if err != nil {
-		log.Fatalf("❌ Failed to load model: %v", err)
+		log.Fatalf(" Failed to load model: %v", err)
 	}
 
 	// Get available texts
 	availableTexts := model.GetAvailableTexts()
 	if len(availableTexts) == 0 {
-		log.Fatalf("❌ No texts available for encoding")
+		log.Fatalf(" No texts available for encoding")
 	}
 
 	fmt.Printf("📚 Available texts for demo: %v\\n\\n", availableTexts)
 
 	// Demo 1: Basic embedding
-	fmt.Println("🔍 DEMO 1: Basic Text Encoding")
+	fmt.Println(" DEMO 1: Basic Text Encoding")
 	fmt.Println(strings.Repeat("-", 50))
 
 	// Test with arbitrary text first
@@ -126,7 +128,7 @@ func RunDemo() {
 	for _, text := range testTexts {
 		embedding, err := model.Encode(text)
 		if err != nil {
-			fmt.Printf("❌ Failed to encode '%s': %v\\n", text, err)
+			fmt.Printf(" Failed to encode '%s': %v\\n", text, err)
 			continue
 		}
 
@@ -137,8 +139,8 @@ func RunDemo() {
 		fmt.Println()
 	}
 
-	fmt.Println("\\n✅ Demo completed successfully!")
-	fmt.Printf("🎯 Model supports arbitrary text tokenization!\\n")
+	fmt.Println("\\n Demo completed successfully!")
+	fmt.Printf(" Model supports arbitrary text tokenization!\\n")
 	fmt.Println(strings.Repeat("=", 80))
 }
 

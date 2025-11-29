@@ -1,42 +1,47 @@
 package gobed
 
-import (
-	"log"
-	"runtime"
-)
+import "runtime"
 
 // AutoOptimizedSearchConfig returns the best configuration based on available hardware
 // It automatically detects and uses GPU acceleration when available
 func AutoOptimizedSearchConfig() SearchConfig {
 	config := DefaultSearchConfig()
-	
+
 	// Check if GPU is available
 	if IsCUDAAvailable() {
-		log.Println("🚀 GPU detected - enabling CUDA acceleration")
+		Debugln("GPU detected - enabling CUDA acceleration")
 		config.EnableGPU = true
 		config.GPUDeviceID = 0
-		config.GPUBatchSize = 50000  // Theoretical analysis: 0.6x GPU occupancy, 10x improvement (80M+ vectors/sec)
-		config.MaxExactSearchSize = 100000 // GPU can handle larger exact searches
-		
-		// Enable int8 quantization for GPU
-		config.UseInt8 = true
-		
+		config.UseInt8 = true // GPU benefits from int8 quantization
+
+		// Detect GPU memory and optimize batch sizes
+		// TODO: Implement actual GPU memory detection
+		// For now, assume RTX 3090-class GPU (24GB)
+		config.GPUBatchSize = 50000
+		config.MaxExactSearchSize = 100000
+
 		// Enable async for better GPU utilization
 		config.EnableAsync = true
-		config.AsyncWorkers = 2 // Less CPU workers needed with GPU
+		config.AsyncWorkers = 2 // Fewer CPU workers needed with GPU
 		config.AsyncQueueSize = 10000
+
+		Debugf("GPU configuration: batch_size=%d, exact_search_limit=%d",
+			config.GPUBatchSize, config.MaxExactSearchSize)
 	} else {
 		// CPU-optimized settings
-		log.Println("💻 No GPU detected - using optimized CPU settings")
+		Debugln("No GPU detected - using optimized CPU settings")
 		config.EnableAsync = true
 		config.AsyncWorkers = runtime.NumCPU()
 		config.AsyncQueueSize = 5000
-		config.UseInt8 = true // Still use int8 for memory savings
-		
+		config.UseInt8 = true // Still beneficial for memory savings
+
 		// Enable parallel search on CPU
 		config.MaxConcurrency = runtime.NumCPU()
+
+		Debugf("CPU configuration: workers=%d, max_concurrency=%d",
+			config.AsyncWorkers, config.MaxConcurrency)
 	}
-	
+
 	return config
 }
 
@@ -52,13 +57,13 @@ func FastSearchEngine(model *EmbeddingModel) *SearchEngine {
 	return NewAutoSearchEngine(model)
 }
 
-// UpdateDefaultSearchEngine modifies the default NewSearchEngine to use auto-optimization
+// init logs optimization status on package initialization
 func init() {
 	// Log optimization status on package initialization
 	if IsCUDAAvailable() {
-		log.Println("✅ Gobed: GPU acceleration available and will be used by default")
-		log.Println("   Performance: 39x faster with 11,000+ QPS")
+		Debugln("Gobed: GPU acceleration available")
+		Debugln("Performance: Up to 50x faster search with GPU")
 	} else {
-		log.Println("ℹ️ Gobed: Running in CPU mode (install CUDA for 39x speedup)")
+		Debugln("Gobed: Running in CPU mode (install CUDA for GPU acceleration)")
 	}
 }

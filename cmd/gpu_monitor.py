@@ -61,20 +61,20 @@ def get_processes():
 
 def monitor_gpu(duration=60, interval=1):
     """Monitor GPU for specified duration"""
-    print("🔍 GPU Performance Monitor")
+    print(" GPU Performance Monitor")
     print("=" * 50)
-    print(f"⏱️  Monitoring for {duration}s (interval: {interval}s)")
-    print(f"📊 Started at: {datetime.now().strftime('%H:%M:%S')}")
+    print(f"  Monitoring for {duration}s (interval: {interval}s)")
+    print(f" Started at: {datetime.now().strftime('%H:%M:%S')}")
     print("-" * 50)
     
     baseline_stats = get_gpu_stats()
     if baseline_stats:
-        print(f"🎯 GPU: {baseline_stats['name']}")
-        print(f"💾 Total Memory: {baseline_stats['mem_total']:.0f} MB")
-        print(f"🌡️  Baseline Temp: {baseline_stats['temperature']:.0f}°C")
-        print(f"⚡ Power Limit: {baseline_stats['power_limit']:.0f}W")
+        print(f" GPU: {baseline_stats['name']}")
+        print(f" Total Memory: {baseline_stats['mem_total']:.0f} MB")
+        print(f"🌡  Baseline Temp: {baseline_stats['temperature']:.0f}°C")
+        print(f" Power Limit: {baseline_stats['power_limit']:.0f}W")
     
-    print("\n📈 Real-time Monitoring:")
+    print("\n Real-time Monitoring:")
     print(f"{'Time':<8} {'GPU%':<6} {'Mem%':<6} {'Used':<8} {'Temp':<6} {'Power':<7} {'Processes'}")
     print("-" * 70)
     
@@ -105,15 +105,15 @@ def monitor_gpu(duration=60, interval=1):
             if processes:
                 for proc in processes:
                     if 'demo' in proc['name'].lower() or 'torch' in proc['name'].lower():
-                        print(f"  └─ 🎯 {proc['name']} (PID: {proc['pid']}) - {proc['memory_mb']:.0f}MB")
+                        print(f"  └─  {proc['name']} (PID: {proc['pid']}) - {proc['memory_mb']:.0f}MB")
         
         time.sleep(interval)
     
     print("\n" + "=" * 50)
-    print("📊 Summary:")
-    print(f"   🏆 Max GPU Utilization: {max_gpu_util:.0f}%")
-    print(f"   💾 Max Memory Used: {max_memory_used:.0f} MB")
-    print(f"   🌡️  Max Temperature: {max_temp:.0f}°C")
+    print(" Summary:")
+    print(f"    Max GPU Utilization: {max_gpu_util:.0f}%")
+    print(f"    Max Memory Used: {max_memory_used:.0f} MB")
+    print(f"   🌡  Max Temperature: {max_temp:.0f}°C")
     print("=" * 50)
 
 def run_demo_with_monitoring():
@@ -121,7 +121,7 @@ def run_demo_with_monitoring():
     import threading
     import os
     
-    print("🚀 Starting Interactive Demo with GPU Monitoring")
+    print(" Starting Interactive Demo with GPU Monitoring")
     print("=" * 60)
     
     # Start GPU monitoring in background

@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -13,7 +15,7 @@ import (
 	"time"
 
 	"github.com/lee101/gobed"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 func main() {
@@ -444,7 +446,7 @@ func printComparison(size int, standard, sharedSingle, sharedMulti, server Bench
 		server.SearchLatency, server.MemoryMB, server.MemoryMB, server.Throughput)
 
 	// Calculate improvements
-	fmt.Println("\n📊 Memory Savings:")
+	fmt.Println("\n Memory Savings:")
 
 	multiProcSaving := (standard.MemoryMB*float64(sharedMulti.ProcessCount) - sharedMulti.MemoryMB) / (standard.MemoryMB * float64(sharedMulti.ProcessCount)) * 100
 	fmt.Printf("• Multi-process: %.1f%% memory saved (shared memory vs %d separate processes)\n",

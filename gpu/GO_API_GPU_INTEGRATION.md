@@ -1,10 +1,10 @@
-# 🚀 Go API GPU Integration Complete
+#  Go API GPU Integration Complete
 
-## ✅ What We Built
+##  What We Built
 
 We have successfully integrated **real GPU acceleration** into the existing Go API for the gobed search engine. The integration is **backward compatible** and **production-ready**.
 
-## 🔧 API Enhancements
+##  API Enhancements
 
 ### 1. **Enhanced SearchConfig** 
 Added GPU configuration options to the main `SearchConfig` struct:
@@ -55,7 +55,7 @@ type GPUSearchEngine struct {
 }
 ```
 
-## 🎯 Usage Examples
+##  Usage Examples
 
 ### Basic GPU Usage
 ```go
@@ -107,7 +107,7 @@ engine := gobed.NewSearchEngineWithConfig(model, config)
 defer engine.Close()
 ```
 
-## 📊 Performance Improvements
+##  Performance Improvements
 
 ### Verified GPU Acceleration
 - **15x speedup** over single-threaded CPU
@@ -124,7 +124,7 @@ defer engine.Close()
 | 1M vectors | 2,463 ms | 947 ms | 2.6x |
 | Peak QPS | 418 | 1,056 | 2.5x |
 
-## 🏗️ Technical Architecture
+## 🏗 Technical Architecture
 
 ### CUDA Integration
 ```
@@ -147,7 +147,7 @@ LibTorch + CUDA Runtime
 - **Automatic cleanup** on engine close
 - **Error handling** with CPU fallback
 
-## 🔧 Build and Deploy
+##  Build and Deploy
 
 ### Prerequisites
 ```bash
@@ -176,23 +176,23 @@ import "github.com/lee101/gobed"
 engine := gobed.NewGPUSearchEngine(model)
 ```
 
-## 🔍 Testing and Verification
+##  Testing and Verification
 
-### Comprehensive Test Suite ✅
+### Comprehensive Test Suite 
 - **Correctness verification**: Perfect accuracy maintained
 - **Performance benchmarks**: 15x speedup confirmed  
 - **GPU utilization monitoring**: 100% hardware usage
 - **Memory behavior testing**: Efficient GPU memory usage
 - **Error handling**: Graceful fallbacks implemented
 
-### Production Readiness ✅
+### Production Readiness 
 - **Backward compatibility**: Existing API unchanged
 - **Graceful degradation**: Falls back to CPU when GPU unavailable
 - **Resource management**: Proper GPU memory cleanup
 - **Error handling**: Comprehensive error checking
 - **Performance monitoring**: Built-in stats and metrics
 
-## 🚀 Migration Guide
+##  Migration Guide
 
 ### For Existing Users
 **No changes required!** Existing code continues to work:
@@ -221,7 +221,7 @@ config.GPUDeviceID = 1         // Use specific GPU
 engine := gobed.NewSearchEngineWithConfig(model, config)
 ```
 
-## 📈 Performance Tuning
+##  Performance Tuning
 
 ### GPU Batch Size Optimization
 ```go
@@ -244,15 +244,15 @@ gpu0_engine := gobed.NewSearchEngineWithConfig(model, gobed.GPUSearchConfig{GPUD
 gpu1_engine := gobed.NewSearchEngineWithConfig(model, gobed.GPUSearchConfig{GPUDeviceID: 1})
 ```
 
-## ✅ Summary
+##  Summary
 
 ### What's Ready for Production
-1. **✅ Full Go API Integration** - GPU options in SearchConfig
-2. **✅ Backward Compatibility** - Existing code unchanged  
-3. **✅ Real GPU Acceleration** - 15x performance improvement
-4. **✅ Production Hardening** - Error handling, resource cleanup
-5. **✅ Comprehensive Testing** - All functionality verified
-6. **✅ Documentation Complete** - Ready for users
+1. ** Full Go API Integration** - GPU options in SearchConfig
+2. ** Backward Compatibility** - Existing code unchanged  
+3. ** Real GPU Acceleration** - 15x performance improvement
+4. ** Production Hardening** - Error handling, resource cleanup
+5. ** Comprehensive Testing** - All functionality verified
+6. ** Documentation Complete** - Ready for users
 
 ### Usage in README Examples
 ```go
@@ -263,7 +263,7 @@ ids, _ := engine.IndexBatch(documents)
 results, _ := engine.Search("query", 10)
 ```
 
-**The GPU acceleration is now seamlessly integrated into the Go API and ready for production use!** 🎉
+**The GPU acceleration is now seamlessly integrated into the Go API and ready for production use!** 
 
 ---
 *GPU integration verified on NVIDIA RTX 3080 with CUDA 12.0*

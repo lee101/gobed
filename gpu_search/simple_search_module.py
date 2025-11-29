@@ -129,21 +129,21 @@ def export_simple_search_module() -> str:
     # Test the scripted module
     test_query = torch.randint(-128, 127, (512,), dtype=torch.int8, device=device)
     test_scores, test_indices = scripted_module.search(test_query, 5)
-    print(f"✅ Test search returned {test_scores.shape[0]} results")
+    print(f" Test search returned {test_scores.shape[0]} results")
     
     # Test batch search
     test_queries = torch.randint(-128, 127, (8, 512), dtype=torch.int8, device=device)
     batch_scores, batch_indices = scripted_module.batch_search(test_queries, 5)
-    print(f"✅ Test batch search returned {batch_scores.shape} results")
+    print(f" Test batch search returned {batch_scores.shape} results")
     
     # Save the scripted module
     output_path = "/home/lee/code/gobed/model/simple_gpu_search_module.pt"
     scripted_module.save(output_path)
     
-    print(f"✅ Exported simple GPU search module to: {output_path}")
+    print(f" Exported simple GPU search module to: {output_path}")
     return output_path
 
 
 if __name__ == "__main__":
-    print("🚀 Exporting Simple GPU Search Module")
+    print(" Exporting Simple GPU Search Module")
     export_simple_search_module()

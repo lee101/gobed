@@ -7,7 +7,7 @@ import json
 from sentence_transformers import SentenceTransformer
 
 def main():
-    print("🚀 Creating demo dataset with diverse semantic relationships...")
+    print(" Creating demo dataset with diverse semantic relationships...")
     
     # Load the model
     model_path = "./real_model_cache/models--sentence-transformers--static-retrieval-mrl-en-v1/snapshots/f60985c706f192d45d218078e49e5a8b6f15283a"
@@ -47,7 +47,7 @@ def main():
         "Natural language processing"
     ]
     
-    print(f"📝 Processing {len(demo_sentences)} sentences...")
+    print(f" Processing {len(demo_sentences)} sentences...")
     
     # Generate tokens and embeddings for all sentences
     reference_tokens = {}
@@ -71,13 +71,13 @@ def main():
             embeddings.append(embedding)
             
         except Exception as e:
-            print(f"     ❌ Error processing '{sentence}': {e}")
+            print(f"      Error processing '{sentence}': {e}")
     
     # Save reference tokens
     tokens_path = "./model/real_reference_tokens.json"
     with open(tokens_path, 'w') as f:
         json.dump(reference_tokens, f, indent=2)
-    print(f"✅ Saved {len(reference_tokens)} reference tokens to: {tokens_path}")
+    print(f" Saved {len(reference_tokens)} reference tokens to: {tokens_path}")
     
     # Save embeddings for verification
     import numpy as np
@@ -88,10 +88,10 @@ def main():
         for sentence in reference_tokens.keys():
             f.write(f"{sentence}\n")
     
-    print(f"✅ Saved embeddings: shape {embeddings_array.shape}")
+    print(f" Saved embeddings: shape {embeddings_array.shape}")
     
     # Preview some similarity relationships
-    print(f"\n🔍 Preview of semantic relationships:")
+    print(f"\n Preview of semantic relationships:")
     tech_sentences = [s for s in demo_sentences if any(word in s.lower() for word in ['machine', 'artificial', 'deep', 'neural'])]
     greeting_sentences = [s for s in demo_sentences if any(word in s.lower() for word in ['hello', 'good', 'hi'])]
     
@@ -107,8 +107,8 @@ def main():
         sim = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
         print(f"   Greeting similarity: '{greeting_sentences[0]}' ↔ '{greeting_sentences[1]}' = {sim:.4f}")
     
-    print(f"\n🎉 Demo dataset created successfully!")
-    print(f"📊 {len(reference_tokens)} sentences ready for Go demonstration")
+    print(f"\n Demo dataset created successfully!")
+    print(f" {len(reference_tokens)} sentences ready for Go demonstration")
 
 if __name__ == "__main__":
     main()

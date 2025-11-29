@@ -8,9 +8,10 @@ import (
 // TestPythonCompatibility verifies that our Go implementation produces
 // embeddings that match the Python static-retrieval-mrl-en-v1 model
 func TestPythonCompatibility(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
+	model := loadModelOrSkip(t)
+
+	if model.EmbedDim != 1024 {
+		t.Skipf("skipping: Python compatibility baseline assumes 1024-dim model, current=%d", model.EmbedDim)
 	}
 
 	// These are expected outputs from the Python model for specific test sentences
@@ -89,9 +90,10 @@ func TestPythonCompatibility(t *testing.T) {
 
 // TestCosineSimilarityPythonCompatibility tests that cosine similarity matches Python
 func TestCosineSimilarityPythonCompatibility(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
+	model := loadModelOrSkip(t)
+
+	if model.EmbedDim != 1024 {
+		t.Skipf("skipping: Python compatibility baseline assumes 1024-dim model, current=%d", model.EmbedDim)
 	}
 
 	// Test pairs with expected similarity from Python
@@ -149,10 +151,7 @@ func TestCosineSimilarityPythonCompatibility(t *testing.T) {
 
 // TestBatchProcessingConsistency ensures batch and single encoding produce same results
 func TestBatchProcessingConsistency(t *testing.T) {
-	model, err := LoadModel()
-	if err != nil {
-		t.Fatalf("Failed to load model: %v", err)
-	}
+	model := loadModelOrSkip(t)
 
 	sentences := []string{
 		"First sentence for batch processing",

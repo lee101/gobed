@@ -25,7 +25,7 @@ class EmbeddingModel(nn.Module):
         self.max_length = 512
         self.embedding_dim = self.model.config.hidden_size
         
-        print(f"✅ Model loaded:")
+        print(f" Model loaded:")
         print(f"   Vocab size: {self.vocab_size}")
         print(f"   Max length: {self.max_length}")
         print(f"   Embedding dim: {self.embedding_dim}")
@@ -60,7 +60,7 @@ def export_model_to_torchscript():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     
-    print(f"🎯 Using device: {device}")
+    print(f" Using device: {device}")
     
     # Create example inputs for tracing
     batch_size = 8
@@ -78,13 +78,13 @@ def export_model_to_torchscript():
             (example_input_ids, example_attention_mask),
             strict=False
         )
-        print("✅ Model traced successfully")
+        print(" Model traced successfully")
     except Exception as e:
-        print(f"❌ Tracing failed: {e}")
+        print(f" Tracing failed: {e}")
         print("🔄 Trying script mode...")
         # Fallback to script mode
         traced_model = torch.jit.script(model)
-        print("✅ Model scripted successfully")
+        print(" Model scripted successfully")
     
     # Test the traced model
     print("🧪 Testing traced model...")
@@ -97,20 +97,20 @@ def export_model_to_torchscript():
         print(f"   Max difference: {diff:.6f}")
         
         if diff < 1e-5:
-            print("✅ Traced model matches original")
+            print(" Traced model matches original")
         else:
-            print("⚠️  Traced model differs from original")
+            print("  Traced model differs from original")
     
     # Save the traced model
     output_path = "/home/lee/code/gobed/model/embedding_model.pt"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    print(f"💾 Saving traced model to: {output_path}")
+    print(f" Saving traced model to: {output_path}")
     traced_model.save(output_path)
     
     # Save tokenizer vocab for Go
     vocab_path = "/home/lee/code/gobed/model/vocab.json"
-    print(f"💾 Saving vocabulary to: {vocab_path}")
+    print(f" Saving vocabulary to: {vocab_path}")
     
     # Save tokenizer configuration
     tokenizer_config = {
@@ -132,7 +132,7 @@ def export_model_to_torchscript():
     with open(vocab_path, 'w') as f:
         json.dump(vocab, f)
     
-    print("✅ Export completed successfully!")
+    print(" Export completed successfully!")
     print(f"📁 Files created:")
     print(f"   - {output_path} (TorchScript model)")
     print(f"   - {vocab_path} (Vocabulary)")
@@ -159,7 +159,7 @@ def test_exported_model(model_path):
     test_input_ids = torch.randint(0, vocab_size, (batch_size, seq_length)).to(device)
     test_attention_mask = torch.ones(batch_size, seq_length).to(device)
     
-    print(f"📊 Input shape: {test_input_ids.shape}")
+    print(f" Input shape: {test_input_ids.shape}")
     
     with torch.no_grad():
         start = torch.cuda.Event(enable_timing=True)
@@ -172,12 +172,12 @@ def test_exported_model(model_path):
         torch.cuda.synchronize()
         elapsed_time = start.elapsed_time(end)
     
-    print(f"📊 Output shape: {embeddings.shape}")
-    print(f"⚡ Inference time: {elapsed_time:.2f}ms")
-    print(f"🔥 Throughput: {batch_size * 1000 / elapsed_time:.0f} texts/sec")
+    print(f" Output shape: {embeddings.shape}")
+    print(f" Inference time: {elapsed_time:.2f}ms")
+    print(f" Throughput: {batch_size * 1000 / elapsed_time:.0f} texts/sec")
     
     # Check output properties
-    print(f"📈 Embedding stats:")
+    print(f" Embedding stats:")
     print(f"   Mean: {embeddings.mean().item():.6f}")
     print(f"   Std: {embeddings.std().item():.6f}")
     print(f"   Min: {embeddings.min().item():.6f}")
@@ -187,10 +187,10 @@ def test_exported_model(model_path):
     norms = torch.norm(embeddings, dim=1)
     print(f"   Norms: {norms.mean().item():.6f} ± {norms.std().item():.6f}")
     
-    print("✅ Exported model test passed!")
+    print(" Exported model test passed!")
 
 if __name__ == "__main__":
-    print("🚀 PyTorch Model Export for Go Integration")
+    print(" PyTorch Model Export for Go Integration")
     print("=" * 50)
     
     try:
@@ -200,13 +200,13 @@ if __name__ == "__main__":
         # Test exported model
         test_exported_model(model_path)
         
-        print("\n🎉 Success! Model exported and ready for Go integration")
+        print("\n Success! Model exported and ready for Go integration")
         print("\nNext steps:")
         print("1. Install libtorch C++ library")
         print("2. Create Go bindings using CGO")
         print("3. Replace Python server with native Go calls")
         
     except Exception as e:
-        print(f"❌ Export failed: {e}")
+        print(f" Export failed: {e}")
         import traceback
         traceback.print_exc()

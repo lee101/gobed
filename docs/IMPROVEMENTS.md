@@ -2,7 +2,7 @@
 
 ## Summary of Changes
 
-### 1. ✅ Fixed Build Issues
+### 1.  Fixed Build Issues
 - **Resolved merge conflict** in `go.sum` - kept newer version (v1.21.0) of onnxruntime_go
 - **Fixed duplicate main functions** preventing compilation:
   - Disabled duplicate mains in `internal/benchmarks/`
@@ -10,18 +10,18 @@
   - Fixed multiple mains in `cmd/search_benchmark/`
   - Renamed duplicate types like `OptimizedConfig`
 
-### 2. ✅ Code Quality
+### 2.  Code Quality
 - **Ran `go fmt`** on entire codebase for consistent formatting
 - **Ran `go vet`** to identify and fix issues
 - **Fixed package declaration** error in `internal/tests/test_go_tokenizer.go`
 - **Ran `go mod tidy`** to clean up dependencies
 
-### 3. ✅ Memory Optimization
+### 3.  Memory Optimization
 - **Added object pooling** to `EmbeddingModel` to reduce allocations
 - Integrated existing `ObjectPool` implementation into embedding generation
 - Added TODO comment for future API improvements to fully leverage pooling
 
-### 4. ✅ Simplified Search Configuration
+### 4.  Simplified Search Configuration
 - **Created preset system** with 3 simple options:
   - `FastPreset` - Optimized for speed (<50K vectors)
   - `BalancedPreset` - Balance speed/accuracy (50K-500K vectors)  
@@ -29,7 +29,7 @@
 - **Reduced configuration complexity** from 70+ lines to simple preset selection
 - Added `search_presets.go` with clean preset implementations
 
-### 5. 📝 Created Examples
+### 5.  Created Examples
 - Added `examples/improved_demo.go` showcasing:
   - Simplified preset-based search configuration
   - Memory-optimized batch processing

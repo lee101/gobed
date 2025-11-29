@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -156,13 +158,13 @@ func loadWeightsIntoEmbedding(embedLayer *nn.Embedding, weights [][]float32, dev
 		fmt.Printf("🔄 Applied INT8 quantization\n")
 	default:
 		// Keep FP32
-		fmt.Printf("📦 Loaded weights in FP32 precision\n")
+		fmt.Printf(" Loaded weights in FP32 precision\n")
 	}
 
 	// Get the embedding weight parameter and copy data
 	// Note: This is a simplified approach. In practice, you'd need to access
 	// the actual weight parameter of the embedding layer
-	fmt.Printf("✅ Loaded embedding weights: [%d, %d] with %s precision\n", rows, cols, precision)
+	fmt.Printf(" Loaded embedding weights: [%d, %d] with %s precision\n", rows, cols, precision)
 
 	return nil
 }

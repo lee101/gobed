@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lee101/gobed/ann/search"
-	"github.com/lee101/gobed/ann/simd"
+	"github.com/lee101/gobed/pkg/ann/search"
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // TestMaxFlatSizePerformance tests performance with different MaxFlatSize values
@@ -98,12 +98,12 @@ func TestMaxFlatSizePerformance(t *testing.T) {
 		)
 	}
 	
-	fmt.Println("\n📊 Analysis Summary:")
+	fmt.Println("\n Analysis Summary:")
 	fmt.Println("• For datasets < 1K: MaxFlatSize=1000-2000 provides good balance")
 	fmt.Println("• For datasets 1K-5K: MaxFlatSize=1000-2000 optimal for speed")
 	fmt.Println("• For datasets 5K-20K: MaxFlatSize=1000-2000 best QPS vs accuracy")
 	fmt.Println("• For datasets > 20K: MaxFlatSize=1000-2000 maintains high QPS")
-	fmt.Println("\n✅ Recommendation: Change default MaxFlatSize from 5000 to 1000-2000")
+	fmt.Println("\n Recommendation: Change default MaxFlatSize from 5000 to 1000-2000")
 }
 
 // BenchmarkRecommendedMaxFlatSize tests the recommended value

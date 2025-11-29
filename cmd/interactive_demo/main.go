@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 /*
@@ -33,7 +35,7 @@ type InteractiveDemo struct {
 }
 
 func main() {
-	fmt.Println("🔍 Interactive Text Search Demo - LibTorch GPU")
+	fmt.Println(" Interactive Text Search Demo - LibTorch GPU")
 	fmt.Println("==============================================")
 
 	// System info
@@ -41,31 +43,31 @@ func main() {
 	cudaAvailable := C.torch_cuda_is_available() != 0
 	deviceCount := int(C.torch_cuda_device_count())
 
-	fmt.Printf("📊 System Status:\n")
+	fmt.Printf(" System Status:\n")
 	fmt.Printf("   LibTorch: %s\n", version)
 	fmt.Printf("   CUDA Available: %v\n", cudaAvailable)
 	fmt.Printf("   GPU Devices: %d\n", deviceCount)
 	fmt.Printf("   Go Runtime: %s\n", runtime.Version())
 
 	if !cudaAvailable {
-		fmt.Println("⚠️  CUDA not available - running on CPU")
+		fmt.Println("  CUDA not available - running on CPU")
 	}
 
 	demo := &InteractiveDemo{vectorDim: 384} // Common embedding dimension
-	
-	fmt.Println("\n🔧 Building text corpus and embeddings...")
+
+	fmt.Println("\n Building text corpus and embeddings...")
 	demo.buildTextCorpus()
-	
-	fmt.Println("\n🚀 Initializing LibTorch indexer...")
+
+	fmt.Println("\n Initializing LibTorch indexer...")
 	demo.initializeIndexer()
-	
+
 	fmt.Println("\n📚 Training index...")
 	demo.trainIndex()
-	
-	fmt.Println("\n📝 Adding documents to index...")
+
+	fmt.Println("\n Adding documents to index...")
 	demo.indexDocuments()
-	
-	fmt.Println("\n✅ Ready for interactive search!")
+
+	fmt.Println("\n Ready for interactive search!")
 	demo.runInteractiveSearch()
 }
 
@@ -232,7 +234,7 @@ func (demo *InteractiveDemo) buildTextCorpus() {
 		for i, text := range category.texts {
 			// Create synthetic embeddings (in real app, use actual embedding model)
 			vector := demo.generateSyntheticEmbedding(text, category.name)
-			
+
 			doc := TextDocument{
 				ID:      docID,
 				Title:   fmt.Sprintf("%s Document %d", category.name, i+1),
@@ -244,23 +246,23 @@ func (demo *InteractiveDemo) buildTextCorpus() {
 		}
 	}
 
-	fmt.Printf("   📊 Generated %d documents across %d categories\n", len(demo.documents), len(categories))
-	fmt.Printf("   🎯 Vector dimension: %d\n", demo.vectorDim)
+	fmt.Printf("    Generated %d documents across %d categories\n", len(demo.documents), len(categories))
+	fmt.Printf("    Vector dimension: %d\n", demo.vectorDim)
 }
 
 func (demo *InteractiveDemo) generateSyntheticEmbedding(text, category string) []int8 {
 	// Generate deterministic but varied embeddings based on text content
 	// This simulates real embeddings with semantic similarity
 	vector := make([]int8, demo.vectorDim)
-	
+
 	// Use text hash for deterministic generation
 	hash := 0
 	for _, char := range text + category {
 		hash = hash*31 + int(char)
 	}
-	
+
 	rng := rand.New(rand.NewSource(int64(hash)))
-	
+
 	// Generate base pattern based on category
 	categorySeeds := map[string]int{
 		"Technology":  1000,
@@ -274,19 +276,19 @@ func (demo *InteractiveDemo) generateSyntheticEmbedding(text, category string) [
 		"Sports":      9000,
 		"History":     10000,
 	}
-	
+
 	categorySeed := categorySeeds[category]
-	
+
 	// Create category-specific patterns
 	for i := 0; i < demo.vectorDim; i++ {
 		// Mix category pattern with text-specific variation
-		categoryComponent := int8((categorySeed + i*17) % 256 - 128)
+		categoryComponent := int8((categorySeed+i*17)%256 - 128)
 		textComponent := int8(rng.Intn(256) - 128)
-		
+
 		// Weight: 70% category pattern, 30% text variation
 		vector[i] = int8((int(categoryComponent)*7 + int(textComponent)*3) / 10)
 	}
-	
+
 	return vector
 }
 
@@ -297,16 +299,16 @@ func (demo *InteractiveDemo) initializeIndexer() {
 		codebook_size:     C.int(256),
 		ivf_clusters:      C.int(256), // Smaller for 1000 docs
 		probe_lists:       C.int(16),
-		rerank_k:         C.int(100),
-		device_id:        C.int(0), // Force GPU usage
+		rerank_k:          C.int(100),
+		device_id:         C.int(0), // Force GPU usage
 	}
 
 	demo.indexer = C.torch_indexer_create(config)
 	if demo.indexer == nil {
-		log.Fatal("❌ Failed to create indexer")
+		log.Fatal(" Failed to create indexer")
 	}
 
-	fmt.Println("   ✅ Indexer initialized with GPU configuration")
+	fmt.Println("    Indexer initialized with GPU configuration")
 }
 
 func (demo *InteractiveDemo) trainIndex() {
@@ -331,10 +333,10 @@ func (demo *InteractiveDemo) trainIndex() {
 	trainTime := time.Since(start)
 
 	if result == 0 {
-		log.Fatal("❌ Training failed")
+		log.Fatal(" Training failed")
 	}
 
-	fmt.Printf("   ✅ Training completed in %v (%d vectors)\n", trainTime, trainingSize)
+	fmt.Printf("    Training completed in %v (%d vectors)\n", trainTime, trainingSize)
 }
 
 func (demo *InteractiveDemo) indexDocuments() {
@@ -353,30 +355,30 @@ func (demo *InteractiveDemo) indexDocuments() {
 	indexTime := time.Since(start)
 
 	if result == 0 {
-		log.Fatal("❌ Indexing failed")
+		log.Fatal(" Indexing failed")
 	}
 
 	indexRate := float64(len(demo.documents)) / indexTime.Seconds()
-	
+
 	// Get memory stats
 	stats := C.torch_indexer_get_stats(demo.indexer)
-	
-	fmt.Printf("   ✅ Indexed %d documents in %v\n", len(demo.documents), indexTime)
-	fmt.Printf("   📊 Rate: %.1f docs/sec\n", indexRate)
-	fmt.Printf("   💾 GPU Memory: %.1f MB\n", float64(stats.gpu_memory_mb))
+
+	fmt.Printf("    Indexed %d documents in %v\n", len(demo.documents), indexTime)
+	fmt.Printf("    Rate: %.1f docs/sec\n", indexRate)
+	fmt.Printf("    GPU Memory: %.1f MB\n", float64(stats.gpu_memory_mb))
 }
 
 func (demo *InteractiveDemo) runInteractiveSearch() {
 	scanner := bufio.NewScanner(os.Stdin)
-	
+
 	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("🔍 Interactive Text Search")
+	fmt.Println(" Interactive Text Search")
 	fmt.Println("Type your search query (or 'quit' to exit)")
 	fmt.Println("Commands: 'stats', 'help', 'examples'")
 	fmt.Println(strings.Repeat("=", 60))
 
 	for {
-		fmt.Print("\n🔍 Search> ")
+		fmt.Print("\n Search> ")
 		if !scanner.Scan() {
 			break
 		}
@@ -407,10 +409,10 @@ func (demo *InteractiveDemo) runInteractiveSearch() {
 
 func (demo *InteractiveDemo) performSearch(query string) {
 	start := time.Now()
-	
+
 	// Generate query embedding (same method as documents)
 	queryVector := demo.generateSyntheticEmbedding(query, "Query")
-	
+
 	// Perform search
 	searchResult := C.torch_indexer_search(
 		demo.indexer,
@@ -418,15 +420,15 @@ func (demo *InteractiveDemo) performSearch(query string) {
 		C.int(demo.vectorDim),
 		C.int(10), // Top 10 results
 	)
-	
+
 	searchTime := time.Since(start)
-	
+
 	if searchResult.count == 0 {
-		fmt.Println("❌ No results found")
+		fmt.Println(" No results found")
 		return
 	}
 
-	fmt.Printf("\n📊 Found %d results in %v (%.2f μs)\n", 
+	fmt.Printf("\n Found %d results in %v (%.2f μs)\n",
 		searchResult.count, searchTime, float64(searchTime.Nanoseconds())/1000.0)
 	fmt.Println(strings.Repeat("-", 60))
 
@@ -437,46 +439,46 @@ func (demo *InteractiveDemo) performSearch(query string) {
 	for i := 0; i < int(searchResult.count); i++ {
 		docID := int(ids[i])
 		score := float64(scores[i])
-		
+
 		if docID >= 0 && docID < len(demo.documents) {
 			doc := demo.documents[docID]
-			fmt.Printf("🏆 %d. [Score: %.1f] %s\n", i+1, score, doc.Title)
-			
+			fmt.Printf(" %d. [Score: %.1f] %s\n", i+1, score, doc.Title)
+
 			// Highlight matching content
 			content := doc.Content
 			if len(content) > 80 {
 				content = content[:77] + "..."
 			}
-			fmt.Printf("   📝 %s\n", content)
+			fmt.Printf("    %s\n", content)
 		}
 	}
 
 	// Free search results
 	C.torch_search_result_free(&searchResult)
-	
+
 	// Show performance stats
 	stats := C.torch_indexer_get_stats(demo.indexer)
-	fmt.Printf("\n💾 GPU Memory: %.1f MB | 📚 Total Docs: %d\n", 
+	fmt.Printf("\n GPU Memory: %.1f MB | 📚 Total Docs: %d\n",
 		float64(stats.gpu_memory_mb), len(demo.documents))
 }
 
 func (demo *InteractiveDemo) printStats() {
 	stats := C.torch_indexer_get_stats(demo.indexer)
-	
-	fmt.Println("\n📊 System Statistics:")
+
+	fmt.Println("\n System Statistics:")
 	fmt.Printf("   📚 Documents: %d\n", len(demo.documents))
-	fmt.Printf("   🎯 Vector Dimension: %d\n", demo.vectorDim)
-	fmt.Printf("   💾 GPU Memory: %.1f MB\n", float64(stats.gpu_memory_mb))
-	fmt.Printf("   🏗️  Index Built: %v\n", stats.index_built != 0)
+	fmt.Printf("    Vector Dimension: %d\n", demo.vectorDim)
+	fmt.Printf("    GPU Memory: %.1f MB\n", float64(stats.gpu_memory_mb))
+	fmt.Printf("   🏗  Index Built: %v\n", stats.index_built != 0)
 	fmt.Printf("   🎓 Trained: %v\n", stats.is_trained != 0)
-	fmt.Printf("   🔧 IVF Clusters: %d\n", int(stats.ivf_clusters))
+	fmt.Printf("    IVF Clusters: %d\n", int(stats.ivf_clusters))
 }
 
 func (demo *InteractiveDemo) printHelp() {
 	fmt.Println("\n📖 Help:")
-	fmt.Println("   🔍 Type any text to search for similar documents")
-	fmt.Println("   📊 'stats' - Show system statistics")
-	fmt.Println("   💡 'examples' - Show example queries")
+	fmt.Println("    Type any text to search for similar documents")
+	fmt.Println("    'stats' - Show system statistics")
+	fmt.Println("    'examples' - Show example queries")
 	fmt.Println("   ❓ 'help' - Show this help")
 	fmt.Println("   🚪 'quit' - Exit the demo")
 }
@@ -494,8 +496,8 @@ func (demo *InteractiveDemo) printExamples() {
 		"art and creativity",
 		"historical events",
 	}
-	
-	fmt.Println("\n💡 Example Queries:")
+
+	fmt.Println("\n Example Queries:")
 	for i, example := range examples {
 		fmt.Printf("   %d. %s\n", i+1, example)
 	}

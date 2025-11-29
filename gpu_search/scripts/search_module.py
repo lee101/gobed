@@ -183,7 +183,7 @@ def export_module(module: GPUSearchModule, path: str = "gpu_search_module.pt"):
     
     # Save
     scripted.save(path)
-    print(f"✅ Exported TorchScript module to {path}")
+    print(f" Exported TorchScript module to {path}")
     
     return scripted
 
@@ -212,4 +212,4 @@ if __name__ == "__main__":
     batch_ids, batch_scores = flat_module.batch_search_flat(queries, k=5)
     print(f"Batch search shape: {batch_ids.shape}")
     
-    print("✅ Module creation and export complete!")
+    print(" Module creation and export complete!")

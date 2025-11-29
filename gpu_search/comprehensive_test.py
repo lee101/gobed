@@ -22,15 +22,15 @@ class GPUSearchTester:
     def run_test(self, name, func):
         """Run a test and record results"""
         try:
-            print(f"\n🔍 {name}")
+            print(f"\n {name}")
             print("-" * 50)
             result = func()
             self.test_results.append((name, True, result))
-            print(f"✅ PASSED")
+            print(f" PASSED")
             return True
         except Exception as e:
             self.test_results.append((name, False, str(e)))
-            print(f"❌ FAILED: {e}")
+            print(f" FAILED: {e}")
             traceback.print_exc()
             return False
             
@@ -207,11 +207,11 @@ class GPUSearchTester:
     def run_all_tests(self):
         """Run all tests"""
         print("\n" + "=" * 60)
-        print("🚀 GPU SEARCH COMPREHENSIVE TEST SUITE")
+        print(" GPU SEARCH COMPREHENSIVE TEST SUITE")
         print("=" * 60)
         
         # Check environment
-        print(f"\n📋 Environment:")
+        print(f"\n Environment:")
         print(f"  PyTorch: {torch.__version__}")
         print(f"  CUDA: {torch.version.cuda}")
         print(f"  GPU: {torch.cuda.get_device_properties(0).name}")
@@ -228,7 +228,7 @@ class GPUSearchTester:
         
         # Summary
         print("\n" + "=" * 60)
-        print("📊 TEST SUMMARY")
+        print(" TEST SUMMARY")
         print("=" * 60)
         
         passed = sum(1 for _, p, _ in self.test_results if p)
@@ -237,20 +237,20 @@ class GPUSearchTester:
         print(f"\nResults: {passed}/{total} tests passed")
         
         for name, passed, details in self.test_results:
-            status = "✅" if passed else "❌"
+            status = "" if passed else ""
             print(f"  {status} {name}: {details}")
             
         if passed == total:
-            print("\n🎉 All tests passed! System is robust.")
+            print("\n All tests passed! System is robust.")
         else:
-            print(f"\n⚠️ {total - passed} tests failed. Review needed.")
+            print(f"\n {total - passed} tests failed. Review needed.")
             
         return passed == total
 
 
 def check_nvidia_tools():
     """Check available NVIDIA profiling tools"""
-    print("\n🔧 NVIDIA Profiling Tools")
+    print("\n NVIDIA Profiling Tools")
     print("=" * 60)
     
     tools = {
@@ -266,12 +266,12 @@ def check_nvidia_tools():
     for tool, desc in tools.items():
         result = subprocess.run(['which', tool], capture_output=True)
         if result.returncode == 0:
-            print(f"✅ {tool:20s} - {desc}")
+            print(f" {tool:20s} - {desc}")
             available.append(tool)
         else:
-            print(f"❌ {tool:20s} - {desc}")
+            print(f" {tool:20s} - {desc}")
             
-    print("\n📝 Profiling commands:")
+    print("\n Profiling commands:")
     if 'nsys' in available:
         print("  System profiling:  nsys profile -o report python your_script.py")
     if 'ncu' in available:
@@ -281,7 +281,7 @@ def check_nvidia_tools():
         print("  Race detection:    compute-sanitizer --tool racecheck python your_script.py")
         print("  Sync checking:     compute-sanitizer --tool synccheck python your_script.py")
         
-    print("\n📝 Valgrind (CPU memory checking):")
+    print("\n Valgrind (CPU memory checking):")
     print("  valgrind --leak-check=full --show-leak-kinds=all \\")
     print("           --track-origins=yes python your_script.py")
     
@@ -296,7 +296,7 @@ def main():
     tools = check_nvidia_tools()
     
     # Recommendations
-    print("\n💡 ROBUSTNESS RECOMMENDATIONS")
+    print("\n ROBUSTNESS RECOMMENDATIONS")
     print("=" * 60)
     
     recommendations = [
@@ -323,19 +323,19 @@ def main():
         "Add graceful degradation for OOM scenarios"
     ])
     
-    print("\n✅ Current strengths:")
+    print("\n Current strengths:")
     for rec in recommendations:
         print(f"  {rec}")
         
-    print("\n📈 Suggested improvements:")
+    print("\n Suggested improvements:")
     for imp in improvements:
         print(f"  • {imp}")
         
     print("\n" + "=" * 60)
     if all_passed:
-        print("✅ System is production-ready with good robustness!")
+        print(" System is production-ready with good robustness!")
     else:
-        print("⚠️ Address failing tests before production deployment")
+        print(" Address failing tests before production deployment")
         
     return 0 if all_passed else 1
 

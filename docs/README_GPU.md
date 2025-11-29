@@ -1,10 +1,10 @@
 # Gobed GPU Search Setup Guide
 
-🚀 **High-Performance GPU-Accelerated Text Search with CUDA**
+ **High-Performance GPU-Accelerated Text Search with CUDA**
 
 This guide shows how to set up and use Gobed's GPU search capabilities, featuring custom CUDA kernels, TorchScript integration, and 146x performance improvements over CPU.
 
-## 🎯 Quick Start
+##  Quick Start
 
 ```bash
 # 1. Clone and setup
@@ -24,7 +24,7 @@ cd ../.. && python3 gpu_search/simple_search_module.py
 cd ../gobedexample && go run gpu_demo.go
 ```
 
-## 🏗️ Architecture Overview
+## 🏗 Architecture Overview
 
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
@@ -37,7 +37,7 @@ cd ../gobedexample && go run gpu_demo.go
 
 **Performance**: 146x faster search, 400K+ QPS, 73% memory reduction
 
-## 📋 Prerequisites
+##  Prerequisites
 
 ### Hardware Requirements
 - **NVIDIA GPU**: RTX 3060+ or Tesla V100+ recommended
@@ -52,7 +52,7 @@ cd ../gobedexample && go run gpu_demo.go
 - **GCC**: 12+ (for CUDA 12.0 compatibility)
 - **CMake**: 3.18+
 
-## 🔧 Installation Steps
+##  Installation Steps
 
 ### 1. CUDA Environment Setup
 
@@ -113,7 +113,7 @@ python3 gpu_search/simple_search_module.py
 ls -la model/simple_gpu_search_module.pt
 ```
 
-## 🚀 Usage Examples
+##  Usage Examples
 
 ### Basic GPU Search
 
@@ -206,7 +206,7 @@ func IndexLargeDataset(pipeline *gpu.Pipeline, texts []string) error {
 }
 ```
 
-## ⚡ Performance Optimization
+##  Performance Optimization
 
 ### GPU Memory Optimization
 
@@ -239,7 +239,7 @@ i8dot512_scores_kernel<<<blocks, threads>>>(
 | 100K-1M     | 512-1024              | 400K+        |
 | 1M+         | 1024-2048             | 500K+        |
 
-## 🔍 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -293,7 +293,7 @@ watch nvidia-smi
 go tool pprof http://localhost:6060/debug/pprof/heap
 ```
 
-## 📊 Benchmarking
+##  Benchmarking
 
 ### Performance Testing
 
@@ -378,7 +378,7 @@ spec:
           value: "0"
 ```
 
-## 🎯 Advanced Features
+##  Advanced Features
 
 ### Custom CUDA Kernels
 
@@ -404,7 +404,7 @@ Complete implementation of:
 - **ADC**: Asymmetric Distance Computation
 - **Re-rank**: Tiny re-ranking for accuracy
 
-## 📈 Scaling Guidelines
+##  Scaling Guidelines
 
 ### Single GPU Performance
 - **Vectors**: Up to 10M with 8GB GPU memory
@@ -444,4 +444,4 @@ Same as main Gobed project - see [LICENSE](LICENSE) file.
 
 ---
 
-🚀 **Ready to accelerate your text search with GPU power!**
+ **Ready to accelerate your text search with GPU power!**

@@ -1,0 +1,2 @@
+- no emoji or superflous language, stoic concise, clear minded ultrathink
+- dont make md files unless asked or summarize, if finished, focus on what we should do next

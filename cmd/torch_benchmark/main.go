@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 /*
@@ -25,18 +27,18 @@ type BenchmarkConfig struct {
 }
 
 type BenchmarkResult struct {
-	Config         BenchmarkConfig
-	TrainTime      time.Duration
-	IndexTime      time.Duration
-	SearchTime     time.Duration
-	IndexRate      float64 // vectors/sec
-	QueryRate      float64 // queries/sec
-	MemoryUsage    float64 // MB
-	TotalTime      time.Duration
+	Config      BenchmarkConfig
+	TrainTime   time.Duration
+	IndexTime   time.Duration
+	SearchTime  time.Duration
+	IndexRate   float64 // vectors/sec
+	QueryRate   float64 // queries/sec
+	MemoryUsage float64 // MB
+	TotalTime   time.Duration
 }
 
 func main() {
-	fmt.Println("🔥 LibTorch Performance Benchmark")
+	fmt.Println(" LibTorch Performance Benchmark")
 	fmt.Println("==================================")
 
 	// Check system info
@@ -44,7 +46,7 @@ func main() {
 	cudaAvailable := C.torch_cuda_is_available() != 0
 	deviceCount := int(C.torch_cuda_device_count())
 
-	fmt.Printf("📊 System Information:\n")
+	fmt.Printf(" System Information:\n")
 	fmt.Printf("   LibTorch version: %s\n", version)
 	fmt.Printf("   CUDA available: %v\n", cudaAvailable)
 	fmt.Printf("   Device count: %d\n", deviceCount)
@@ -60,7 +62,7 @@ func main() {
 		{VectorDim: 1024, TrainingSize: 5000, IndexSize: 100000, QueryCount: 1000, K: 10},
 	}
 
-	fmt.Printf("\n🚀 Running Performance Benchmarks...\n")
+	fmt.Printf("\n Running Performance Benchmarks...\n")
 	fmt.Printf("\n%-8s %-10s %-10s %-8s %-12s %-10s %-10s %-8s\n",
 		"Dim", "Index", "Queries", "K", "Index/sec", "Query/ms", "QPS", "Memory")
 	fmt.Println("--------------------------------------------------------------------------------")
@@ -83,7 +85,7 @@ func main() {
 	}
 
 	// Print summary
-	fmt.Println("\n📈 Performance Summary:")
+	fmt.Println("\n Performance Summary:")
 	for i, result := range results {
 		config := result.Config
 		fmt.Printf("\n%d. %dD vectors (%d indexed):\n", i+1, config.VectorDim, config.IndexSize)
@@ -109,12 +111,12 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\n🏆 Best Performance:\n")
+	fmt.Printf("\n Best Performance:\n")
 	fmt.Printf("   Indexing: %.0f vectors/sec (%dD)\n", bestIndexRate, bestConfig.VectorDim)
 	fmt.Printf("   Search: %.0f QPS\n", bestQueryRate)
 
 	// Scalability estimates
-	fmt.Println("\n🔮 Scalability Estimates:")
+	fmt.Println("\n Scalability Estimates:")
 	fmt.Println("   With current performance:")
 
 	scales := []int{1000000, 10000000, 100000000}
@@ -123,7 +125,7 @@ func main() {
 		fmt.Printf("   %8d vectors: ~%.1f seconds to index\n", scale, indexTime)
 	}
 
-	fmt.Println("\n✅ Benchmark completed!")
+	fmt.Println("\n Benchmark completed!")
 }
 
 func runBenchmark(config BenchmarkConfig) BenchmarkResult {
@@ -136,8 +138,8 @@ func runBenchmark(config BenchmarkConfig) BenchmarkResult {
 		codebook_size:     C.int(256),
 		ivf_clusters:      C.int(1024),
 		probe_lists:       C.int(32),
-		rerank_k:         C.int(200),
-		device_id:        C.int(0),
+		rerank_k:          C.int(200),
+		device_id:         C.int(0),
 	}
 
 	handle := C.torch_indexer_create(cConfig)
@@ -194,7 +196,7 @@ func runBenchmark(config BenchmarkConfig) BenchmarkResult {
 
 	// Search benchmark
 	searchStart := time.Now()
-	
+
 	for i := 0; i < config.QueryCount; i++ {
 		searchResult := C.torch_indexer_search(
 			handle,
@@ -211,7 +213,7 @@ func runBenchmark(config BenchmarkConfig) BenchmarkResult {
 		// Free search results
 		C.torch_search_result_free(&searchResult)
 	}
-	
+
 	searchTime := time.Since(searchStart)
 	queryRate := float64(config.QueryCount) / searchTime.Seconds()
 

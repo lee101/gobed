@@ -71,7 +71,7 @@ Based on your RTX 3080 with 16GB VRAM:
 
 ## Current Implementation Status
 
-✅ **Completed:**
+ **Completed:**
 - CPU implementation with excellent performance
 - Long string support (tested up to 16K tokens)
 - Memory-efficient processing

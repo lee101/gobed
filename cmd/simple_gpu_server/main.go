@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -26,34 +28,34 @@ func main() {
 	)
 	flag.Parse()
 
-	fmt.Println("🚀 Simple GPU-Accelerated GoBeD Server")
+	fmt.Println(" Simple GPU-Accelerated GoBeD Server")
 	fmt.Println("======================================")
 
 	// Check GPU availability
 	if !gobed.IsCUDAAvailable() {
-		log.Fatal("❌ CUDA is not available. Please ensure NVIDIA drivers and CUDA are installed.")
+		log.Fatal(" CUDA is not available. Please ensure NVIDIA drivers and CUDA are installed.")
 	}
 
 	gpuCount := gobed.GetCUDADeviceCount()
 	cudaVersion := gobed.GetCUDAVersion()
 
-	fmt.Printf("✅ CUDA Available: %s\n", cudaVersion)
+	fmt.Printf(" CUDA Available: %s\n", cudaVersion)
 	fmt.Printf("   GPU Devices: %d\n", gpuCount)
 	fmt.Printf("   Using Device: %d\n", *gpuDevice)
 
 	if *gpuDevice >= gpuCount {
-		log.Fatalf("❌ Invalid GPU device %d. Available devices: 0-%d", *gpuDevice, gpuCount-1)
+		log.Fatalf(" Invalid GPU device %d. Available devices: 0-%d", *gpuDevice, gpuCount-1)
 	}
 
 	// Load embedding model
 	fmt.Println("\n📚 Loading Embedding Model...")
 	model, err := gobed.LoadModel()
 	if err != nil {
-		log.Fatalf("❌ Failed to load model: %v", err)
+		log.Fatalf(" Failed to load model: %v", err)
 	}
 
 	// Initialize GPU indexer
-	fmt.Println("\n🚀 Initializing GPU Indexer...")
+	fmt.Println("\n Initializing GPU Indexer...")
 	gpuConfig := gobed.IndexConfig{
 		VectorDim:        512,
 		NumSubquantizers: 8,
@@ -66,7 +68,7 @@ func main() {
 
 	gpuIndexer, err := gobed.NewGPUIndexer(gpuConfig)
 	if err != nil {
-		log.Fatalf("❌ Failed to create GPU indexer: %v", err)
+		log.Fatalf(" Failed to create GPU indexer: %v", err)
 	}
 	defer gpuIndexer.Close()
 
@@ -80,9 +82,9 @@ func main() {
 
 	// Run demonstration if requested
 	if *demoMode {
-		fmt.Println("\n🎪 Running GPU Demonstration...")
+		fmt.Println("\n Running GPU Demonstration...")
 		if err := server.runDemo(*demoVectors); err != nil {
-			log.Printf("⚠️  Demo failed: %v", err)
+			log.Printf("  Demo failed: %v", err)
 		}
 	}
 
@@ -100,17 +102,17 @@ func main() {
 	}
 
 	// Start server
-	fmt.Printf("\n✅ GPU Server Running on Port %d\n", *port)
-	fmt.Printf("   🔍 Search: POST /search\n")
-	fmt.Printf("   📦 Batch Search: POST /batch_search\n")
+	fmt.Printf("\n GPU Server Running on Port %d\n", *port)
+	fmt.Printf("    Search: POST /search\n")
+	fmt.Printf("    Batch Search: POST /batch_search\n")
 	fmt.Printf("   📚 Index: POST /index\n")
-	fmt.Printf("   📊 Stats: GET /stats\n")
-	fmt.Printf("   🔧 Health: GET /health\n")
+	fmt.Printf("    Stats: GET /stats\n")
+	fmt.Printf("    Health: GET /health\n")
 
 	// Start HTTP server
 	go func() {
 		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-			log.Fatalf("❌ Server failed: %v", err)
+			log.Fatalf(" Server failed: %v", err)
 		}
 	}()
 
@@ -118,11 +120,11 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	fmt.Println("\n🎯 Ready! Press Ctrl+C to stop.")
+	fmt.Println("\n Ready! Press Ctrl+C to stop.")
 	<-sigChan
 
 	fmt.Println("\n🛑 Shutting down gracefully...")
-	fmt.Println("✅ Goodbye!")
+	fmt.Println(" Goodbye!")
 }
 
 // SimpleGPUServer provides a lightweight GPU-accelerated server
@@ -249,7 +251,7 @@ func (s *SimpleGPUServer) handleBatchSearch(w http.ResponseWriter, r *http.Reque
 	for i, query := range req.Queries {
 		embedding, err := s.model.EmbedInt8(query)
 		if err != nil {
-			log.Printf("⚠️  Failed to embed query %d: %v", i, err)
+			log.Printf("  Failed to embed query %d: %v", i, err)
 			continue
 		}
 		embeddings[i] = embedding.Vector
@@ -306,7 +308,7 @@ func (s *SimpleGPUServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 		for _, doc := range batch {
 			embedding, err := s.model.EmbedInt8(doc.Text)
 			if err != nil {
-				log.Printf("⚠️  Failed to embed document %d: %v", doc.ID, err)
+				log.Printf("  Failed to embed document %d: %v", doc.ID, err)
 				continue
 			}
 			batchEmbeddings = append(batchEmbeddings, embedding.Vector)
@@ -316,7 +318,7 @@ func (s *SimpleGPUServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 		// Add to GPU index
 		if len(batchEmbeddings) > 0 {
 			if err := s.gpuIndexer.AddVectors(batchEmbeddings); err != nil {
-				log.Printf("⚠️  Failed to index batch: %v", err)
+				log.Printf("  Failed to index batch: %v", err)
 			}
 		}
 	}
@@ -392,7 +394,7 @@ func (s *SimpleGPUServer) performanceMonitor() {
 		stats := s.gpuIndexer.GetStats()
 		uptime := time.Since(s.startTime)
 
-		fmt.Printf("\n📊 Performance Stats (Uptime: %.1fm)\n", uptime.Minutes())
+		fmt.Printf("\n Performance Stats (Uptime: %.1fm)\n", uptime.Minutes())
 		fmt.Printf("   Requests: %d\n", s.totalRequests)
 		fmt.Printf("   Indexed: %d vectors\n", s.totalIndexed)
 		fmt.Printf("   GPU Memory: %.1f MB\n", stats.GPUMemoryMB)
@@ -407,7 +409,7 @@ func (s *SimpleGPUServer) performanceMonitor() {
 
 // runDemo runs a demonstration with sample data
 func (s *SimpleGPUServer) runDemo(numVectors int) error {
-	fmt.Printf("🎪 Demo: Indexing %d vectors and testing search\n", numVectors)
+	fmt.Printf(" Demo: Indexing %d vectors and testing search\n", numVectors)
 
 	// Generate sample texts
 	sampleTexts := generateSampleTexts(numVectors)
@@ -442,10 +444,10 @@ func (s *SimpleGPUServer) runDemo(numVectors int) error {
 	}
 
 	indexTime := time.Since(start)
-	fmt.Printf("✅ Indexed %d vectors in %v\n", len(allEmbeddings), indexTime)
+	fmt.Printf(" Indexed %d vectors in %v\n", len(allEmbeddings), indexTime)
 
 	// Test searches
-	fmt.Printf("\n🔍 Testing GPU searches...\n")
+	fmt.Printf("\n Testing GPU searches...\n")
 	queries := []string{
 		"machine learning algorithms",
 		"neural network training",
@@ -474,7 +476,7 @@ func (s *SimpleGPUServer) runDemo(numVectors int) error {
 	}
 
 	searchTime := time.Since(searchStart)
-	fmt.Printf("✅ Completed %d searches in %v\n", len(queries), searchTime)
+	fmt.Printf(" Completed %d searches in %v\n", len(queries), searchTime)
 
 	s.totalIndexed = uint64(len(allEmbeddings))
 	return nil

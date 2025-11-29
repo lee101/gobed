@@ -2,10 +2,11 @@
 set -euo pipefail
 
 # find_broken_test
-# - Runs tests in priority order and fails fast on first failure
-# - Suppresses output for passing tests; prints full logs for the failing test
-# - Order: (1) unit (changed packages first), (2) integration, (3) browser (if present), (4) benchmarks
-# - Designed for Go monorepo; skips stages that don't apply
+# - Runs Go tests in two tiers: fast packages first (changed ones before the rest),
+#   then optional slow packages when RUN_SLOW_TESTS=1.
+# - Known manual/experimental packages are blocked unless ALLOW_MANUAL=1.
+# - Suppresses output for passing tests; prints full logs for the failing test.
+# - Integration/browser/benchmark stages only run when slow tests are enabled.
 
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
@@ -13,6 +14,78 @@ cd "$ROOT_DIR"
 log() { printf "%s\n" "$*" >&2; }
 
 debug() { if [[ "${DEBUG:-}" == "1" ]]; then printf "[debug] %s\n" "$*" >&2; fi }
+
+# Packages that require long-running assets or external setup. These only run
+# when RUN_SLOW_TESTS=1 and we default to skipping them.
+SLOW_PATTERNS=(
+  "github.com/lee101/gobed"
+  "github.com/lee101/gobed/ann"
+)
+
+# Packages that are known to be experimental or require manual setup. We refuse
+# to auto-run them unless ALLOW_MANUAL=1 is set.
+MANUAL_PATTERNS=(
+  "github.com/lee101/gobed/benchmarks..."
+  "github.com/lee101/gobed/bed..."
+  "github.com/lee101/gobed/cmd..."
+  "github.com/lee101/gobed/examples..."
+  "github.com/lee101/gobed/gpu..."
+  "github.com/lee101/gobed/gpu_search..."
+  "github.com/lee101/gobed/internal..."
+  "github.com/lee101/gobed/pkg/gobed..."
+  "github.com/lee101/gobed/pkg/gpu..."
+  "github.com/lee101/gobed/pkg/search..."
+  "github.com/lee101/gobed/test..."
+  "github.com/lee101/gobed/test_dup..."
+)
+
+pattern_matches() {
+  local pkg="$1"
+  shift || return 1
+  for raw in "$@"; do
+    [[ -z "$raw" ]] && continue
+    local glob="${raw//.../*}"
+    if [[ "$pkg" == $glob ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+array_contains() {
+  local needle="$1"
+  shift || true
+  for item in "$@"; do
+    [[ "$item" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+dedupe_in_place() {
+  local -n arr=$1
+  declare -A seen=()
+  local unique=()
+  for item in "${arr[@]}"; do
+    [[ -z "$item" ]] && continue
+    if [[ -z "${seen[$item]:-}" ]]; then
+      unique+=("$item")
+      seen["$item"]=1
+    fi
+  done
+  arr=("${unique[@]}")
+}
+
+array_difference() {
+  local -n result=$1
+  local -n base=$2
+  local -n remove=$3
+  result=()
+  for item in "${base[@]}"; do
+    if ! array_contains "$item" "${remove[@]}"; then
+      result+=("$item")
+    fi
+  done
+}
 
 # Collect changed files relative to the main branch or upstream
 _get_base_ref() {
@@ -58,13 +131,23 @@ packages_from_paths() {
 run_go_tests_for_packages() {
   local tag_opts=$1; shift || true
   local pkgs=("$@")
+  if [[ ${#pkgs[@]} -eq 0 ]]; then
+    return 0
+  fi
+  local go_args=()
+  if [[ -n "${GO_TEST_FLAGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    go_args=(${GO_TEST_FLAGS})
+  fi
   for pkg in "${pkgs[@]}"; do
     [[ -z "$pkg" ]] && continue
-    debug "Testing package: $pkg ${tag_opts}"
+    debug "Testing package: $pkg ${tag_opts} ${GO_TEST_FLAGS:-}"
     local tmp
     tmp="$(mktemp)"
     # Capture full verbose output for the package
-    if ! go test -run . -v ${tag_opts} "$pkg" >"$tmp" 2>&1; then
+    local run_pat
+    run_pat="${GO_TEST_RUN:-.}"
+    if ! go test "${go_args[@]}" -run "$run_pat" -v ${tag_opts} "$pkg" >"$tmp" 2>&1; then
       log "\n=================================================="
       log "❌ FAILED: $pkg"
       log "==================================================\n"
@@ -113,10 +196,12 @@ run_benchmarks() {
 
 packages_with_tests() {
   local dirs
+  local search_root="${TEST_PKG_ROOT:-.}"
+  local pkg_glob="${TEST_PKG_GLOBS:-**}"
   if command -v rg >/dev/null 2>&1; then
-    mapfile -t dirs < <(rg --no-messages -l --glob '**/*_test.go' --type go '.' 2>/dev/null | xargs -r -n1 dirname | sort -u)
+    mapfile -t dirs < <(rg --no-messages -l --glob "$pkg_glob/*_test.go" --type go "$search_root" 2>/dev/null | xargs -r -n1 dirname | sort -u)
   else
-    mapfile -t dirs < <(find . -type f -name '*_test.go' -print 2>/dev/null | xargs -r -n1 dirname | sort -u)
+    mapfile -t dirs < <(find "$search_root" -type f -name '*_test.go' -print 2>/dev/null | xargs -r -n1 dirname | sort -u)
   fi
   for d in "${dirs[@]:-}"; do
     go list "$d" 2>/dev/null || true
@@ -124,79 +209,175 @@ packages_with_tests() {
 }
 
 main() {
-  # Discover only packages that actually have Go tests
   mapfile -t test_pkgs < <(packages_with_tests || true)
-
-  # Determine changed packages to prioritize, intersect with test packages
-  mapfile -t changed_paths < <(get_changed_paths | awk 'NF' | sort -u)
-  mapfile -t changed_pkgs_all < <(printf '%s\n' "${changed_paths[@]}" | packages_from_paths | sort -u)
   declare -A test_pkg_set=()
-  if [[ ${#test_pkgs[@]} -gt 0 ]]; then
-    for p in "${test_pkgs[@]}"; do test_pkg_set["$p"]=1; done
-  fi
-  changed_pkgs=()
-  for p in "${changed_pkgs_all[@]:-}"; do
-    if [[ -n "${test_pkg_set[$p]:-}" ]]; then
-      changed_pkgs+=("$p")
-    fi
-  done
-
-  # Also prioritize the current working directory's package if it has tests
-  if pkg_here=$(go list . 2>/dev/null); then
-    if [[ -n "${test_pkg_set[$pkg_here]:-}" ]]; then
-      changed_pkgs=($(printf '%s\n' "$pkg_here" "${changed_pkgs[@]:-}" | awk 'NF' | awk '!seen[$0]++'))
-    fi
-  fi
-
-  # Build priority list: changed first, then remaining test packages
-  declare -A seen=()
-  priority_pkgs=()
-  for p in "${changed_pkgs[@]:-}"; do
-    [[ -z "$p" ]] && continue
-    seen["$p"]=1
-    priority_pkgs+=("$p")
-  done
   for p in "${test_pkgs[@]:-}"; do
-    if [[ -z "${seen[$p]:-}" ]]; then
-      priority_pkgs+=("$p")
+    test_pkg_set["$p"]=1
+  done
+
+  local fast_pkgs=()
+  local slow_pkgs=()
+  local manual_pkgs=()
+  for p in "${test_pkgs[@]:-}"; do
+    if pattern_matches "$p" "${MANUAL_PATTERNS[@]}"; then
+      manual_pkgs+=("$p")
+      continue
+    fi
+    if pattern_matches "$p" "${SLOW_PATTERNS[@]}"; then
+      slow_pkgs+=("$p")
+      continue
+    fi
+    fast_pkgs+=("$p")
+  done
+
+  mapfile -t changed_paths < <(get_changed_paths | awk 'NF' | sort -u)
+  mapfile -t changed_pkgs_all < <(printf '%s\n' "${changed_paths[@]:-}" | packages_from_paths | sort -u)
+
+  local changed_fast=()
+  local changed_slow=()
+  local changed_manual=()
+  local changed_no_tests=()
+
+  for p in "${changed_pkgs_all[@]:-}"; do
+    if pattern_matches "$p" "${MANUAL_PATTERNS[@]}"; then
+      changed_manual+=("$p")
+      continue
+    fi
+    if pattern_matches "$p" "${SLOW_PATTERNS[@]}"; then
+      if [[ -n "${test_pkg_set[$p]:-}" ]]; then
+        changed_slow+=("$p")
+      else
+        changed_no_tests+=("$p")
+      fi
+      continue
+    fi
+    if [[ -n "${test_pkg_set[$p]:-}" ]]; then
+      changed_fast+=("$p")
+    else
+      changed_no_tests+=("$p")
     fi
   done
 
-  # 1) Unit tests (default)
-  if [[ ${#priority_pkgs[@]} -gt 0 ]]; then
-    run_go_tests_for_packages "" "${priority_pkgs[@]}"
+  if pkg_here=$(go list . 2>/dev/null); then
+    if pattern_matches "$pkg_here" "${MANUAL_PATTERNS[@]}"; then
+      changed_manual+=("$pkg_here")
+    elif pattern_matches "$pkg_here" "${SLOW_PATTERNS[@]}"; then
+      if [[ -n "${test_pkg_set[$pkg_here]:-}" ]]; then
+        changed_slow+=("$pkg_here")
+      fi
+    elif [[ -n "${test_pkg_set[$pkg_here]:-}" ]]; then
+      changed_fast+=("$pkg_here")
+    fi
+  fi
+
+  dedupe_in_place changed_fast
+  dedupe_in_place changed_slow
+  dedupe_in_place changed_manual
+  dedupe_in_place changed_no_tests
+
+  if [[ ${#changed_manual[@]} -gt 0 && "${ALLOW_MANUAL:-0}" != "1" ]]; then
+    log "⚠️  Changes touch packages that require manual verification:"
+    for pkg in "${changed_manual[@]}"; do
+      log "   - $pkg"
+    done
+    log "Set ALLOW_MANUAL=1 to acknowledge and continue."
+    exit 1
+  elif [[ ${#changed_manual[@]} -gt 0 ]]; then
+    debug "ALLOW_MANUAL=1: skipping manual packages ${changed_manual[*]}"
+  fi
+
+  if [[ ${#changed_slow[@]} -gt 0 && "${RUN_SLOW_TESTS:-0}" != "1" ]]; then
+    log "⚠️  Changes touch slow-test packages. Re-run with RUN_SLOW_TESTS=1 to include them:"
+    for pkg in "${changed_slow[@]}"; do
+      log "   - $pkg"
+    done
+    exit 1
+  fi
+
+  if [[ ${#changed_no_tests[@]} -gt 0 ]]; then
+    debug "Changed paths without Go tests: ${changed_no_tests[*]}"
+  fi
+
+  local fast_flags
+  if [[ -z "${FAST_GO_TEST_FLAGS+x}" ]]; then
+    fast_flags="-short"
   else
-    debug "No Go unit test packages detected; skipping unit stage."
+    fast_flags="${FAST_GO_TEST_FLAGS}"
   fi
 
-  # 2) Integration tests (if any)
-  if has_integration_tests; then
-    # Run only in packages that actually contain integration tests when possible
-    mapfile -t it_dirs < <(rg -n "_integration_test\\.go|// *\+build +integration|//go:build +integration" --type go --no-messages -l | xargs -r -n1 dirname | sort -u)
-    mapfile -t it_pkgs < <(printf '%s\n' "${it_dirs[@]:-}" | while IFS= read -r d; do go list "$d" 2>/dev/null || true; done | sort -u)
-    if [[ ${#it_pkgs[@]} -gt 0 ]]; then
-      run_go_tests_for_packages "-tags=integration" "${it_pkgs[@]}"
+  if [[ ${#fast_pkgs[@]} -gt 0 ]]; then
+    GO_TEST_FLAGS="$fast_flags"
+    if [[ ${#changed_fast[@]} -gt 0 ]]; then
+      run_go_tests_for_packages "${GO_TEST_TAGS:-}" "${changed_fast[@]}"
+    fi
+    local fast_remaining=()
+    array_difference fast_remaining fast_pkgs changed_fast
+    if [[ ${#fast_remaining[@]} -gt 0 ]]; then
+      run_go_tests_for_packages "${GO_TEST_TAGS:-}" "${fast_remaining[@]}"
+    else
+      debug "No additional fast packages beyond changed set."
+    fi
+    unset GO_TEST_FLAGS
+  else
+    debug "No fast Go test packages detected."
+  fi
+
+  if [[ ${#slow_pkgs[@]} -gt 0 ]]; then
+    if [[ "${RUN_SLOW_TESTS:-0}" == "1" ]]; then
+      local slow_flags
+      if [[ -z "${SLOW_GO_TEST_FLAGS+x}" ]]; then
+        slow_flags=""
+      else
+        slow_flags="${SLOW_GO_TEST_FLAGS}"
+      fi
+      GO_TEST_FLAGS="$slow_flags"
+      if [[ ${#changed_slow[@]} -gt 0 ]]; then
+        run_go_tests_for_packages "${SLOW_GO_TEST_TAGS:-${GO_TEST_TAGS:-}}" "${changed_slow[@]}"
+      fi
+      local slow_remaining=()
+      array_difference slow_remaining slow_pkgs changed_slow
+      if [[ ${#slow_remaining[@]} -gt 0 ]]; then
+        run_go_tests_for_packages "${SLOW_GO_TEST_TAGS:-${GO_TEST_TAGS:-}}" "${slow_remaining[@]}"
+      else
+        debug "No additional slow packages beyond changed set."
+      fi
+      unset GO_TEST_FLAGS
+    else
+      log "⏭️  Skipping slow Go packages (set RUN_SLOW_TESTS=1 to include):"
+      for pkg in "${slow_pkgs[@]}"; do
+        log "   - $pkg"
+      done
     fi
   fi
 
-  # 3) Browser tests (skip if not present)
-  if [[ -f package.json ]] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-    tmp="$(mktemp)"
-    if ! npm test --silent >"$tmp" 2>&1; then
-      log "\n=================================================="
-      log "❌ BROWSER TESTS FAILED (npm test)"
-      log "==================================================\n"
-      cat "$tmp"
+  if [[ "${RUN_SLOW_TESTS:-0}" == "1" ]]; then
+    if has_integration_tests; then
+      mapfile -t it_dirs < <(rg -n "_integration_test\\.go|// *\\+build +integration|//go:build +integration" --type go --no-messages -l | xargs -r -n1 dirname | sort -u)
+      mapfile -t it_pkgs < <(printf '%s\n' "${it_dirs[@]:-}" | while IFS= read -r d; do go list "$d" 2>/dev/null || true; done | sort -u)
+      if [[ ${#it_pkgs[@]} -gt 0 ]]; then
+        GO_TEST_FLAGS="${INTEGRATION_GO_TEST_FLAGS:-${SLOW_GO_TEST_FLAGS:-}}"
+        run_go_tests_for_packages "-tags=integration" "${it_pkgs[@]}"
+        unset GO_TEST_FLAGS
+      fi
+    fi
+    if [[ -f package.json ]] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+      tmp="$(mktemp)"
+      if ! npm test --silent >"$tmp" 2>&1; then
+        log "\n=================================================="
+        log "❌ BROWSER TESTS FAILED (npm test)"
+        log "==================================================\n"
+        cat "$tmp"
+        rm -f "$tmp"
+        exit 1
+      fi
       rm -f "$tmp"
-      exit 1
     fi
-    rm -f "$tmp"
+    run_benchmarks
+  else
+    debug "Skipping integration/browser/benchmark stages; enable RUN_SLOW_TESTS=1 to include them."
   fi
 
-  # 4) Performance/Benchmarks (quiet unless failures)
-  run_benchmarks
-
-  log "✅ All tests and benchmarks passed"
+  log "✅ Selected Go test stages completed successfully"
 }
 
 main "$@"

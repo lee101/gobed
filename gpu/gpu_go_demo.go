@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 Go GPU Search Engine Demo")
+	fmt.Println(" Go GPU Search Engine Demo")
 	fmt.Println("============================")
 
 	// Load the embedding model
@@ -19,10 +19,10 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to load model:", err)
 	}
-	fmt.Println("✅ Model loaded successfully")
+	fmt.Println(" Model loaded successfully")
 
 	// Create GPU-accelerated search engine
-	fmt.Println("\n🏗️ Creating GPU search engine...")
+	fmt.Println("\n🏗 Creating GPU search engine...")
 	config := DefaultGPUSearchConfig()
 	config.EnableGPU = true
 	config.DeviceID = 0
@@ -65,7 +65,7 @@ func main() {
 		"Digital transformation modernizes business processes",
 	}
 
-	fmt.Printf("📊 Sample dataset: %d documents\n", len(documents))
+	fmt.Printf(" Sample dataset: %d documents\n", len(documents))
 
 	// Batch index all documents using GPU acceleration
 	fmt.Println("\n📚 Indexing documents with GPU acceleration...")
@@ -77,11 +77,11 @@ func main() {
 	}
 
 	indexTime := time.Since(start)
-	fmt.Printf("✅ Successfully indexed %d documents in %v\n", len(ids), indexTime)
+	fmt.Printf(" Successfully indexed %d documents in %v\n", len(ids), indexTime)
 	fmt.Printf("   Indexing speed: %.0f docs/sec\n", float64(len(documents))/indexTime.Seconds())
 
 	// Show index statistics
-	fmt.Println("\n📊 Index Statistics:")
+	fmt.Println("\n Index Statistics:")
 	stats := engine.GetStats()
 	for key, value := range stats {
 		fmt.Printf("   %s: %v\n", key, value)
@@ -96,7 +96,7 @@ func main() {
 		"data analysis and statistics",
 	}
 
-	fmt.Printf("\n🔍 Performing GPU-accelerated searches...\n")
+	fmt.Printf("\n Performing GPU-accelerated searches...\n")
 
 	totalSearchTime := time.Duration(0)
 	for i, query := range queries {
@@ -108,7 +108,7 @@ func main() {
 		totalSearchTime += searchTime
 
 		if err != nil {
-			fmt.Printf("❌ Search failed: %v\n", err)
+			fmt.Printf(" Search failed: %v\n", err)
 			continue
 		}
 
@@ -122,22 +122,22 @@ func main() {
 	}
 
 	avgSearchTime := totalSearchTime / time.Duration(len(queries))
-	fmt.Printf("\n📈 Search Performance Summary:\n")
+	fmt.Printf("\n Search Performance Summary:\n")
 	fmt.Printf("   Average search time: %v\n", avgSearchTime)
 	fmt.Printf("   Queries per second: %.0f\n", 1.0/avgSearchTime.Seconds())
 	fmt.Printf("   Total documents: %d\n", engine.Size())
 
 	// Performance comparison estimation
-	fmt.Printf("\n🏆 Performance Achievement:\n")
+	fmt.Printf("\n Performance Achievement:\n")
 	fmt.Printf("   GPU batch indexing: %.0f docs/sec\n", float64(len(documents))/indexTime.Seconds())
 	fmt.Printf("   GPU search speed: %.0f QPS\n", 1.0/avgSearchTime.Seconds())
 	fmt.Printf("   Memory efficiency: INT8 quantization\n")
 	fmt.Printf("   Hardware acceleration: CUDA GPU\n")
 
-	fmt.Println("\n✅ Demo completed successfully!")
-	fmt.Println("   🚀 GPU acceleration is working with Go API")
-	fmt.Println("   📊 Real performance improvements achieved")
-	fmt.Println("   🎯 Production-ready integration complete")
+	fmt.Println("\n Demo completed successfully!")
+	fmt.Println("    GPU acceleration is working with Go API")
+	fmt.Println("    Real performance improvements achieved")
+	fmt.Println("    Production-ready integration complete")
 }
 
 func truncateText(text string, maxLen int) string {

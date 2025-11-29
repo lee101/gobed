@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -91,18 +93,18 @@ func (b *BulkEmbedder) SimulatedCUDAProcess(texts []string) ([][]float32, time.D
 
 func runBulkEmbeddingExample() {
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("🚀 BULK EMBEDDING EXAMPLE (CPU vs Simulated CUDA)")
+	fmt.Println(" BULK EMBEDDING EXAMPLE (CPU vs Simulated CUDA)")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// Load model
 	model, err := LoadModel()
 	if err != nil {
-		fmt.Printf("❌ Error: %v\n", err)
+		fmt.Printf(" Error: %v\n", err)
 		return
 	}
 
-	fmt.Printf("\n✅ Model loaded: %d vocab × %d dims\n", model.VocabSize, model.EmbedDim)
-	fmt.Printf("💾 Model size: %.2f MB\n", float64(model.VocabSize*model.EmbedDim*4)/(1024*1024))
+	fmt.Printf("\n Model loaded: %d vocab × %d dims\n", model.VocabSize, model.EmbedDim)
+	fmt.Printf(" Model size: %.2f MB\n", float64(model.VocabSize*model.EmbedDim*4)/(1024*1024))
 
 	// Create bulk embedder
 	bulkEmbedder := NewBulkEmbedder(model, 32)
@@ -114,7 +116,7 @@ func runBulkEmbeddingExample() {
 	batchSizes := []int{1, 10, 32, 64, 128, 256}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("📊 BATCH PROCESSING PERFORMANCE (CPU)")
+	fmt.Println(" BATCH PROCESSING PERFORMANCE (CPU)")
 	fmt.Println(strings.Repeat("=", 80))
 
 	fmt.Println("\nBatch Size | Total Time | Per Text | Throughput | Speedup")
@@ -161,7 +163,7 @@ func runBulkEmbeddingExample() {
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("🎮 SIMULATED CUDA BATCH PROCESSING")
+	fmt.Println(" SIMULATED CUDA BATCH PROCESSING")
 	fmt.Println(strings.Repeat("=", 80))
 
 	fmt.Println("\nBatch Size | CPU Time   | CUDA Time | Speedup | GPU Util")
@@ -244,7 +246,7 @@ func runBulkEmbeddingExample() {
 
 	// Memory transfer analysis
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("💾 MEMORY TRANSFER ANALYSIS (for CUDA)")
+	fmt.Println(" MEMORY TRANSFER ANALYSIS (for CUDA)")
 	fmt.Println(strings.Repeat("=", 80))
 
 	fmt.Println("\nBatch Size | Weight Transfer | Input Transfer | Output Transfer | Total")
@@ -269,7 +271,7 @@ func runBulkEmbeddingExample() {
 			batchSize, weightTransfer, inputTransfer, outputTransfer, total)
 	}
 
-	fmt.Println("\n📝 CUDA RECOMMENDATIONS:")
+	fmt.Println("\n CUDA RECOMMENDATIONS:")
 	fmt.Println(strings.Repeat("-", 75))
 	fmt.Println("• For batch sizes < 32: CPU is likely faster (transfer overhead)")
 	fmt.Println("• For batch sizes 32-128: 2-5x speedup expected")
@@ -277,5 +279,5 @@ func runBulkEmbeddingExample() {
 	fmt.Println("• Optimal batch size for RTX 3080: 128-256 texts")
 	fmt.Println("• Keep model weights in GPU memory to avoid repeated transfers")
 
-	fmt.Println("\n✅ Bulk embedding example completed!")
+	fmt.Println("\n Bulk embedding example completed!")
 }

@@ -479,13 +479,13 @@ func (m *GPUMemoryManager) StartMemoryMonitor(interval time.Duration) {
 			// Log memory usage if high
 			usagePercent := stats.AllocatedGB / stats.TotalMemoryGB * 100
 			if usagePercent > 70 {
-				fmt.Printf("⚠️  High GPU memory usage: %.1f%% (%.2fGB/%.2fGB)\n",
+				fmt.Printf("High GPU memory usage: %.1f%% (%.2fGB/%.2fGB)\n",
 					usagePercent, stats.AllocatedGB, stats.TotalMemoryGB)
 			}
 
 			// Trigger garbage collection if memory is getting low
 			if stats.FreeMemoryGB < 1.0 { // Less than 1GB free
-				fmt.Printf("🧹 Triggering GPU memory garbage collection\n")
+				fmt.Printf("Triggering GPU memory garbage collection\n")
 				m.ForceGarbageCollection()
 			}
 		}

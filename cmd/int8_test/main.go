@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -107,7 +109,7 @@ func main() {
 	fmt.Printf("INT8 weights:    %d MB\n", int8Mem)
 	fmt.Printf("Memory saving:   %.1f%%\n", (1.0-float64(int8Mem)/float64(float32Mem))*100)
 
-	fmt.Println("\n✅ INT8 test completed!")
+	fmt.Println("\n INT8 test completed!")
 }
 
 // convertToInt8 converts float32 embedding to uint8 [0-255] range

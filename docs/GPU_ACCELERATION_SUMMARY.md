@@ -1,6 +1,6 @@
-# 🚀 GPU Acceleration Implementation Summary
+#  GPU Acceleration Implementation Summary
 
-## ✅ Achievement Overview
+##  Achievement Overview
 
 We've successfully implemented **real CUDA GPU acceleration** for the Gobed vector search system, achieving significant performance improvements:
 
@@ -9,7 +9,7 @@ We've successfully implemented **real CUDA GPU acceleration** for the Gobed vect
 - **105M+ comparisons/second** throughput
 - **1,056 queries/second** on 100K vector database
 
-## 🏗️ What Was Built
+## 🏗 What Was Built
 
 ### 1. **CUDA Kernels** (`cuda_kernels.cu`)
 - Custom INT8 similarity computation kernel
@@ -34,7 +34,7 @@ We've successfully implemented **real CUDA GPU acceleration** for the Gobed vect
 - `benchmark_gpu.cu` - Scaling tests across dimensions
 - `full_benchmark.cu` - CPU vs GPU comparison suite
 
-## 📊 Performance Results
+##  Performance Results
 
 ### Database Size Scaling (768-dim, 100 queries)
 | Database Size | GPU Time | CPU-MT Time | Speedup |
@@ -54,7 +54,7 @@ We've successfully implemented **real CUDA GPU acceleration** for the Gobed vect
 | Real-time | 50K | 1 | 1,866 | 2.4x |
 | Batch | 100K | 1000 | 1,056 | 2.8x |
 
-## 🔧 Technical Details
+##  Technical Details
 
 ### GPU Specifications (RTX 3080 Laptop)
 - **Architecture**: Ampere (SM 8.6)
@@ -70,7 +70,7 @@ We've successfully implemented **real CUDA GPU acceleration** for the Gobed vect
 4. **Shared Memory**: Utilized for frequently accessed data
 5. **Stream Processing**: Overlapped computation and memory transfers
 
-## 📈 Key Achievements
+##  Key Achievements
 
 1. **Verified Real GPU Computation**
    - Not just memory transfers - actual CUDA kernel execution
@@ -87,7 +87,7 @@ We've successfully implemented **real CUDA GPU acceleration** for the Gobed vect
    - Maintains performance across different dimensions
    - Supports batch processing for maximum throughput
 
-## 🎯 Usage Instructions
+##  Usage Instructions
 
 ### Building GPU Support
 ```bash
@@ -115,7 +115,7 @@ config := GPUConfig{
 indexer := NewGPUIndexer(config)
 ```
 
-## 🚀 Future Enhancements
+##  Future Enhancements
 
 1. **Multi-GPU Support**: Distribute across multiple GPUs
 2. **FP16 Operations**: Use Tensor Cores for even faster computation
@@ -123,7 +123,7 @@ indexer := NewGPUIndexer(config)
 4. **Unified Memory**: Simplify CPU-GPU data management
 5. **cuBLAS Integration**: Leverage optimized BLAS operations
 
-## ✅ Conclusion
+##  Conclusion
 
 The GPU acceleration implementation is **complete and verified**:
 - Real CUDA kernels executing on GPU

@@ -1,3 +1,5 @@
+//go:build legacy
+
 // go_client_optimized.go - High-performance Go client for GPU server
 package main
 
@@ -139,7 +141,7 @@ func (c *OptimizedGPUClient) IndexTextsParallel(texts []string) error {
 		return nil
 	}
 
-	log.Printf("🚀 Starting parallel indexing of %d texts", len(texts))
+	log.Printf(" Starting parallel indexing of %d texts", len(texts))
 	start := time.Now()
 
 	// Create large batches for optimal GPU utilization
@@ -157,7 +159,7 @@ func (c *OptimizedGPUClient) IndexTextsParallel(texts []string) error {
 		batches = append(batches, texts[i:end])
 	}
 
-	log.Printf("📦 Created %d batches (avg size: %d)", len(batches), len(texts)/len(batches))
+	log.Printf(" Created %d batches (avg size: %d)", len(batches), len(texts)/len(batches))
 
 	// Process batches in parallel
 	var wg sync.WaitGroup
@@ -185,7 +187,7 @@ func (c *OptimizedGPUClient) IndexTextsParallel(texts []string) error {
 			// Report progress
 			if batchNum%10 == 0 || batchNum == len(batches)-1 {
 				progress := float64(batchNum+1) / float64(len(batches)) * 100
-				log.Printf("📈 Progress: %.1f%% (%d/%d batches)", progress, batchNum+1, len(batches))
+				log.Printf(" Progress: %.1f%% (%d/%d batches)", progress, batchNum+1, len(batches))
 			}
 
 		}(i, batch)
@@ -204,7 +206,7 @@ func (c *OptimizedGPUClient) IndexTextsParallel(texts []string) error {
 	totalTime := time.Since(start)
 	throughput := float64(len(texts)) / totalTime.Seconds()
 
-	log.Printf("✅ Parallel indexing complete!")
+	log.Printf(" Parallel indexing complete!")
 	log.Printf("   Total time: %v", totalTime)
 	log.Printf("   Throughput: %.0f texts/sec", throughput)
 	log.Printf("   Batches: %d", len(batches))
@@ -267,7 +269,7 @@ func (c *OptimizedGPUClient) GetServerStats() (*ServerStats, error) {
 		return nil, err
 	}
 
-	log.Printf("📊 Server Stats:")
+	log.Printf(" Server Stats:")
 	log.Printf("   Total embedded: %d", stats.ServerStats.TotalEmbedded)
 	log.Printf("   Total indexed: %d", stats.ServerStats.TotalIndexed)
 	log.Printf("   Peak throughput: %.0f texts/sec", stats.ServerStats.PeakThroughput)
@@ -288,7 +290,7 @@ func (c *OptimizedGPUClient) Benchmark(numTexts int) {
 	}
 
 	// Test large batch embedding
-	log.Printf("📝 Testing large batch embedding...")
+	log.Printf(" Testing large batch embedding...")
 	start := time.Now()
 
 	response, err := c.EmbedTextsBatch(texts)
@@ -299,7 +301,7 @@ func (c *OptimizedGPUClient) Benchmark(numTexts int) {
 	embedTime := time.Since(start)
 	throughput := float64(numTexts) / embedTime.Seconds()
 
-	log.Printf("✅ Embedding Results:")
+	log.Printf(" Embedding Results:")
 	log.Printf("   Texts: %d", numTexts)
 	log.Printf("   Time: %v", embedTime)
 	log.Printf("   Throughput: %.0f texts/sec", throughput)
@@ -313,7 +315,7 @@ func (c *OptimizedGPUClient) Benchmark(numTexts int) {
 	}
 
 	// Get final stats
-	log.Printf("\n📊 Final server statistics:")
+	log.Printf("\n Final server statistics:")
 	c.GetServerStats()
 }
 
@@ -329,7 +331,7 @@ func main() {
 
 	client := NewOptimizedGPUClient(config)
 
-	log.Printf("🚀 Optimized GPU Client initialized")
+	log.Printf(" Optimized GPU Client initialized")
 	log.Printf("   Server: %s", config.ServerURL)
 	log.Printf("   Max batch size: %d", config.MaxBatchSize)
 	log.Printf("   Max concurrent: %d", config.MaxConcurrent)

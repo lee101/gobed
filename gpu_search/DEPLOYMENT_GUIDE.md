@@ -14,9 +14,9 @@ This guide covers deploying the GPU-accelerated search system for gobed in produ
 - GCC 9+ or compatible C++ compiler
 
 ### Tested Configurations
-- ✅ CUDA 12.0 + PyTorch 2.7.1 + RTX 3080 (Current)
-- ✅ CUDA 12.2 + PyTorch 2.7.1 (Forward compatible)
-- ✅ CUDA 12.9 + PyTorch 2.7.1 (Target deployment)
+-  CUDA 12.0 + PyTorch 2.7.1 + RTX 3080 (Current)
+-  CUDA 12.2 + PyTorch 2.7.1 (Forward compatible)
+-  CUDA 12.9 + PyTorch 2.7.1 (Target deployment)
 
 ## CUDA Version Migration
 
@@ -47,9 +47,9 @@ export CUDA_HOME=/usr/local/cuda-12.9
 ### Version Compatibility Matrix
 | CUDA Version | Compute Capability | __dp4a Support | Status |
 |--------------|-------------------|----------------|---------|
-| 11.0-11.8    | 6.1+              | ✅             | Supported |
-| 12.0-12.2    | 6.1+              | ✅             | Tested |
-| 12.3-12.9    | 6.1+              | ✅             | Compatible |
+| 11.0-11.8    | 6.1+              |              | Supported |
+| 12.0-12.2    | 6.1+              |              | Tested |
+| 12.3-12.9    | 6.1+              |              | Compatible |
 
 ## Build System
 
@@ -70,10 +70,10 @@ endif()
 ```
 
 ### Error Handling
-- ✅ Comprehensive input validation
-- ✅ CUDA error checking with detailed messages
-- ✅ Memory allocation failure handling
-- ✅ Device compatibility verification
+-  Comprehensive input validation
+-  CUDA error checking with detailed messages
+-  Memory allocation failure handling
+-  Device compatibility verification
 
 ## Production Integration
 
@@ -201,10 +201,10 @@ export CUDA_DEVICE_MAX_CONNECTIONS=32
 ## Security Considerations
 
 ### Input Validation
-- ✅ Tensor dimension checking
-- ✅ Data type validation
-- ✅ Memory bounds checking
-- ✅ Device compatibility verification
+-  Tensor dimension checking
+-  Data type validation
+-  Memory bounds checking
+-  Device compatibility verification
 
 ### Resource Limits
 ```python

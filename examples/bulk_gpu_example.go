@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -10,7 +12,7 @@ import (
 
 // BulkGPUIndexingExample demonstrates how to use the bulk GPU indexing feature
 func main() {
-	fmt.Println("🚀 Bulk GPU Indexing Example")
+	fmt.Println(" Bulk GPU Indexing Example")
 	fmt.Println("============================")
 
 	// Load the embedding model
@@ -46,11 +48,11 @@ func main() {
 		log.Fatalf("Automatic indexing failed: %v", err)
 	}
 	elapsed := time.Since(start)
-	fmt.Printf("✅ Indexed %d documents in %.2fs (%.0f docs/sec)\n",
+	fmt.Printf(" Indexed %d documents in %.2fs (%.0f docs/sec)\n",
 		len(docs), elapsed.Seconds(), float64(len(docs))/elapsed.Seconds())
 
 	// Method 2: Force GPU bulk indexing
-	fmt.Printf("\n🚀 Method 2: Forced GPU bulk indexing\n")
+	fmt.Printf("\n Method 2: Forced GPU bulk indexing\n")
 	newIndex := gobed.NewVectorIndex(model, config)
 
 	start = time.Now()
@@ -59,11 +61,11 @@ func main() {
 		log.Fatalf("Forced GPU indexing failed: %v", err)
 	}
 	elapsed = time.Since(start)
-	fmt.Printf("✅ GPU indexed %d documents in %.2fs (%.0f docs/sec)\n",
+	fmt.Printf(" GPU indexed %d documents in %.2fs (%.0f docs/sec)\n",
 		len(docs), elapsed.Seconds(), float64(len(docs))/elapsed.Seconds())
 
 	// Method 3: Bulk indexing with real-time monitoring
-	fmt.Printf("\n📊 Method 3: Bulk indexing with GPU monitoring\n")
+	fmt.Printf("\n Method 3: Bulk indexing with GPU monitoring\n")
 	monitoredIndex := gobed.NewVectorIndex(model, config)
 
 	progressChan, err := monitoredIndex.AddDocumentsWithMonitoring(docs)
@@ -74,12 +76,12 @@ func main() {
 	// Monitor progress in real-time
 	for progress := range progressChan {
 		if progress.Error != nil {
-			log.Printf("❌ Error: %v", progress.Error)
+			log.Printf(" Error: %v", progress.Error)
 			break
 		}
 
 		if progress.Complete {
-			fmt.Printf("✅ Monitoring complete! Final throughput: %.0f docs/sec\n", progress.Throughput)
+			fmt.Printf(" Monitoring complete! Final throughput: %.0f docs/sec\n", progress.Throughput)
 			if progress.GPUStats != nil {
 				progress.GPUStats.LogStats()
 			}
@@ -93,16 +95,16 @@ func main() {
 	}
 
 	// Test search functionality
-	fmt.Printf("\n🔍 Testing search functionality\n")
+	fmt.Printf("\n Testing search functionality\n")
 	query := "document topic keywords content"
 	start = time.Now()
 	results, err := monitoredIndex.Search(query, 5)
 	searchTime := time.Since(start)
 
 	if err != nil {
-		log.Printf("❌ Search failed: %v", err)
+		log.Printf(" Search failed: %v", err)
 	} else {
-		fmt.Printf("✅ Search completed in %.2fms, found %d results\n",
+		fmt.Printf(" Search completed in %.2fms, found %d results\n",
 			float64(searchTime.Nanoseconds())/1e6, len(results))
 
 		for i, result := range results {
@@ -111,7 +113,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\n🎯 Example completed successfully!\n")
+	fmt.Printf("\n Example completed successfully!\n")
 	fmt.Printf("Key features demonstrated:\n")
 	fmt.Printf("  • Automatic GPU bulk indexing for large datasets\n")
 	fmt.Printf("  • Manual GPU bulk indexing control\n")

@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -87,7 +89,7 @@ func LoadModel(safetensorsPath, referenceTokensPath string, precision PrecisionM
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse reference tokens: %v", err)
 		}
-		log.Printf("✅ Reference tokens loaded for %d sentences", len(referenceTokens))
+		log.Printf(" Reference tokens loaded for %d sentences", len(referenceTokens))
 	}
 
 	model := &OptimizedEmbedding{
@@ -111,12 +113,12 @@ func LoadModel(safetensorsPath, referenceTokensPath string, precision PrecisionM
 		}
 		log.Printf("🔄 Applied INT8 quantization")
 	default:
-		log.Printf("📦 Loaded weights in FP32 precision")
+		log.Printf(" Loaded weights in FP32 precision")
 	}
 
 	loadTime := time.Since(loadStart)
-	log.Printf("✅ Model loaded successfully in %v", loadTime)
-	log.Printf("📊 Model specs: vocab_size=%d, embed_dim=%d, precision=%s", vocabSize, embedDim, precision)
+	log.Printf(" Model loaded successfully in %v", loadTime)
+	log.Printf(" Model specs: vocab_size=%d, embed_dim=%d, precision=%s", vocabSize, embedDim, precision)
 
 	return model, nil
 }
@@ -388,7 +390,7 @@ func CosineSimilarity(a, b []float32) float32 {
 // benchmarkInference benchmarks pure inference performance
 func benchmarkInference(model *OptimizedEmbedding, precision PrecisionMode) {
 	fmt.Printf("\n%s\n", strings.Repeat("=", 70))
-	fmt.Printf("🚀 OPTIMIZED INFERENCE BENCHMARK - %s PRECISION\n", precision)
+	fmt.Printf(" OPTIMIZED INFERENCE BENCHMARK - %s PRECISION\n", precision)
 	fmt.Printf("%s\n", strings.Repeat("=", 70))
 
 	// Test sentences for benchmarking
@@ -403,7 +405,7 @@ func benchmarkInference(model *OptimizedEmbedding, precision PrecisionMode) {
 	fmt.Printf("Benchmarking %d sentences with %s precision...\n", len(sentences), precision)
 
 	// Warmup runs
-	fmt.Println("\n🔥 Warmup runs...")
+	fmt.Println("\n Warmup runs...")
 	for i := 0; i < 3; i++ {
 		_, err := model.EncodeText(sentences[0])
 		if err != nil {
@@ -411,10 +413,10 @@ func benchmarkInference(model *OptimizedEmbedding, precision PrecisionMode) {
 			return
 		}
 	}
-	fmt.Println("✅ Warmup completed")
+	fmt.Println(" Warmup completed")
 
 	// Benchmark individual inference times
-	fmt.Println("\n⏱️  Pure inference benchmarks:")
+	fmt.Println("\n  Pure inference benchmarks:")
 	times := make([]time.Duration, len(sentences))
 	embeddings := make([][]float32, len(sentences))
 
@@ -445,7 +447,7 @@ func benchmarkInference(model *OptimizedEmbedding, precision PrecisionMode) {
 	avgTime := totalTime / time.Duration(len(times))
 	throughput := float64(len(sentences)) / totalTime.Seconds()
 
-	fmt.Printf("\n📊 Performance Summary:\n")
+	fmt.Printf("\n Performance Summary:\n")
 	fmt.Printf("   Total inference time: %v\n", totalTime)
 	fmt.Printf("   Average per inference: %v\n", avgTime)
 	fmt.Printf("   Throughput: %.0f inferences/sec\n", throughput)
@@ -497,7 +499,7 @@ func testPrecisionModes() {
 		// Load model with current precision (timed separately)
 		model, err := LoadModel(modelPath, referenceTokensPath, precision)
 		if err != nil {
-			log.Printf("❌ Failed to load model with %s precision: %v", precision, err)
+			log.Printf(" Failed to load model with %s precision: %v", precision, err)
 			continue
 		}
 
@@ -508,7 +510,7 @@ func testPrecisionModes() {
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 OPTIMIZED GO EMBEDDING - PRECISION BENCHMARKING")
+	fmt.Println(" OPTIMIZED GO EMBEDDING - PRECISION BENCHMARKING")
 	fmt.Println("================================================================================")
 	fmt.Println("Model: sentence-transformers/static-retrieval-mrl-en-v1")
 	fmt.Println("Features: Separated loading, FP16/INT8 support, Pure inference timing")
@@ -519,17 +521,17 @@ func main() {
 	referenceTokensPath := "model/production_reference_tokens.json"
 
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		log.Fatalf("❌ Safetensors model file not found: %s", modelPath)
+		log.Fatalf(" Safetensors model file not found: %s", modelPath)
 	}
 	if _, err := os.Stat(referenceTokensPath); os.IsNotExist(err) {
-		log.Fatalf("❌ Reference tokens file not found: %s", referenceTokensPath)
+		log.Fatalf(" Reference tokens file not found: %s", referenceTokensPath)
 	}
 
 	// Test all precision modes
 	testPrecisionModes()
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("✅ Benchmark completed! Optimized inference ready for production.")
-	fmt.Println("🎯 Key insights: Compare FP32 vs FP16 vs INT8 performance and accuracy.")
+	fmt.Println(" Benchmark completed! Optimized inference ready for production.")
+	fmt.Println(" Key insights: Compare FP32 vs FP16 vs INT8 performance and accuracy.")
 	fmt.Println(strings.Repeat("=", 80))
 }

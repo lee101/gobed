@@ -92,7 +92,7 @@ func main() {
 def compare_embeddings(py_emb, go_emb):
     """Compare Python and Go embeddings."""
     if go_emb is None:
-        print("❌ Could not get Go embeddings")
+        print(" Could not get Go embeddings")
         return False
     
     print("\n" + "="*60)
@@ -117,12 +117,12 @@ def compare_embeddings(py_emb, go_emb):
         print(f"  Mean difference: {mean_diff:.6f}")
         
         if max_diff < 0.001:
-            print(f"  ✅ PERFECT MATCH (within numerical precision)")
+            print(f"   PERFECT MATCH (within numerical precision)")
         elif max_diff < 0.01:
-            print(f"  ⚠️  Very close match")
+            print(f"    Very close match")
             all_match = False
         else:
-            print(f"  ❌ MISMATCH")
+            print(f"   MISMATCH")
             all_match = False
     
     return all_match
@@ -162,12 +162,12 @@ def main():
     # Compare them
     if compare_embeddings(py_embeddings, go_embeddings):
         print("\n" + "="*60)
-        print("✅ SUCCESS: Go implementation matches Python perfectly!")
+        print(" SUCCESS: Go implementation matches Python perfectly!")
         print("We are definitely using the real safetensors model!")
         print("="*60)
     else:
         print("\n" + "="*60)
-        print("⚠️  WARNING: Some differences detected")
+        print("  WARNING: Some differences detected")
         print("="*60)
 
 if __name__ == "__main__":

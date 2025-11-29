@@ -1,8 +1,8 @@
 # GPU Search Optimization - Implementation Results
 
-## 🎯 What We've Implemented
+##  What We've Implemented
 
-### ✅ Completed Optimizations
+###  Completed Optimizations
 
 1. **Modified main.go with parallel processing**
    - Added `IndexTextsParallel()` function with 8 concurrent workers
@@ -19,7 +19,7 @@
    - Go concept test showing 2x improvement in parallel processing
    - Added performance analysis and reporting
 
-## 📊 Performance Predictions
+##  Performance Predictions
 
 | Metric | Current | Optimized | Improvement |
 |--------|---------|-----------|-------------|
@@ -28,7 +28,7 @@
 | GPU Utilization | ~3% | ~60-80% | 20x better |
 | **Throughput** | **700 texts/sec** | **3,500-7,000 texts/sec** | **5-10x faster** |
 
-## 🚀 How to Test the Optimizations
+##  How to Test the Optimizations
 
 ### Option 1: Standard Test
 ```bash
@@ -48,7 +48,7 @@ cd /home/lee/code/gobedexample
 go run main.go --performance-test --max-texts 10000 --batch-size 4096
 ```
 
-## 🔧 Key Changes Made to main.go
+##  Key Changes Made to main.go
 
 ### 1. Added Parallel Processing Function
 ```go
@@ -82,42 +82,42 @@ if err := pipeline.IndexTexts(texts); err != nil {
 if err := IndexTextsParallel(pipeline, texts, chunkSize); err != nil {
 ```
 
-## 🎯 Expected Output Example
+##  Expected Output Example
 
 ```
-✅ Optimized GPU Pipeline initialized
+ Optimized GPU Pipeline initialized
    Batch size: 4096 (optimized for GPU)
    GPU-only mode: true
    Preload GPU: true
 
-📊 Optimization settings:
+ Optimization settings:
    GPU batch size: 4096
    Parallel chunk size: 8192
    Max concurrent workers: 8
 
-🚀 Starting parallel GPU indexing of 5000 texts
-📦 Chunk size: 8192 (optimized for GPU)
-📊 Created 1 chunks (avg: 5000 texts/chunk)
+ Starting parallel GPU indexing of 5000 texts
+ Chunk size: 8192 (optimized for GPU)
+ Created 1 chunks (avg: 5000 texts/chunk)
 
-📈 Progress: 100.0% (1/1 chunks, 4500 texts/sec)
+ Progress: 100.0% (1/1 chunks, 4500 texts/sec)
 
-✅ Parallel indexing complete!
+ Parallel indexing complete!
    Total texts: 5000
    Total time: 1.1s
    Throughput: 4545 texts/sec
    Chunks: 1
    Concurrency: 8
-🚀 Excellent performance! GPU well utilized.
+ Excellent performance! GPU well utilized.
 
-🎯 FINAL PERFORMANCE RESULTS:
+ FINAL PERFORMANCE RESULTS:
    Total texts: 5000
    Total time: 1.1s
    Final throughput: 4545 texts/sec
    Improvement: 6.5x faster than baseline
-🚀 EXCELLENT! GPU optimization successful!
+ EXCELLENT! GPU optimization successful!
 ```
 
-## 🔍 Troubleshooting
+##  Troubleshooting
 
 ### If you see LibTorch errors:
 ```bash
@@ -142,7 +142,7 @@ cd /home/lee/code/gobed/gpu_search
 go run test_go_optimization.go
 ```
 
-## 📈 Benchmark Results Summary
+##  Benchmark Results Summary
 
 ### Simulation Results (Python):
 - **Current**: 731 texts/sec
@@ -159,14 +159,14 @@ go run test_go_optimization.go
 - **Expected Optimized**: 3,500-7,000 texts/sec
 - **Conservative Improvement**: 5-10x faster
 
-## 🎯 Why This Works
+##  Why This Works
 
 1. **Larger Batches**: 4096 vs 256 = better GPU memory bandwidth utilization
 2. **Parallel Processing**: 8 workers vs 1 = higher GPU occupancy  
 3. **Reduced Overhead**: Pre-allocation and chunking reduce setup time
 4. **Better Scheduling**: GPU gets continuous work instead of waiting
 
-## 🚀 Next Steps
+##  Next Steps
 
 1. **Test the implementation**: Run with `--performance-test`
 2. **Monitor GPU utilization**: Should see 60-80% vs current 3%

@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -12,7 +14,7 @@ import (
 
 func main() {
 	fmt.Println("================================================================================")
-	fmt.Println("🚀 RTX 3090 FINAL OPTIMIZED BENCHMARK - FINDING BEST CONFIGURATION")
+	fmt.Println(" RTX 3090 FINAL OPTIMIZED BENCHMARK - FINDING BEST CONFIGURATION")
 	fmt.Println("================================================================================")
 	fmt.Printf("GPU: NVIDIA RTX 3090 (24GB VRAM)\n")
 	fmt.Printf("CPU: %d cores\n", runtime.NumCPU())
@@ -24,7 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("✅ Model loaded successfully\n")
+	fmt.Println(" Model loaded successfully\n")
 
 	// Results tracking
 	type Result struct {
@@ -223,7 +225,7 @@ func main() {
 
 	// Final summary
 	fmt.Println("\n" + "=" + repeat("=", 79))
-	fmt.Println("🏆 FINAL RESULTS SUMMARY")
+	fmt.Println(" FINAL RESULTS SUMMARY")
 	fmt.Println("=" + repeat("=", 79))
 	
 	// Find best configurations
@@ -237,18 +239,18 @@ func main() {
 		}
 	}
 	
-	fmt.Printf("\n📊 BEST INDEXING THROUGHPUT:\n")
+	fmt.Printf("\n BEST INDEXING THROUGHPUT:\n")
 	fmt.Printf("   Configuration: %s\n", bestThroughput.Name)
 	fmt.Printf("   Throughput: %.0f docs/sec\n", bestThroughput.Throughput)
 	fmt.Printf("   Batch Size: %d\n", bestThroughput.BatchSize)
 	fmt.Printf("   Workers: %d\n", bestThroughput.Workers)
 	
-	fmt.Printf("\n🔍 BEST SEARCH PERFORMANCE:\n")
+	fmt.Printf("\n BEST SEARCH PERFORMANCE:\n")
 	fmt.Printf("   Configuration: %s\n", bestQPS.Name)
 	fmt.Printf("   QPS: %.0f queries/sec\n", bestQPS.QPS)
 	fmt.Printf("   Document Count: %d\n", bestQPS.DocCount)
 	
-	fmt.Printf("\n💡 RECOMMENDATIONS FOR RTX 3090:\n")
+	fmt.Printf("\n RECOMMENDATIONS FOR RTX 3090:\n")
 	fmt.Printf("   • For small datasets (<2K docs): Use batch size 250-500\n")
 	fmt.Printf("   • For medium datasets (2K-50K): Use batch size 1000-5000\n")
 	fmt.Printf("   • For large datasets (>100K): Use batch size 10K-50K with training\n")

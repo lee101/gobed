@@ -51,7 +51,7 @@ class GobedGPUBackend:
         self.id_to_text = {}
         self.current_id = 0
         
-        print(f"✅ Gobed GPU Backend initialized")
+        print(f" Gobed GPU Backend initialized")
         print(f"   Device: {torch.cuda.get_device_name()}")
         print(f"   Max vectors: {max_vectors:,}")
         print(f"   Precision: {'INT8' if use_int8 else 'FP32'}")
@@ -278,7 +278,7 @@ def stats():
 
 
 if __name__ == '__main__':
-    print("🚀 Starting Gobed GPU Backend Server...")
+    print(" Starting Gobed GPU Backend Server...")
     print("   This server provides GPU-accelerated embedding and search for gobed")
     print("   Custom CUDA kernels ensure maximum performance")
     print()

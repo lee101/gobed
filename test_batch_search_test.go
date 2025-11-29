@@ -84,5 +84,5 @@ func TestGPUBatchSearch(t *testing.T) {
 		}
 	}
 
-	fmt.Printf("✅ GPU Batch Search test passed: %d queries processed successfully\n", numQueries)
+	fmt.Printf(" GPU Batch Search test passed: %d queries processed successfully\n", numQueries)
 }

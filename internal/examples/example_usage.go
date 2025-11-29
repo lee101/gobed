@@ -1,3 +1,5 @@
+//go:build legacy
+
 package main
 
 import (
@@ -161,7 +163,7 @@ func main() {
 	fmt.Printf("  Cosine similarity: %.6f\n", cosineSim)
 	fmt.Printf("  Euclidean distance: %.6f\n", euclideanDist)
 
-	fmt.Println("\n✅ Example completed successfully!")
-	fmt.Println("📋 Note: This package provides perfect numerical consistency with Python PyTorch")
-	fmt.Println("🚀 Ready for production use in Go applications")
+	fmt.Println("\n Example completed successfully!")
+	fmt.Println(" Note: This package provides perfect numerical consistency with Python PyTorch")
+	fmt.Println(" Ready for production use in Go applications")
 }

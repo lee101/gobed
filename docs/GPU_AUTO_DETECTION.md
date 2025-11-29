@@ -5,18 +5,18 @@ The Gobed library now **automatically detects and uses GPU acceleration** when a
 
 ## Key Features
 
-### 🚀 Automatic GPU Detection
+###  Automatic GPU Detection
 - **Zero configuration needed** - GPU is detected and enabled automatically
 - Falls back to optimized CPU mode when GPU is unavailable
 - Transparent to existing code - same API works everywhere
 
-### ⚡ Performance Improvements (with GPU)
+###  Performance Improvements (with GPU)
 - **39.7x faster latency**: 3,453µs → 87µs
 - **39.3x higher throughput**: 290 → 11,385 QPS
 - **75% memory reduction** with int8 quantization
 - **<1% accuracy loss** - maintains search quality
 
-### 💻 CPU Fallback
+###  CPU Fallback
 When GPU is not available:
 - Uses optimized SIMD instructions (AVX-512/ARM NEON)
 - Multi-threaded processing with all CPU cores
