@@ -257,4 +257,3 @@ func writeDocsTo(writer io.Writer, data *cagraFileCache) error {
 	enc := gob.NewEncoder(writer)
 	return enc.Encode(data)
 }
-

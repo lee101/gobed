@@ -55,15 +55,16 @@ func NewCAGRABedSearcher() (*CAGRABedSearcher, error) {
 
 	projectHash := fmt.Sprintf("%x", sha1.Sum([]byte(basePath)))
 	cacheDir := filepath.Join(cfg.CacheDir, "cagra", projectHash)
+	cagraConf := gobed.DefaultCAGRAConfig()
+	cagraConf.VectorDim = gobed.Int8EmbeddingDim
 	cacheMgr, err := newCAGRACacheManager(cacheDir)
 	if err != nil {
 		gobed.Debugf("Failed to initialize CAGRA cache manager: %v", err)
 		cacheMgr = nil
+		cagraConf.CachePath = ""
+	} else {
+		cagraConf.CachePath = filepath.Join(cacheDir, "graph.cagrabin")
 	}
-
-	cagraConf := gobed.DefaultCAGRAConfig()
-	cagraConf.VectorDim = gobed.Int8EmbeddingDim
-	cagraConf.CachePath = filepath.Join(cacheDir, "graph.cagrabin")
 
 	idx, err := gobed.NewCAGRAIndex(cagraConf)
 	if err != nil {
@@ -151,16 +152,20 @@ func (c *CAGRABedSearcher) ensureBasePath(path string) error {
 		return nil
 	}
 
-	c.basePath = absPath
 	projectHash := fmt.Sprintf("%x", sha1.Sum([]byte(absPath)))
 	cacheDir := filepath.Join(c.config.CacheDir, "cagra", projectHash)
 	cacheMgr, err := newCAGRACacheManager(cacheDir)
 	if err != nil {
-		return fmt.Errorf("failed to reinitialize cache manager: %w", err)
+		gobed.Debugf("Failed to reinitialize CAGRA cache manager: %v", err)
+		c.cache = nil
+		c.cagraConf.CachePath = ""
+	} else {
+		c.cache = cacheMgr
+		c.cagraConf.CachePath = filepath.Join(cacheDir, "graph.cagrabin")
 	}
-	c.cache = cacheMgr
 
-	c.cagraConf.CachePath = filepath.Join(cacheDir, "graph.cagrabin")
+	c.basePath = absPath
+
 	if c.index != nil {
 		c.index.Close()
 	}
@@ -437,7 +442,7 @@ func (c *CAGRABedSearcher) buildIndex(path string, options BedSearchOptions) err
 
 	if collectErr != nil {
 		return collectErr
-}
+	}
 
 	if len(vecs) == 0 {
 		return fmt.Errorf("no data to index")
