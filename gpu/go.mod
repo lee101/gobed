@@ -1,4 +1,4 @@
-module gpu-search-demo
+module github.com/lee101/gobed/gpu
 
 go 1.21
 

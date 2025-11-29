@@ -4,7 +4,7 @@ package gobed
 
 /*
 #cgo CFLAGS: -I./gpu
-#cgo LDFLAGS: -L./gpu -lgpu_fast_search -L/usr/local/cuda-12.8/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.8/lib64
+#cgo LDFLAGS: -L./gpu -lgpu_fast_search -L/usr/local/cuda-12.9/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.9/lib64
 #include <stdlib.h>
 
 // Ultra-fast GPU search optimized for 1ms inference

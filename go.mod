@@ -19,4 +19,6 @@ require (
 	golang.org/x/text v0.10.0 // indirect
 )
 
+replace github.com/lee101/gobed/gpu => ./gpu
+
 exclude github.com/sugarme/gotch v0.9.1

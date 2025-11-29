@@ -1,13 +1,13 @@
 # Makefile for Real GPU LibTorch integration with CUDA kernels
 LIBTORCH_ROOT = /home/lee/code/gobed/libtorch
-CUDA_PATH = /usr/local/cuda-12.8
+CUDA_PATH = /usr/local/cuda-12.9
 
 # Compilers
-NVCC = /usr/local/cuda-12.8/bin/nvcc
+NVCC = /usr/local/cuda-12.9/bin/nvcc
 CXX = g++
 
 # Flags
-NVCC_FLAGS = -std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC -allow-unsupported-compiler
+NVCC_FLAGS = -std=c++17 -O3 -arch=sm_86 --compiler-options -fPIC -allow-unsupported-compiler --extended-lambda
 CXX_FLAGS = -std=c++17 -O3 -fPIC -D_GLIBCXX_USE_CXX11_ABI=1
 SHARED_FLAGS = --shared
 
@@ -28,6 +28,7 @@ WRAPPER_OBJ = torch_gpu_forced.o
 GPU_MEMORY_LIB = libgpu_memory.so
 GPU_IVF_LIB = libgpu_ivf_bulk.so
 GPU_SEARCH_LIB = libgpu_fast_search.so
+GPU_CAGRA_LIB = libgpu_cagra.so
 
 # Source files
 CUDA_KERNEL_SRC = cuda_kernels.cu
@@ -35,10 +36,11 @@ WRAPPER_SRC = torch_gpu_forced.cpp
 GPU_MEMORY_SRC = gpu_memory.cu
 GPU_IVF_SRC = gpu_ivf_bulk.cu
 GPU_SEARCH_SRC = gpu_fast_search.cu
+GPU_CAGRA_SRC = gpu_cagra.cu
 
 .PHONY: all clean test diagnose
 
-all: $(WRAPPER_LIB) $(GPU_MEMORY_LIB) $(GPU_IVF_LIB) $(GPU_SEARCH_LIB)
+all: $(WRAPPER_LIB) $(GPU_MEMORY_LIB) $(GPU_IVF_LIB) $(GPU_SEARCH_LIB) $(GPU_CAGRA_LIB)
 
 # Compile CUDA kernels
 $(CUDA_KERNEL_OBJ): $(CUDA_KERNEL_SRC)
@@ -75,15 +77,22 @@ $(GPU_SEARCH_LIB): $(GPU_SEARCH_SRC)
 	@echo "🔧 Building GPU fast search library..."
 	$(NVCC) $(NVCC_FLAGS) $(SHARED_FLAGS) -o $@ $< $(CUDA_LIBS)
 	@echo "✅ Built $(GPU_SEARCH_LIB)"
+
+# Build GPU CAGRA-style scorer library
+$(GPU_CAGRA_LIB): $(GPU_CAGRA_SRC)
+	@echo "🔧 Building GPU CAGRA library..."
+	$(NVCC) $(NVCC_FLAGS) $(SHARED_FLAGS) -o $@ $< $(CUDA_LIBS)
+	@echo "✅ Built $(GPU_CAGRA_LIB)"
 	@echo ""
 	@echo "🚀 All GPU libraries ready!"
 	@echo "   CUDA kernels: ✅"
 	@echo "   Memory pool: ✅"
 	@echo "   IVF bulk indexing: ✅"
 	@echo "   Fast search: ✅"
+	@echo "   CAGRA (IVF-gated): ✅"
 
 clean:
-	rm -f $(WRAPPER_LIB) $(CUDA_KERNEL_OBJ) $(WRAPPER_OBJ) $(GPU_MEMORY_LIB) $(GPU_IVF_LIB) $(GPU_SEARCH_LIB)
+	rm -f $(WRAPPER_LIB) $(CUDA_KERNEL_OBJ) $(WRAPPER_OBJ) $(GPU_MEMORY_LIB) $(GPU_IVF_LIB) $(GPU_SEARCH_LIB) $(GPU_CAGRA_LIB)
 	@echo "🧹 Cleaned build artifacts"
 
 test: $(WRAPPER_LIB)
