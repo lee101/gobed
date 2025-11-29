@@ -123,13 +123,13 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		useGPU = flagGPU
 	}
 
-	type searcher interface {
+	type bedSearcher interface {
 		Search(BedSearchOptions) error
 		Close() error
 	}
 
 	var (
-		searcher searcher
+		searcher bedSearcher
 		err      error
 		gpuUsed  bool
 	)

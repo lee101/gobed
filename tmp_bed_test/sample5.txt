@@ -1,0 +1,1 @@
+Vector databases are specialized databases designed to store and query high-dimensional vectors efficiently. They are particularly useful for machine learning applications like similarity search, recommendation systems, and semantic search. Vector databases use advanced indexing techniques like approximate nearest neighbor search to provide fast retrieval of similar vectors.
