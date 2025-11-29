@@ -12,7 +12,7 @@ import (
 )
 
 // OptimizedSearchEngine provides SIMD-accelerated semantic search
-// It can use either int8 quantized embeddings or float32 embeddings
+// Pre-computes norms at index time for fastest search
 type OptimizedSearchEngine struct {
 	// Model (either int8 or float32)
 	int8Model    *gobed.Int8EmbeddingModel512
@@ -22,9 +22,12 @@ type OptimizedSearchEngine struct {
 	// Contiguous storage for cache-friendly int8 access
 	int8Embeddings []int8
 	int8Scales     []float32
+	// Pre-computed: normSq * scale^2 for each doc (avoids norm computation at search time)
+	int8NormProducts []float32
 
 	// Float32 embeddings storage (when int8 not available)
 	float32Embeddings []float32
+	float32NormSq     []float32 // Pre-computed squared norms
 	embeddingDim      int
 
 	// Document metadata
@@ -38,7 +41,6 @@ type OptimizedSearchEngine struct {
 type Int8SearchEngine = OptimizedSearchEngine
 
 // NewInt8SearchEngine creates a new SIMD-accelerated search engine
-// Falls back to float32 model if int8 model unavailable
 func NewInt8SearchEngine() (*OptimizedSearchEngine, error) {
 	return NewOptimizedSearchEngine()
 }
@@ -55,6 +57,7 @@ func NewOptimizedSearchEngine() (*OptimizedSearchEngine, error) {
 		engine.useInt8 = true
 		engine.int8Embeddings = make([]int8, 0)
 		engine.int8Scales = make([]float32, 0)
+		engine.int8NormProducts = make([]float32, 0)
 		engine.embeddingDim = 512
 		return engine, nil
 	}
@@ -68,6 +71,7 @@ func NewOptimizedSearchEngine() (*OptimizedSearchEngine, error) {
 	engine.float32Model = float32Model
 	engine.useInt8 = false
 	engine.float32Embeddings = make([]float32, 0)
+	engine.float32NormSq = make([]float32, 0)
 	engine.embeddingDim = float32Model.EmbedDim
 
 	return engine, nil
@@ -97,7 +101,7 @@ func (h *minHeap) Pop() any {
 // AddDocument adds a document with an int8 embedding
 func (e *OptimizedSearchEngine) AddDocument(doc Document, embedding *gobed.Int8Result512) {
 	if !e.useInt8 {
-		return // Can't add int8 to float32 engine
+		return
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -106,6 +110,13 @@ func (e *OptimizedSearchEngine) AddDocument(doc Document, embedding *gobed.Int8R
 	e.documents = append(e.documents, doc)
 	e.int8Embeddings = append(e.int8Embeddings, embedding.Vector...)
 	e.int8Scales = append(e.int8Scales, embedding.Scale)
+
+	// Pre-compute norm product: normSq * scale^2
+	var normSq int32
+	for _, v := range embedding.Vector {
+		normSq += int32(v) * int32(v)
+	}
+	e.int8NormProducts = append(e.int8NormProducts, float32(normSq)*embedding.Scale*embedding.Scale)
 	e.numDocs++
 }
 
@@ -117,6 +128,13 @@ func (e *OptimizedSearchEngine) AddDocumentFloat32(doc Document, embedding []flo
 	doc.ID = e.numDocs
 	e.documents = append(e.documents, doc)
 	e.float32Embeddings = append(e.float32Embeddings, embedding...)
+
+	// Pre-compute squared norm
+	var normSq float32
+	for _, v := range embedding {
+		normSq += v * v
+	}
+	e.float32NormSq = append(e.float32NormSq, normSq)
 	e.numDocs++
 }
 
@@ -128,7 +146,7 @@ func (e *OptimizedSearchEngine) Search(query string, topK int, threshold float32
 	return e.searchFloat32(query, topK, threshold)
 }
 
-// searchInt8 performs SIMD-accelerated search with int8 embeddings
+// searchInt8 performs SIMD-accelerated search with pre-computed norms
 func (e *OptimizedSearchEngine) searchInt8(query string, topK int, threshold float32) ([]SearchMatch, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -147,7 +165,10 @@ func (e *OptimizedSearchEngine) searchInt8(query string, topK int, threshold flo
 	var queryVec simd.Vec512
 	copy(queryVec[:], queryResult.Vector)
 
-	// Parallel search across CPU cores
+	// Pre-compute query norm product ONCE (not per-doc!)
+	queryNormProduct := computeNormProduct(&queryVec, queryResult.Scale)
+
+	// Parallel search
 	numWorkers := runtime.NumCPU()
 	if numWorkers > e.numDocs {
 		numWorkers = e.numDocs
@@ -172,26 +193,26 @@ func (e *OptimizedSearchEngine) searchInt8(query string, topK int, threshold flo
 			heap.Init(&h)
 
 			queryScale := queryResult.Scale
-			queryNormSq := computeNormSquaredInt8(&queryVec)
 
 			for i := start; i < end; i++ {
+				// Direct pointer into contiguous embedding storage
 				docOffset := i * 512
-				var docVec simd.Vec512
-				copy(docVec[:], e.int8Embeddings[docOffset:docOffset+512])
+				docVec := (*simd.Vec512)(unsafe.Pointer(&e.int8Embeddings[docOffset]))
 				docScale := e.int8Scales[i]
 
-				// SIMD dot product
-				dotInt := simd.Dot512(&queryVec, &docVec)
-				docNormSq := computeNormSquaredInt8(&docVec)
+				// SIMD dot product - the HOT path, everything else is pre-computed
+				dotInt := simd.Dot512(&queryVec, docVec)
 
-				// Cosine similarity with scales
+				// Use pre-computed doc norm product
+				docNormProduct := e.int8NormProducts[i]
+
+				// Cosine similarity - only multiply and fastSqrt in hot path
 				scaledDot := float32(dotInt) * queryScale * docScale
-				scaledNorm1 := float32(queryNormSq) * queryScale * queryScale
-				scaledNorm2 := float32(docNormSq) * docScale * docScale
+				normProduct := queryNormProduct * docNormProduct
 
 				var similarity float32
-				if scaledNorm1 > 0 && scaledNorm2 > 0 {
-					similarity = scaledDot / fastSqrt(scaledNorm1*scaledNorm2)
+				if normProduct > 0 {
+					similarity = scaledDot * fastInvSqrt(normProduct)
 				}
 
 				if similarity >= threshold {
@@ -210,11 +231,10 @@ func (e *OptimizedSearchEngine) searchInt8(query string, topK int, threshold flo
 
 	wg.Wait()
 
-	// Merge and return results
 	return e.mergeResults(workerResults, topK), nil
 }
 
-// searchFloat32 performs parallel search with float32 embeddings
+// searchFloat32 performs parallel search with pre-computed norms
 func (e *OptimizedSearchEngine) searchFloat32(query string, topK int, threshold float32) ([]SearchMatch, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -227,6 +247,12 @@ func (e *OptimizedSearchEngine) searchFloat32(query string, topK int, threshold 
 	queryEmb, err := e.float32Model.Encode(query)
 	if err != nil {
 		return nil, err
+	}
+
+	// Pre-compute query norm ONCE
+	var queryNormSq float32
+	for _, v := range queryEmb {
+		queryNormSq += v * v
 	}
 
 	// Parallel search
@@ -259,7 +285,20 @@ func (e *OptimizedSearchEngine) searchFloat32(query string, topK int, threshold 
 				docOffset := i * dim
 				docEmb := e.float32Embeddings[docOffset : docOffset+dim]
 
-				similarity := cosineSimFloat32(queryEmb, docEmb)
+				// Only compute dot product - norm is pre-computed
+				var dot float32
+				for j := 0; j < dim; j += 4 {
+					dot += queryEmb[j]*docEmb[j] + queryEmb[j+1]*docEmb[j+1] +
+						queryEmb[j+2]*docEmb[j+2] + queryEmb[j+3]*docEmb[j+3]
+				}
+
+				docNormSq := e.float32NormSq[i]
+				normProduct := queryNormSq * docNormSq
+
+				var similarity float32
+				if normProduct > 0 {
+					similarity = dot * fastInvSqrt(normProduct)
+				}
 
 				if similarity >= threshold {
 					if h.Len() < topK {
@@ -296,7 +335,6 @@ func (e *OptimizedSearchEngine) mergeResults(workerResults []minHeap, topK int) 
 		}
 	}
 
-	// Extract in descending order
 	results := make([]SearchMatch, finalHeap.Len())
 	for i := len(results) - 1; i >= 0; i-- {
 		r := heap.Pop(&finalHeap).(searchResult)
@@ -323,9 +361,10 @@ func (e *OptimizedSearchEngine) BatchAddDocuments(docs []Document, numWorkers in
 
 func (e *OptimizedSearchEngine) batchAddInt8(docs []Document, numWorkers int) error {
 	type result struct {
-		doc       Document
-		embedding *gobed.Int8Result512
-		err       error
+		doc         Document
+		embedding   *gobed.Int8Result512
+		normProduct float32
+		err         error
 	}
 
 	results := make([]result, len(docs))
@@ -343,7 +382,21 @@ func (e *OptimizedSearchEngine) batchAddInt8(docs []Document, numWorkers int) er
 			}
 			for i := start; i < end; i++ {
 				emb, err := e.int8Model.EmbedInt8(docs[i].Content)
-				results[i] = result{doc: docs[i], embedding: emb, err: err}
+				if err == nil && emb != nil {
+					// Pre-compute norm product
+					var normSq int32
+					for _, v := range emb.Vector {
+						normSq += int32(v) * int32(v)
+					}
+					results[i] = result{
+						doc:         docs[i],
+						embedding:   emb,
+						normProduct: float32(normSq) * emb.Scale * emb.Scale,
+						err:         nil,
+					}
+				} else {
+					results[i] = result{doc: docs[i], err: err}
+				}
 			}
 		}(w)
 	}
@@ -359,6 +412,7 @@ func (e *OptimizedSearchEngine) batchAddInt8(docs []Document, numWorkers int) er
 			e.documents = append(e.documents, r.doc)
 			e.int8Embeddings = append(e.int8Embeddings, r.embedding.Vector...)
 			e.int8Scales = append(e.int8Scales, r.embedding.Scale)
+			e.int8NormProducts = append(e.int8NormProducts, r.normProduct)
 			e.numDocs++
 		}
 	}
@@ -370,6 +424,7 @@ func (e *OptimizedSearchEngine) batchAddFloat32(docs []Document, numWorkers int)
 	type result struct {
 		doc       Document
 		embedding []float32
+		normSq    float32
 		err       error
 	}
 
@@ -388,7 +443,15 @@ func (e *OptimizedSearchEngine) batchAddFloat32(docs []Document, numWorkers int)
 			}
 			for i := start; i < end; i++ {
 				emb, err := e.float32Model.Encode(docs[i].Content)
-				results[i] = result{doc: docs[i], embedding: emb, err: err}
+				if err == nil && emb != nil {
+					var normSq float32
+					for _, v := range emb {
+						normSq += v * v
+					}
+					results[i] = result{doc: docs[i], embedding: emb, normSq: normSq, err: nil}
+				} else {
+					results[i] = result{doc: docs[i], err: err}
+				}
 			}
 		}(w)
 	}
@@ -403,6 +466,7 @@ func (e *OptimizedSearchEngine) batchAddFloat32(docs []Document, numWorkers int)
 			r.doc.ID = e.numDocs
 			e.documents = append(e.documents, r.doc)
 			e.float32Embeddings = append(e.float32Embeddings, r.embedding...)
+			e.float32NormSq = append(e.float32NormSq, r.normSq)
 			e.numDocs++
 		}
 	}
@@ -424,7 +488,9 @@ func (e *OptimizedSearchEngine) Clear() {
 
 	e.int8Embeddings = e.int8Embeddings[:0]
 	e.int8Scales = e.int8Scales[:0]
+	e.int8NormProducts = e.int8NormProducts[:0]
 	e.float32Embeddings = e.float32Embeddings[:0]
+	e.float32NormSq = e.float32NormSq[:0]
 	e.documents = e.documents[:0]
 	e.numDocs = 0
 }
@@ -436,39 +502,34 @@ func (e *OptimizedSearchEngine) UseInt8() bool {
 
 // Helper functions
 
-func computeNormSquaredInt8(v *simd.Vec512) int32 {
-	var sum int32
-	for i := 0; i < 512; i += 8 {
-		sum += int32(v[i]) * int32(v[i])
-		sum += int32(v[i+1]) * int32(v[i+1])
-		sum += int32(v[i+2]) * int32(v[i+2])
-		sum += int32(v[i+3]) * int32(v[i+3])
-		sum += int32(v[i+4]) * int32(v[i+4])
-		sum += int32(v[i+5]) * int32(v[i+5])
-		sum += int32(v[i+6]) * int32(v[i+6])
-		sum += int32(v[i+7]) * int32(v[i+7])
-	}
-	return sum
+// computeNormProduct computes normSq * scale^2 for query (done once per search)
+func computeNormProduct(v *simd.Vec512, scale float32) float32 {
+	// Use SIMD dot product with self for norm squared
+	normSq := simd.Dot512(v, v)
+	return float32(normSq) * scale * scale
 }
 
-func fastSqrt(x float32) float32 {
+// fastInvSqrt computes 1/sqrt(x) using Quake III fast inverse square root
+// More efficient than computing sqrt then dividing
+func fastInvSqrt(x float32) float32 {
 	if x <= 0 {
 		return 0
 	}
 	i := *(*uint32)(unsafe.Pointer(&x))
 	i = 0x5f3759df - (i >> 1)
 	y := *(*float32)(unsafe.Pointer(&i))
+	// One Newton-Raphson iteration for accuracy
 	y = y * (1.5 - (x*0.5)*y*y)
-	return 1.0 / y
+	return y
 }
 
+// cosineSimFloat32 computes cosine similarity (kept for compatibility)
 func cosineSimFloat32(a, b []float32) float32 {
 	if len(a) != len(b) {
 		return 0
 	}
 
 	var dot, normA, normB float32
-	// Unroll by 4
 	n := len(a)
 	i := 0
 	for ; i <= n-4; i += 4 {
