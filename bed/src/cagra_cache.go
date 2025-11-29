@@ -1,3 +1,5 @@
+//go:build cagra
+
 package src
 
 import (
@@ -10,7 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/lee101/gobed/pkg/ann/simd"
+	"github.com/lee101/gobed/ann/simd"
 )
 
 const cagraCacheVersion = 1
