@@ -1,4 +1,5 @@
 //go:build gpu && cgo
+// +build gpu,cgo
 
 package gobed
 
