@@ -26,7 +26,7 @@ import (
     "unsafe"
 
     "github.com/lee101/gobed/ann/ivf"
-    "github.com/lee101/gobed/ann/simd"
+    "github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // GPUCagraConfig configures the GPU graph search (CAGRA-style) indexer.
