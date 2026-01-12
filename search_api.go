@@ -860,8 +860,12 @@ func (se *SearchEngine) generateIndexConfig(estimatedSize int) search.Config {
 		}
 	}
 
-	// Use preset configuration for simplicity
-	return GetSearchConfig(se.config.Preset, estimatedSize)
+	// Use preset configuration but override MaxFlatSize if specified
+	cfg := GetSearchConfig(se.config.Preset, estimatedSize)
+	if se.config.MaxExactSearchSize > 0 {
+		cfg.MaxFlatSize = se.config.MaxExactSearchSize
+	}
+	return cfg
 }
 
 // Optimize rebuilds the index with optimal parameters for current data

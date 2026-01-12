@@ -1,6 +1,6 @@
 //go:build gpu
 
-package bed
+package lib
 
 import (
     "time"

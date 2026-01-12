@@ -2,7 +2,6 @@ package src
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 
 	"github.com/lee101/gobed"
@@ -17,6 +16,8 @@ var (
 	flagNoIndex        bool
 	flagForceIndex     bool
 	flagGPU            bool
+	flagAuto           bool
+	flagPreset         string
 	flagThreshold      float64
 	flagIgnoreCase     bool
 	flagVerbose        bool
@@ -90,7 +91,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagColorMode, "color", "auto", "When to colorize output (auto|always|never)")
 	rootCmd.PersistentFlags().BoolVar(&flagNoIndex, "no-index", false, "Skip indexing, use existing index only")
 	rootCmd.PersistentFlags().BoolVar(&flagForceIndex, "force-index", false, "Force re-indexing even if index exists")
-	rootCmd.PersistentFlags().BoolVar(&flagGPU, "gpu", false, "Force GPU acceleration (auto-detect by default)")
+	rootCmd.PersistentFlags().BoolVar(&flagGPU, "gpu", false, "Force GPU acceleration")
+	rootCmd.PersistentFlags().BoolVarP(&flagAuto, "auto", "a", true, "Auto-select optimal backend (default)")
+	rootCmd.PersistentFlags().StringVar(&flagPreset, "preset", "", "Use preset (fast|accurate|balanced|large|interactive|deep)")
 	rootCmd.PersistentFlags().Float64Var(&flagThreshold, "threshold", 0.7, "Minimum similarity threshold (0.0-1.0)")
 	rootCmd.PersistentFlags().BoolVarP(&flagIgnoreCase, "ignore-case", "i", false, "Case-insensitive search")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Verbose output")
@@ -118,11 +121,6 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		gobed.EnableDebugLogging()
 	}
 
-	useGPU := true
-	if cmd.Flags().Changed("gpu") {
-		useGPU = flagGPU
-	}
-
 	type bedSearcher interface {
 		Search(BedSearchOptions) error
 		Close() error
@@ -134,17 +132,39 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		gpuUsed bool
 	)
 
-	if useGPU {
-		if s, e := NewCAGRABedSearcher(); e == nil {
-			srch = s
-			gpuUsed = true
-		} else {
-			if cmd.Flags().Changed("gpu") && flagGPU {
-				return fmt.Errorf("gpu requested but unavailable: %w", e)
+	// Try fast int8 searcher with caching first (unless GPU requested)
+	if !cmd.Flags().Changed("gpu") {
+		if fastSearcher, e := NewFastBedSearcher(); e == nil {
+			srch = fastSearcher
+			if flagVerbose {
+				fmt.Println("Using fast int8 searcher with caching")
+			}
+		} else if flagVerbose {
+			fmt.Printf("Fast searcher unavailable: %v\n", e)
+		}
+	}
+
+	// Fallback to adaptive searcher
+	if srch == nil && flagAuto {
+		srch, err = NewAdaptiveSearcher()
+		if err != nil {
+			if flagVerbose {
+				fmt.Printf("Adaptive searcher unavailable: %v\n", err)
 			}
 		}
 	}
 
+	// If --gpu flag explicitly set, try GPU
+	if srch == nil && cmd.Flags().Changed("gpu") && flagGPU {
+		if s, e := NewCAGRABedSearcher(); e == nil {
+			srch = s
+			gpuUsed = true
+		} else {
+			return fmt.Errorf("gpu requested but unavailable: %w", e)
+		}
+	}
+
+	// Fallback to simple searcher
 	if srch == nil {
 		srch, err = NewSimpleBedSearcher()
 		if err != nil {
@@ -164,6 +184,20 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		Progressive:    flagProgressive,
 		UseGPU:         gpuUsed,
 		Verbose:        flagVerbose,
+	}
+
+	// Apply preset if specified
+	if flagPreset != "" {
+		preset := GetPreset(flagPreset)
+		if preset != nil {
+			ApplyPreset(&options, preset)
+			if flagVerbose {
+				fmt.Printf("Using preset: %s (%s)\n", preset.Name, preset.Description)
+			}
+		} else {
+			fmt.Printf("Unknown preset: %s\n", flagPreset)
+			fmt.Println("Available presets: fast, accurate, balanced, large, interactive, deep")
+		}
 	}
 
 	return srch.Search(options)
@@ -206,21 +240,35 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println("=================")
 	fmt.Println()
 
-	fmt.Printf("Natural language search: Enabled\n")
-	fmt.Printf("Query enhancement:       Enabled\n")
-	fmt.Printf("Gitignore support:       Enabled\n")
-	fmt.Printf("Binary detection:        Enabled\n")
-	fmt.Printf("Parallel workers:        %d\n", runtime.NumCPU())
+	// Get optimizer capabilities
+	opt := GetOptimizer()
+	caps := opt.GetCapabilities()
+	config := opt.Optimize()
 
-	mode := "Auto (try GPU when available)"
-	if cmd.Flags().Changed("gpu") {
-		if flagGPU {
-			mode = "Forced On"
-		} else {
-			mode = "Disabled"
-		}
+	fmt.Printf("System Capabilities:\n")
+	fmt.Printf("  CPU cores:     %d\n", caps.NumCPUs)
+	fmt.Printf("  AVX2 support:  %v\n", caps.HasAVX2)
+	fmt.Printf("  AVX-512:       %v\n", caps.HasAVX512)
+	if caps.GPUAvailable {
+		fmt.Printf("  GPU:           %s (%d MB)\n", caps.GPUName, caps.GPUMemoryMB)
+	} else {
+		fmt.Printf("  GPU:           Not available\n")
 	}
-	fmt.Printf("GPU acceleration:        %s\n", mode)
+	fmt.Println()
+
+	fmt.Printf("Auto-Optimization:\n")
+	fmt.Printf("  Backend:       %s\n", config.Backend)
+	fmt.Printf("  Workers:       %d\n", config.NumWorkers)
+	fmt.Printf("  Batch size:    %d\n", config.BatchSize)
+	fmt.Printf("  Int8 mode:     %v\n", config.UseInt8)
+	fmt.Printf("  Reason:        %s\n", config.Reason)
+	fmt.Println()
+
+	fmt.Printf("Features:\n")
+	fmt.Printf("  Natural language:  Enabled\n")
+	fmt.Printf("  Query enhancement: Enabled\n")
+	fmt.Printf("  Gitignore:         Enabled\n")
+	fmt.Printf("  Binary detection:  Enabled\n")
 
 	return nil
 }

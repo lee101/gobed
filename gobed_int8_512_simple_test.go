@@ -199,3 +199,135 @@ func BenchmarkSimpleInt8EmbeddingInt8(b *testing.B) {
 
 	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "embeddings/sec")
 }
+
+// BenchmarkSimpleInt8EmbedFast benchmarks zero-allocation path
+func BenchmarkSimpleInt8EmbedFast(b *testing.B) {
+	model, err := LoadSimpleInt8Model512()
+	if err != nil {
+		b.Skipf("Simple Int8 model not available: %v", err)
+	}
+
+	text := "machine learning algorithms for neural networks"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, release := model.EmbedFast(text)
+		_ = result[0] // use result
+		release()
+	}
+
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "embeddings/sec")
+}
+
+// BenchmarkSimpleInt8EmbedFastParallel benchmarks parallel zero-allocation path
+func BenchmarkSimpleInt8EmbedFastParallel(b *testing.B) {
+	model, err := LoadSimpleInt8Model512()
+	if err != nil {
+		b.Skipf("Simple Int8 model not available: %v", err)
+	}
+
+	texts := []string{
+		"machine learning algorithms for neural networks",
+		"deep learning and artificial intelligence",
+		"natural language processing with transformers",
+		"computer vision and image recognition",
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			result, release := model.EmbedFast(texts[i%len(texts)])
+			_ = result[0]
+			release()
+			i++
+		}
+	})
+
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "embeddings/sec")
+}
+
+// BenchmarkEmbedPlusSearch benchmarks full embed + search pipeline
+func BenchmarkEmbedPlusSearch(b *testing.B) {
+	model, err := LoadSimpleInt8Model512()
+	if err != nil {
+		b.Skipf("Model not available: %v", err)
+	}
+
+	// Build a corpus of 10K embeddings
+	const corpusSize = 10000
+	corpus := make([][]float32, corpusSize)
+	for i := 0; i < corpusSize; i++ {
+		emb, _ := model.Embed("document number " + string(rune('a'+i%26)))
+		corpus[i] = emb
+	}
+
+	query := "machine learning neural network"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Embed query
+		qEmb, release := model.EmbedFast(query)
+
+		// Brute-force search (find top-1)
+		var bestScore float32 = -1
+		var bestIdx int
+		for j, doc := range corpus {
+			score := dotProduct(qEmb, doc)
+			if score > bestScore {
+				bestScore = score
+				bestIdx = j
+			}
+		}
+		_ = bestIdx
+
+		release()
+	}
+
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "searches/sec")
+}
+
+func dotProduct(a, b []float32) float32 {
+	var sum float32
+	for i := 0; i < len(a) && i < len(b); i += 8 {
+		sum += a[i]*b[i] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3]
+		sum += a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7]
+	}
+	return sum
+}
+
+// BenchmarkEmbedPlusSearchSizes benchmarks across corpus sizes
+func BenchmarkEmbedPlusSearchSizes(b *testing.B) {
+	model, err := LoadSimpleInt8Model512()
+	if err != nil {
+		b.Skipf("Model not available: %v", err)
+	}
+
+	sizes := []int{1000, 10000, 50000, 100000}
+
+	for _, size := range sizes {
+		corpus := make([][]float32, size)
+		for i := 0; i < size; i++ {
+			emb, _ := model.Embed("doc " + string(rune('a'+i%26)))
+			corpus[i] = emb
+		}
+
+		b.Run(string(rune('0'+size/1000))+"K", func(b *testing.B) {
+			query := "machine learning"
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				qEmb, release := model.EmbedFast(query)
+				var bestScore float32 = -1
+				for _, doc := range corpus {
+					if score := dotProduct(qEmb, doc); score > bestScore {
+						bestScore = score
+					}
+				}
+				_ = bestScore
+				release()
+			}
+			b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "QPS")
+		})
+	}
+}

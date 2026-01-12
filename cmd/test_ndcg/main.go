@@ -5,7 +5,7 @@ import (
 	"log"
 
 	gobed "github.com/lee101/gobed"
-	"github.com/lee101/gobed/bed"
+	"github.com/lee101/gobed/bed/lib"
 )
 
 func main() {
@@ -24,8 +24,8 @@ func main() {
 		{ID: 4, Text: "Database SQL queries"},
 	}
 
-	cfg := bed.EvalConfig{K: 5, NumQueries: 3, Warmup: 1}
-	result, err := bed.RunEval(model, docs, cfg)
+	cfg := lib.EvalConfig{K: 5, NumQueries: 3, Warmup: 1}
+	result, err := lib.RunEval(model, docs, cfg)
 	if err != nil {
 		log.Fatalf("Eval: %v", err)
 	}

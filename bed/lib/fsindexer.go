@@ -1,4 +1,4 @@
-package bed
+package lib
 
 import (
     "bufio"

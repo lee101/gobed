@@ -139,11 +139,8 @@ func (e *Engine) Train(vectors []simd.Vec512, scales []float32) error {
 		return fmt.Errorf("no training data provided")
 	}
 
-	// For small datasets, no training needed
-	if n <= e.config.MaxFlatSize {
-		e.trained = true
-		return nil
-	}
+	// Always create IVF when Train is explicitly called (caller knows IVF is needed)
+	// The check for small datasets should happen at the caller level
 
 	// Only print if actually training, not when loading from cache
 	if !e.trained {

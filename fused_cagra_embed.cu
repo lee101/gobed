@@ -144,6 +144,8 @@ __device__ void cagra_search_fixed(
     int k) {
 
     int tid = threadIdx.x;
+    int warp_id = tid / WARP_SIZE;
+    int lane_id = tid % WARP_SIZE;
 
     // Initialize results
     for (int i = tid; i < k; i += blockDim.x) {
@@ -152,58 +154,111 @@ __device__ void cagra_search_fixed(
     }
     __syncthreads();
 
-    // Simple brute force - each thread maintains its own top-k
-    __shared__ float thread_dists[BLOCK_DIM * 10];  // Max k=10 per thread
-    __shared__ int thread_indices[BLOCK_DIM * 10];
+    // CAGRA graph traversal with multiple entry points
+    // Use modular hashing for visited set - hash node IDs to fit in 8K bitmap
+    __shared__ int visited_set[8192];  // Bitmap for 256K unique tracked nodes (with collisions)
+    __shared__ float best_dists[64];   // Candidate pool
+    __shared__ int best_indices[64];
+    __shared__ int num_candidates;
 
-    // Initialize thread-local top-k
-    for (int i = 0; i < k; i++) {
-        thread_dists[tid * k + i] = FLT_MAX;
-        thread_indices[tid * k + i] = -1;
+    // Clear visited set
+    for (int i = tid; i < 8192; i += blockDim.x) {
+        visited_set[i] = 0;
     }
+    if (tid == 0) num_candidates = 0;
+    __syncthreads();
 
-    // Each thread processes different vectors
-    for (int vid = tid; vid < num_vectors && vid < 1000; vid += blockDim.x) {
-        const int8_t* db_vec = database + vid * EMBED_DIM;
+    // Start from multiple random entry points
+    int num_entries = min(8, num_vectors);
+    int entry_stride = num_vectors / num_entries;
+    const int VISIT_MASK = 8192 * 32 - 1;  // 262143 - modular hash to fit in bitmap
 
-        // Compute distance
+    // Each warp handles one entry point initially
+    if (warp_id < num_entries && lane_id == 0) {
+        int entry = warp_id * entry_stride;
+        int hash_entry = entry & VISIT_MASK;  // Modular hash
+        atomicOr(&visited_set[hash_entry / 32], 1 << (hash_entry % 32));
+
+        const int8_t* db_vec = database + entry * EMBED_DIM;
         int32_t dot = int8_dot_product_512(query, db_vec);
-        float dist = -dot * query_scale * db_scales[vid].scale;
+        float dist = -dot * query_scale * db_scales[entry].scale;
 
-        // Update thread-local top-k
-        for (int i = 0; i < k; i++) {
-            if (dist < thread_dists[tid * k + i]) {
-                // Shift and insert
-                for (int j = k-1; j > i; j--) {
-                    thread_dists[tid * k + j] = thread_dists[tid * k + j-1];
-                    thread_indices[tid * k + j] = thread_indices[tid * k + j-1];
-                }
-                thread_dists[tid * k + i] = dist;
-                thread_indices[tid * k + i] = vid;
-                break;
-            }
+        int slot = atomicAdd(&num_candidates, 1);
+        if (slot < 64) {
+            best_dists[slot] = dist;
+            best_indices[slot] = entry;
         }
     }
     __syncthreads();
 
-    // Merge thread results - only thread 0 does final merge
-    if (tid == 0) {
-        for (int t = 0; t < blockDim.x; t++) {
-            for (int i = 0; i < k; i++) {
-                float dist = thread_dists[t * k + i];
-                int idx = thread_indices[t * k + i];
-                if (idx >= 0) {
-                    // Insert into global top-k
-                    for (int j = 0; j < k; j++) {
-                        if (dist < top_k_dists[j]) {
-                            for (int l = k-1; l > j; l--) {
-                                top_k_dists[l] = top_k_dists[l-1];
-                                top_k_indices[l] = top_k_indices[l-1];
-                            }
-                            top_k_dists[j] = dist;
-                            top_k_indices[j] = idx;
-                            break;
+    // Graph traversal iterations
+    for (int iter = 0; iter < MAX_PROBES; iter++) {
+        // Find best unvisited candidate
+        __shared__ int best_candidate;
+        __shared__ float best_candidate_dist;
+
+        if (tid == 0) {
+            best_candidate = -1;
+            best_candidate_dist = FLT_MAX;
+            for (int i = 0; i < num_candidates && i < 64; i++) {
+                if (best_indices[i] >= 0 && best_dists[i] < best_candidate_dist) {
+                    best_candidate_dist = best_dists[i];
+                    best_candidate = best_indices[i];
+                }
+            }
+        }
+        __syncthreads();
+
+        if (best_candidate < 0) break;
+
+        // Explore neighbors of best candidate
+        int node_idx = best_candidate;
+        if (node_idx >= 0 && node_idx < num_vectors) {
+            // Each thread in warp handles different neighbor
+            int neighbor_idx = lane_id;
+            if (neighbor_idx < CAGRA_DEGREE) {
+                int neighbor = graph[node_idx].neighbors[neighbor_idx];
+                if (neighbor >= 0 && neighbor < num_vectors) {
+                    // Check if visited using modular hash
+                    int hash_neighbor = neighbor & VISIT_MASK;
+                    int word = hash_neighbor / 32;
+                    int bit = hash_neighbor % 32;
+                    int old = atomicOr(&visited_set[word], 1 << bit);
+                    bool was_visited = (old >> bit) & 1;
+
+                    if (!was_visited) {
+                        const int8_t* db_vec = database + neighbor * EMBED_DIM;
+                        int32_t dot = int8_dot_product_512(query, db_vec);
+                        float dist = -dot * query_scale * db_scales[neighbor].scale;
+
+                        // Add to candidates
+                        int slot = atomicAdd(&num_candidates, 1);
+                        if (slot < 64) {
+                            best_dists[slot] = dist;
+                            best_indices[slot] = neighbor;
                         }
+                    }
+                }
+            }
+        }
+        __syncthreads();
+    }
+
+    // Extract top-k from candidates
+    if (tid == 0) {
+        for (int c = 0; c < num_candidates && c < 64; c++) {
+            float dist = best_dists[c];
+            int idx = best_indices[c];
+            if (idx >= 0) {
+                for (int j = 0; j < k; j++) {
+                    if (dist < top_k_dists[j]) {
+                        for (int l = k-1; l > j; l--) {
+                            top_k_dists[l] = top_k_dists[l-1];
+                            top_k_indices[l] = top_k_indices[l-1];
+                        }
+                        top_k_dists[j] = dist;
+                        top_k_indices[j] = idx;
+                        break;
                     }
                 }
             }
@@ -256,7 +311,7 @@ __global__ void fused_embed_cagra_search_kernel(
     }
 }
 
-// Simple k-NN graph builder
+// Optimized k-NN graph builder with sampling for large datasets
 __global__ void build_knn_graph_kernel(
     const int8_t* __restrict__ database,
     const QuantParams* __restrict__ db_scales,
@@ -271,7 +326,6 @@ __global__ void build_knn_graph_kernel(
     const int8_t* query_vec = database + vid * embed_dim;
     float query_scale = db_scales[vid].scale;
 
-    // Find k nearest neighbors
     float distances[CAGRA_DEGREE];
     int indices[CAGRA_DEGREE];
 
@@ -280,21 +334,22 @@ __global__ void build_knn_graph_kernel(
         indices[i] = -1;
     }
 
-    // Brute force search (can be optimized)
-    for (int other = 0; other < num_vectors && other < 1000; other++) {
+    // For large datasets, use sampling + local refinement
+    // Sample stride based on dataset size to limit comparisons
+    int sample_size = min(num_vectors, 10000);  // Compare against 10K samples max
+    int stride = max(1, num_vectors / sample_size);
+
+    // First pass: sample-based search
+    for (int s = 0; s < sample_size; s++) {
+        int other = (s * stride + vid * 17) % num_vectors;  // Pseudo-random but deterministic
         if (other == vid) continue;
 
         const int8_t* other_vec = database + other * embed_dim;
         float other_scale = db_scales[other].scale;
 
-        // Compute distance
-        int32_t dot = 0;
-        for (int i = 0; i < embed_dim; i++) {
-            dot += int32_t(query_vec[i]) * int32_t(other_vec[i]);
-        }
+        int32_t dot = int8_dot_product_512(query_vec, other_vec);
         float dist = -dot * query_scale * other_scale;
 
-        // Update neighbors
         for (int i = 0; i < degree; i++) {
             if (dist < distances[i]) {
                 for (int j = degree-1; j > i; j--) {

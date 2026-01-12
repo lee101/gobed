@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cooperative_groups.h>
 #include <cuda_fp16.h>
+#include <cfloat>
 
 namespace cg = cooperative_groups;
 
@@ -20,7 +21,7 @@ struct CUDAIndex {
     int num_vectors;
     int vector_dim;
     size_t allocated_size;
-    
+
     // Embedding table for token lookups
     float* d_embeddings;    // Token embeddings [vocab_size x embed_dim]
     int8_t* d_embeddings_int8;  // Quantized int8 embeddings [vocab_size x embed_dim]
@@ -29,24 +30,36 @@ struct CUDAIndex {
     int embed_dim;
     int max_tokens;         // Max tokens to process (default 512)
     bool use_int8_embeddings;  // Whether to use int8 embeddings
-    
+
     // Bulk indexing cache
     float* d_batch_embeddings;  // Cached batch embeddings for bulk operations
     int batch_capacity;
-    
+
+    // Pre-allocated search buffers (avoid cudaMalloc per query)
+    int8_t* d_query_buffer;     // [vector_dim] - reused per query
+    float* d_scores_buffer;     // [max_search_vectors] - similarity scores
+    int* d_indices_buffer;      // [max_k] - top-k indices
+    float* d_topk_scores_buffer; // [max_k] - top-k scores
+    int search_buffer_capacity; // current max vectors the score buffer can hold
+    int topk_buffer_capacity;   // current max k the topk buffers can hold
+
     // CUDA streams for async execution
     cudaStream_t compute_stream;
     cudaStream_t transfer_stream;
-    
+
     cublasHandle_t cublas_handle;
     bool initialized;
-    
-    CUDAIndex() : d_database(nullptr), d_scales(nullptr), d_embeddings(nullptr), 
+
+    CUDAIndex() : d_database(nullptr), d_scales(nullptr), d_embeddings(nullptr),
                   d_embeddings_int8(nullptr), d_embedding_scales(nullptr),
                   num_vectors(0), vector_dim(0), allocated_size(0),
                   vocab_size(0), embed_dim(0), max_tokens(512),
-                  use_int8_embeddings(false), d_batch_embeddings(nullptr), 
-                  batch_capacity(0), compute_stream(0), transfer_stream(0),
+                  use_int8_embeddings(false), d_batch_embeddings(nullptr),
+                  batch_capacity(0),
+                  d_query_buffer(nullptr), d_scores_buffer(nullptr),
+                  d_indices_buffer(nullptr), d_topk_scores_buffer(nullptr),
+                  search_buffer_capacity(0), topk_buffer_capacity(0),
+                  compute_stream(0), transfer_stream(0),
                   initialized(false) {}
 };
 
@@ -1049,7 +1062,58 @@ int cuda_search_with_tokens(
     return k;
 }
 
-// Search with pre-computed int8 embedding
+// Helper: ensure search buffers are allocated for given capacity
+static void ensure_search_buffers(CUDAIndex* index, int num_vectors, int k) {
+    // Allocate/reallocate query buffer if needed
+    if (index->d_query_buffer == nullptr) {
+        cudaMalloc(&index->d_query_buffer, index->vector_dim * sizeof(int8_t));
+    }
+
+    // Allocate/reallocate scores buffer if capacity insufficient
+    if (index->search_buffer_capacity < num_vectors) {
+        if (index->d_scores_buffer) cudaFree(index->d_scores_buffer);
+        // Allocate with 20% headroom for growth
+        int new_cap = num_vectors + num_vectors / 5;
+        cudaMalloc(&index->d_scores_buffer, new_cap * sizeof(float));
+        index->search_buffer_capacity = new_cap;
+    }
+
+    // Allocate/reallocate topk buffers if k increased
+    if (index->topk_buffer_capacity < k) {
+        if (index->d_indices_buffer) cudaFree(index->d_indices_buffer);
+        if (index->d_topk_scores_buffer) cudaFree(index->d_topk_scores_buffer);
+        int new_k = k + 64; // headroom
+        cudaMalloc(&index->d_indices_buffer, new_k * sizeof(int));
+        cudaMalloc(&index->d_topk_scores_buffer, new_k * sizeof(float));
+        index->topk_buffer_capacity = new_k;
+    }
+}
+
+// Fast parallel top-k using thrust (radix sort partial)
+static void thrust_topk(float* d_scores, int* d_indices, float* d_top_scores, int n, int k, cudaStream_t stream) {
+    // Create index array
+    thrust::device_vector<int> idx(n);
+    thrust::sequence(thrust::cuda::par.on(stream), idx.begin(), idx.end());
+
+    // Wrap scores in device_ptr
+    thrust::device_ptr<float> scores_ptr(d_scores);
+
+    // Partial sort (only sorts enough to get top k) - use negative for descending
+    thrust::device_vector<float> neg_scores(n);
+    thrust::transform(thrust::cuda::par.on(stream), scores_ptr, scores_ptr + n, neg_scores.begin(),
+                      thrust::negate<float>());
+
+    // Sort by negative scores (gives descending order)
+    thrust::sort_by_key(thrust::cuda::par.on(stream), neg_scores.begin(), neg_scores.end(), idx.begin());
+
+    // Copy top k results
+    cudaMemcpyAsync(d_indices, thrust::raw_pointer_cast(idx.data()), k * sizeof(int), cudaMemcpyDeviceToDevice, stream);
+    // Negate back to get original scores
+    thrust::transform(thrust::cuda::par.on(stream), neg_scores.begin(), neg_scores.begin() + k,
+                      thrust::device_ptr<float>(d_top_scores), thrust::negate<float>());
+}
+
+// Search with pre-computed int8 embedding (optimized: reuses pre-allocated buffers)
 int cuda_search_with_embedding(
     void* index_ptr,
     const int8_t* query,
@@ -1060,78 +1124,43 @@ int cuda_search_with_embedding(
 ) {
     CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
     if (!index || !index->initialized || index->num_vectors == 0) return 0;
-    
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    // Allocate GPU memory
-    int8_t* d_query;
-    float* d_scores;
-    cudaMalloc(&d_query, index->vector_dim * sizeof(int8_t));
-    cudaMalloc(&d_scores, index->num_vectors * sizeof(float));
-    
-    // Copy query to GPU
-    cudaMemcpy(d_query, query, index->vector_dim * sizeof(int8_t), cudaMemcpyHostToDevice);
-    
+
+    // Ensure buffers are allocated (only allocates once, then reused)
+    ensure_search_buffers(index, index->num_vectors, k);
+
+    // Copy query to pre-allocated GPU buffer (async on transfer stream)
+    cudaMemcpyAsync(index->d_query_buffer, query, index->vector_dim * sizeof(int8_t),
+                    cudaMemcpyHostToDevice, index->transfer_stream);
+    cudaStreamSynchronize(index->transfer_stream);
+
     // Compute similarities using optimized vectorized kernel
     int block_size = 256;
     int grid_size = (index->num_vectors + block_size - 1) / block_size;
-    
-    // Use vectorized kernel for better performance
-    int8_dot_product_vectorized_kernel<<<grid_size, block_size>>>(
-        d_query, index->d_database, d_scores,
+
+    int8_dot_product_vectorized_kernel<<<grid_size, block_size, 0, index->compute_stream>>>(
+        index->d_query_buffer, index->d_database, index->d_scores_buffer,
         query_scale, index->d_scales,
         index->num_vectors, index->vector_dim
     );
-    
+
     // Check for kernel errors
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
-        std::cerr << "❌ Kernel launch failed: " << cudaGetErrorString(err) << std::endl;
-        cudaFree(d_query);
-        cudaFree(d_scores);
+        std::cerr << "Kernel launch failed: " << cudaGetErrorString(err) << std::endl;
         return 0;
     }
-    
-    // Find top-k using optimized heap kernel
-    int* d_indices;
-    float* d_top_scores;
-    cudaMalloc(&d_indices, k * sizeof(int));
-    cudaMalloc(&d_top_scores, k * sizeof(float));
-    
-    // Use heap-based top-k for better performance
-    if (k == 10) {
-        topk_heap_kernel<10><<<1, 256, 0, index->compute_stream>>>(
-            d_scores, d_indices, d_top_scores, index->num_vectors
-        );
-    } else if (k == 20) {
-        topk_heap_kernel<20><<<1, 256, 0, index->compute_stream>>>(
-            d_scores, d_indices, d_top_scores, index->num_vectors
-        );
-    } else {
-        // Fallback to original kernel
-        size_t shared_mem_size = k * (sizeof(float) + sizeof(int));
-        topk_selection_kernel<<<1, 256, shared_mem_size, index->compute_stream>>>(
-            d_scores, d_indices, d_top_scores, index->num_vectors, k
-        );
-    }
-    
-    cudaDeviceSynchronize();
-    
-    // Copy results back
-    cudaMemcpy(result_indices, d_indices, k * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(result_scores, d_top_scores, k * sizeof(float), cudaMemcpyDeviceToHost);
-    
-    // Cleanup
-    cudaFree(d_query);
-    cudaFree(d_scores);
-    cudaFree(d_indices);
-    cudaFree(d_top_scores);
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    
-    // GPU search with embeddings completed
-    
+
+    // Use fast thrust-based top-k (O(n log n) but highly parallel)
+    thrust_topk(index->d_scores_buffer, index->d_indices_buffer, index->d_topk_scores_buffer,
+                index->num_vectors, k, index->compute_stream);
+
+    cudaStreamSynchronize(index->compute_stream);
+
+    // Copy results back (async)
+    cudaMemcpyAsync(result_indices, index->d_indices_buffer, k * sizeof(int), cudaMemcpyDeviceToHost, index->transfer_stream);
+    cudaMemcpyAsync(result_scores, index->d_topk_scores_buffer, k * sizeof(float), cudaMemcpyDeviceToHost, index->transfer_stream);
+    cudaStreamSynchronize(index->transfer_stream);
+
     return k;
 }
 
@@ -1139,21 +1168,26 @@ int cuda_search_with_embedding(
 void cuda_index_destroy(void* index_ptr) {
     CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
     if (!index) return;
-    
+
     if (index->d_database) cudaFree(index->d_database);
     if (index->d_scales) cudaFree(index->d_scales);
     if (index->d_embeddings) cudaFree(index->d_embeddings);
     if (index->d_embeddings_int8) cudaFree(index->d_embeddings_int8);
     if (index->d_embedding_scales) cudaFree(index->d_embedding_scales);
-    
+
+    // Free pre-allocated search buffers
+    if (index->d_query_buffer) cudaFree(index->d_query_buffer);
+    if (index->d_scores_buffer) cudaFree(index->d_scores_buffer);
+    if (index->d_indices_buffer) cudaFree(index->d_indices_buffer);
+    if (index->d_topk_scores_buffer) cudaFree(index->d_topk_scores_buffer);
+
     // Destroy CUDA streams
     if (index->compute_stream) cudaStreamDestroy(index->compute_stream);
     if (index->transfer_stream) cudaStreamDestroy(index->transfer_stream);
-    
+
     if (index->initialized) cublasDestroy(index->cublas_handle);
-    
+
     delete index;
-    // CUDA index destroyed
 }
 
 // Get GPU memory usage

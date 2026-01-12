@@ -2,6 +2,7 @@ package src
 
 import (
 	"container/heap"
+	"fmt"
 	"math"
 	"runtime"
 	"sync"
@@ -15,9 +16,11 @@ import (
 // Pre-computes norms at index time for fastest search
 type OptimizedSearchEngine struct {
 	// Model (either int8 or float32)
-	int8Model    *gobed.Int8EmbeddingModel512
-	float32Model *gobed.EmbeddingModel
-	useInt8      bool
+	simpleInt8Model *gobed.SimpleInt8Model512 // Fast zero-alloc model
+	int8Model       *gobed.Int8EmbeddingModel512
+	float32Model    *gobed.EmbeddingModel
+	useInt8         bool
+	useSimpleInt8   bool
 
 	// Contiguous storage for cache-friendly int8 access
 	int8Embeddings []int8
@@ -51,7 +54,19 @@ func NewOptimizedSearchEngine() (*OptimizedSearchEngine, error) {
 		documents: make([]Document, 0),
 	}
 
-	// Try int8 model first (preferred for SIMD)
+	// Try SimpleInt8Model512 first (fastest - zero-alloc)
+	if simpleModel, err := gobed.LoadSimpleInt8Model512(); err == nil {
+		engine.simpleInt8Model = simpleModel
+		engine.useSimpleInt8 = true
+		engine.useInt8 = true
+		engine.int8Embeddings = make([]int8, 0)
+		engine.int8Scales = make([]float32, 0)
+		engine.int8NormProducts = make([]float32, 0)
+		engine.embeddingDim = 512
+		return engine, nil
+	}
+
+	// Try regular int8 model
 	if int8Model, err := gobed.LoadInt8Model512(); err == nil {
 		engine.int8Model = int8Model
 		engine.useInt8 = true
@@ -140,6 +155,9 @@ func (e *OptimizedSearchEngine) AddDocumentFloat32(doc Document, embedding []flo
 
 // Search performs optimized parallel search
 func (e *OptimizedSearchEngine) Search(query string, topK int, threshold float32) ([]SearchMatch, error) {
+	if topK <= 0 {
+		topK = 100
+	}
 	if e.useInt8 {
 		return e.searchInt8(query, topK, threshold)
 	}
@@ -155,8 +173,17 @@ func (e *OptimizedSearchEngine) searchInt8(query string, topK int, threshold flo
 		return nil, nil
 	}
 
-	// Embed query
-	queryResult, err := e.int8Model.EmbedInt8(query)
+	// Embed query using fastest available path
+	var queryResult *gobed.Int8Result512
+	var err error
+
+	if e.useSimpleInt8 && e.simpleInt8Model != nil {
+		queryResult, err = e.simpleInt8Model.EmbedInt8(query)
+	} else if e.int8Model != nil {
+		queryResult, err = e.int8Model.EmbedInt8(query)
+	} else {
+		return nil, fmt.Errorf("no int8 model available")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +408,16 @@ func (e *OptimizedSearchEngine) batchAddInt8(docs []Document, numWorkers int) er
 				end = len(docs)
 			}
 			for i := start; i < end; i++ {
-				emb, err := e.int8Model.EmbedInt8(docs[i].Content)
+				var emb *gobed.Int8Result512
+				var err error
+
+				// Use fastest available model
+				if e.useSimpleInt8 && e.simpleInt8Model != nil {
+					emb, err = e.simpleInt8Model.EmbedInt8(docs[i].Content)
+				} else if e.int8Model != nil {
+					emb, err = e.int8Model.EmbedInt8(docs[i].Content)
+				}
+
 				if err == nil && emb != nil {
 					// Pre-compute norm product
 					var normSq int32

@@ -7,6 +7,29 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
+)
+
+// Buffer pools for zero-allocation hot paths
+var (
+	float32Pool512 = sync.Pool{
+		New: func() interface{} {
+			buf := make([]float32, Int8EmbeddingDim)
+			return &buf
+		},
+	}
+	int8Pool512 = sync.Pool{
+		New: func() interface{} {
+			buf := make([]int8, Int8EmbeddingDim)
+			return &buf
+		},
+	}
+	tokenPool = sync.Pool{
+		New: func() interface{} {
+			buf := make([]int16, 0, 128)
+			return &buf
+		},
+	}
 )
 
 // SimpleInt8Model512 is a simple version that works without external C deps
@@ -17,20 +40,37 @@ type SimpleInt8Model512 struct {
 	tokenizer  *wordPieceTokenizer
 }
 
-// LoadSimpleInt8Model512 loads the int8 model with built-in tokenizer
+var simpleInt8ModelOnce sync.Once
+var simpleInt8ModelInstance *SimpleInt8Model512
+var simpleInt8ModelError error
+var simpleInt8Verbose = false
+
+// SetSimpleInt8Verbose controls whether model loading logs are printed
+func SetSimpleInt8Verbose(verbose bool) {
+	simpleInt8Verbose = verbose
+}
+
+// LoadSimpleInt8Model512 loads the int8 model with built-in tokenizer (singleton)
 func LoadSimpleInt8Model512() (*SimpleInt8Model512, error) {
+	simpleInt8ModelOnce.Do(func() {
+		simpleInt8ModelInstance, simpleInt8ModelError = loadSimpleInt8Model512Internal()
+	})
+	return simpleInt8ModelInstance, simpleInt8ModelError
+}
+
+func loadSimpleInt8Model512Internal() (*SimpleInt8Model512, error) {
 	modelPath := filepath.Join("model", "modelint8_512dim.safetensors")
 	tokenizerPath := filepath.Join("model", "tokenizer.json")
 
-	log.Printf(" Loading Simple Int8 512-dim model from %s", modelPath)
+	if simpleInt8Verbose {
+		log.Printf("Loading Simple Int8 512-dim model from %s", modelPath)
+	}
 
-	// Load the quantized model
 	embeddings, scales, err := loadInt8Embeddings(modelPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load embeddings: %v", err)
 	}
 
-	// Load simple vocab from tokenizer.json
 	vocab, err := loadSimpleVocab(tokenizerPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vocab: %v", err)
@@ -43,9 +83,11 @@ func LoadSimpleInt8Model512() (*SimpleInt8Model512, error) {
 		tokenizer:  newWordPieceTokenizer(vocab),
 	}
 
-	log.Printf(" Simple Int8 model loaded: vocab=%d, dims=%d, memory=%.1f MB",
-		len(embeddings), Int8EmbeddingDim,
-		float64(len(embeddings)*Int8EmbeddingDim+len(scales)*4)/(1024*1024))
+	if simpleInt8Verbose {
+		log.Printf("Simple Int8 model loaded: vocab=%d, dims=%d, memory=%.1f MB",
+			len(embeddings), Int8EmbeddingDim,
+			float64(len(embeddings)*Int8EmbeddingDim+len(scales)*4)/(1024*1024))
+	}
 
 	return model, nil
 }
@@ -74,7 +116,9 @@ func loadSimpleVocab(path string) (map[string]int16, error) {
 		}
 	}
 
-	log.Printf("Loaded %d tokens into vocab", len(vocab))
+	if simpleInt8Verbose {
+		log.Printf("Loaded %d tokens into vocab", len(vocab))
+	}
 	return vocab, nil
 }
 
@@ -141,6 +185,87 @@ func (m *SimpleInt8Model512) EmbedTokens(tokens []int16) ([]float32, error) {
 func (m *SimpleInt8Model512) Embed(text string) ([]float32, error) {
 	tokens := m.SimpleTokenize(text)
 	return m.EmbedTokens(tokens)
+}
+
+// EmbedTokensInto embeds tokens into a pre-allocated buffer (zero-alloc hot path)
+func (m *SimpleInt8Model512) EmbedTokensInto(tokens []int16, result []float32) int {
+	// Clear result
+	for i := range result {
+		result[i] = 0
+	}
+
+	validTokens := 0
+	vocabLen := len(m.embeddings)
+
+	for _, token := range tokens {
+		if token < 0 || int(token) >= vocabLen {
+			continue
+		}
+
+		embedding := m.embeddings[token]
+		scale := m.scales[token]
+
+		// Unrolled loop for 512 dims - process 8 at a time
+		for j := 0; j < Int8EmbeddingDim; j += 8 {
+			result[j] += float32(embedding[j]) * scale
+			result[j+1] += float32(embedding[j+1]) * scale
+			result[j+2] += float32(embedding[j+2]) * scale
+			result[j+3] += float32(embedding[j+3]) * scale
+			result[j+4] += float32(embedding[j+4]) * scale
+			result[j+5] += float32(embedding[j+5]) * scale
+			result[j+6] += float32(embedding[j+6]) * scale
+			result[j+7] += float32(embedding[j+7]) * scale
+		}
+		validTokens++
+	}
+
+	if validTokens > 1 {
+		invCount := 1.0 / float32(validTokens)
+		for i := 0; i < Int8EmbeddingDim; i += 8 {
+			result[i] *= invCount
+			result[i+1] *= invCount
+			result[i+2] *= invCount
+			result[i+3] *= invCount
+			result[i+4] *= invCount
+			result[i+5] *= invCount
+			result[i+6] *= invCount
+			result[i+7] *= invCount
+		}
+	}
+
+	return validTokens
+}
+
+// Token buffer pool with fixed size for zero-alloc tokenization
+var tokenBufPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]int16, 256) // max 256 tokens
+		return &buf
+	},
+}
+
+// EmbedFast is the zero-allocation embedding path using buffer pools
+func (m *SimpleInt8Model512) EmbedFast(text string) ([]float32, func()) {
+	// Get pooled token buffer
+	tokBufPtr := tokenBufPool.Get().(*[]int16)
+	tokens := *tokBufPtr
+
+	// Tokenize directly into buffer (zero-alloc)
+	var tokenCount int
+	if m.tokenizer != nil {
+		tokenCount = m.tokenizer.tokenizeZeroAlloc(text, tokens, nil)
+	}
+
+	// Get pooled result buffer
+	resultPtr := float32Pool512.Get().(*[]float32)
+	result := *resultPtr
+
+	m.EmbedTokensInto(tokens[:tokenCount], result)
+
+	return result, func() {
+		tokenBufPool.Put(tokBufPtr)
+		float32Pool512.Put(resultPtr)
+	}
 }
 
 // EmbedInt8 returns int8 quantized embedding

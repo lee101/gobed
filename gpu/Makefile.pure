@@ -1,5 +1,5 @@
 # Makefile for Pure CUDA implementation (no LibTorch)
-CUDA_PATH = /usr/local/cuda-12.0
+CUDA_PATH = /usr/local/cuda-12
 NVCC = $(CUDA_PATH)/bin/nvcc
 CXX = /usr/bin/g++-11
 

@@ -25,6 +25,7 @@ require (
 
 require (
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

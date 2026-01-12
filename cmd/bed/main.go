@@ -6,7 +6,7 @@ import (
 	"log"
 
 	gobed "github.com/lee101/gobed"
-	"github.com/lee101/gobed/bed"
+	"github.com/lee101/gobed/bed/lib"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 	cfg.NProbe = 8
 
 	fmt.Printf("Indexing directory: %s\n", *dirPath)
-	indexer, err := bed.NewFSIndexer(*dirPath, model, cfg)
+	indexer, err := lib.NewFSIndexer(*dirPath, model, cfg)
 	if err != nil {
 		log.Fatalf("Failed to create indexer: %v", err)
 	}
@@ -48,7 +48,7 @@ func main() {
 	}
 }
 
-func runSearch(indexer *bed.FSIndexer, query string, k int) {
+func runSearch(indexer *lib.FSIndexer, query string, k int) {
 	results, err := indexer.Index().Search(query, k)
 	if err != nil {
 		log.Fatalf("Search failed: %v", err)
@@ -71,8 +71,8 @@ func runBenchmark(model *gobed.EmbeddingModel, numQueries, k int) {
 		docs[i] = gobed.Document{ID: i, Text: fmt.Sprintf("benchmark doc %d content", i)}
 	}
 
-	evalCfg := bed.EvalConfig{K: k, NumQueries: numQueries, Warmup: 10}
-	result, err := bed.RunEval(model, docs, evalCfg)
+	evalCfg := lib.EvalConfig{K: k, NumQueries: numQueries, Warmup: 10}
+	result, err := lib.RunEval(model, docs, evalCfg)
 	if err != nil {
 		log.Fatalf("Benchmark failed: %v", err)
 	}

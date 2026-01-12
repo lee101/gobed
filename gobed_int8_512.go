@@ -141,6 +141,109 @@ func isWordChar(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'' || r == '_'
 }
 
+// tokenizeZeroAlloc tokenizes directly into result slice, returns token count
+// Uses a pre-allocated scratch buffer for word processing
+func (t *wordPieceTokenizer) tokenizeZeroAlloc(text string, result []int16, scratch []byte) int {
+	if len(t.vocab) == 0 {
+		return 0
+	}
+
+	count := 0
+	maxLen := len(result)
+
+	// Add CLS token
+	if t.addSpecial && t.clsID >= 0 && count < maxLen {
+		result[count] = t.clsID
+		count++
+	}
+
+	// Process text directly without allocating word slices
+	textBytes := []byte(strings.ToLower(text))
+	wordStart := -1
+
+	processWord := func(word []byte) {
+		if len(word) == 0 || count >= maxLen {
+			return
+		}
+
+		wordStr := string(word)
+		if id, ok := t.vocab[wordStr]; ok {
+			result[count] = id
+			count++
+			return
+		}
+
+		// WordPiece tokenization inline
+		start := 0
+		for start < len(word) && count < maxLen {
+			end := len(word)
+			var matched int16 = -1
+
+			for end > start {
+				var sub string
+				if start > 0 {
+					sub = "##" + string(word[start:end])
+				} else {
+					sub = string(word[start:end])
+				}
+
+				if id, ok := t.vocab[sub]; ok {
+					matched = id
+					result[count] = id
+					count++
+					start = end
+					break
+				}
+				end--
+			}
+
+			if matched == -1 {
+				if t.unkID >= 0 && count < maxLen {
+					result[count] = t.unkID
+					count++
+				}
+				break
+			}
+		}
+	}
+
+	for i := 0; i < len(textBytes); i++ {
+		b := textBytes[i]
+		isWord := (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '\'' || b == '_'
+
+		if isWord {
+			if wordStart < 0 {
+				wordStart = i
+			}
+		} else {
+			if wordStart >= 0 {
+				processWord(textBytes[wordStart:i])
+				wordStart = -1
+			}
+			// Handle punctuation as single-char token
+			if b != ' ' && b != '\t' && b != '\n' && b != '\r' {
+				if id, ok := t.vocab[string(b)]; ok && count < maxLen {
+					result[count] = id
+					count++
+				}
+			}
+		}
+	}
+
+	// Process last word
+	if wordStart >= 0 {
+		processWord(textBytes[wordStart:])
+	}
+
+	// Add SEP token
+	if t.addSpecial && t.sepID >= 0 && count < maxLen {
+		result[count] = t.sepID
+		count++
+	}
+
+	return count
+}
+
 func newWordPieceTokenizer(vocab map[string]int16) *wordPieceTokenizer {
 	tk := &wordPieceTokenizer{
 		vocab:      vocab,
