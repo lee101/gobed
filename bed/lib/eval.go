@@ -6,7 +6,7 @@ import (
     "time"
 
     gobed "github.com/lee101/gobed"
-    "github.com/lee101/gobed/ann/simd"
+    "github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // EvalConfig captures basic evaluation knobs.
