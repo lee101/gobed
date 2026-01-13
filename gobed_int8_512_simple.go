@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/lee101/gobed/pkg/ann/simd"
 )
 
 // Buffer pools for zero-allocation hot paths
@@ -234,6 +236,16 @@ func (m *SimpleInt8Model512) EmbedTokensInto(tokens []int16, result []float32) i
 	}
 
 	return validTokens
+}
+
+// EmbedTokensIntoSIMD uses AVX2 SIMD for faster embedding accumulation
+func (m *SimpleInt8Model512) EmbedTokensIntoSIMD(tokens []int16, result []float32) int {
+	if len(result) != Int8EmbeddingDim {
+		return m.EmbedTokensInto(tokens, result)
+	}
+
+	// Use SIMD-accelerated path
+	return simd.EmbedTokensIntoSIMD(m.embeddings, m.scales, tokens, result)
 }
 
 // Token buffer pool with fixed size for zero-alloc tokenization

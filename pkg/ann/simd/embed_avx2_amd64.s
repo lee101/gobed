@@ -5,10 +5,11 @@
 // func embed_accum_avx2(embedding *int8, scale float32, result *float32)
 // Accumulates int8 embedding * scale into float32 result buffer (512 dims)
 // This is the hot path for EmbedTokensInto
-TEXT ·embed_accum_avx2(SB), NOSPLIT, $0-20
+// Frame: embedding(8) + scale(4) + pad(4) + result(8) = 24 bytes
+TEXT ·embed_accum_avx2(SB), NOSPLIT, $0-24
     MOVQ embedding+0(FP), SI    // Source int8 embedding
     MOVSS scale+8(FP), X0       // Scale factor
-    MOVQ result+12(FP), DI      // Destination float32 buffer
+    MOVQ result+16(FP), DI      // Destination float32 buffer (after 4-byte padding)
 
     // Broadcast scale to all 8 lanes of Y0
     VBROADCASTSS X0, Y0         // Y0 = [scale, scale, ..., scale] x8

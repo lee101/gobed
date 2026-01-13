@@ -34,28 +34,25 @@ func embedAccumBatchFallback(embeddings [][]int8, scales []float32, result []flo
 }
 
 // EmbedTokensIntoSIMD is the optimized embedding function using SIMD
-// Returns number of valid tokens processed
+// Returns number of valid tokens processed (zero allocation hot path)
 func EmbedTokensIntoSIMD(embeddings [][]int8, scales []float32, tokens []int16, result []float32) int {
 	if len(result) != 512 {
 		return 0
 	}
 
-	// Clear result
+	// Clear result using SIMD
 	ClearF32(result)
 
 	validTokens := 0
 	vocabLen := len(embeddings)
 
-	// Collect valid embeddings and scales
-	validEmbs := make([][]int8, 0, len(tokens))
-	validScales := make([]float32, 0, len(tokens))
-
+	// Process each token directly - no intermediate allocations
 	for _, token := range tokens {
 		if token < 0 || int(token) >= vocabLen {
 			continue
 		}
-		validEmbs = append(validEmbs, embeddings[token])
-		validScales = append(validScales, scales[token])
+		// Accumulate this embedding using SIMD
+		EmbedAccum(embeddings[token], scales[token], result)
 		validTokens++
 	}
 
@@ -63,10 +60,7 @@ func EmbedTokensIntoSIMD(embeddings [][]int8, scales []float32, tokens []int16, 
 		return 0
 	}
 
-	// Use batch SIMD accumulation
-	EmbedAccumBatch(validEmbs, validScales, result)
-
-	// Average
+	// Average using SIMD
 	if validTokens > 1 {
 		ScaleF32(result, 1.0/float32(validTokens))
 	}
