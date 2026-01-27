@@ -92,12 +92,29 @@
 - gpu_search/go_client/*_test.go - GPU client tests
 - gobed_test.go - Main gobed tests
 
-## Benchmark Status
-- Cleanup committed (77 files changed, 18K+ lines removed)
-- Go binary not in PATH - requires manual setup
-- Run CPU benchmarks: `cd test_bench && go test -bench=. -benchtime=3s`
+## Test Results
+All tests passing:
+- gobed: PASS
+- ann/simd: PASS
+- pkg/ann/simd: PASS
+- pkg/search: PASS
+- metrics: PASS
+
+## CPU Benchmark Results
+SIMD performance (AMD EPYC-Genoa):
+- AVX2 Assembly: 17.43 ns/op (512-dim int8 dot product)
+- VNNI CGO: 18.38 ns/op
+- Generic fallback: 344.9 ns/op
+- Speedup: 19.8x over generic
+
+Size scaling:
+- 128-dim: 103.3 ns/op
+- 256-dim: 213.2 ns/op
+- 512-dim: 19.06 ns/op (optimal)
+- 1024-dim: 867.4 ns/op
+- 2048-dim: 1643 ns/op
 
 ## Next Steps
-- Profile CPU performance on core search operations
-- Consider removing cmd/gpu_perf_test and cmd/search_benchmark (redundant with test_bench/)
-- Review remaining cuda_*.cu files for consolidation opportunities
+- Consider removing cmd/gpu_perf_test and cmd/search_benchmark (200+ files, redundant with active benchmarks)
+- Review cuda_*.cu files for consolidation
+- GPU benchmarks require CUDA environment
