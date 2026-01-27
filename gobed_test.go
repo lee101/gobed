@@ -8,12 +8,28 @@ import (
 // mustLoadModelForTest loads the embedding model or skips the test when unavailable.
 func mustLoadModelForTest(t *testing.T) *EmbeddingModel {
 	t.Helper()
-	return loadModelOrSkip(t)
+	model, err := NewEmbeddingModel("model/int8_512", 512)
+	if err != nil {
+		t.Skipf("Skipping test: model unavailable: %v", err)
+	}
+	return model
 }
 
 func mustLoadModelForBenchmark(b *testing.B) *EmbeddingModel {
 	b.Helper()
-	return loadModelOrSkipB(b)
+	model, err := NewEmbeddingModel("model/int8_512", 512)
+	if err != nil {
+		b.Skipf("Skipping benchmark: model unavailable: %v", err)
+	}
+	return model
+}
+
+func isModelUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return containsWord(errStr, "model") || containsWord(errStr, "file") || containsWord(errStr, "not found")
 }
 
 func TestEmbeddingModelWithRealModel(t *testing.T) {

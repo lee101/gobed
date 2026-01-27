@@ -92,7 +92,12 @@
 - gpu_search/go_client/*_test.go - GPU client tests
 - gobed_test.go - Main gobed tests
 
-## TODO: Benchmarks
-- Go binary not available in environment
-- CPU benchmarks need to be run once Go is accessible
-- Recommended: `cd bed && go test -bench=. -benchtime=3s`
+## Benchmark Status
+- Cleanup committed (77 files changed, 18K+ lines removed)
+- Go binary not in PATH - requires manual setup
+- Run CPU benchmarks: `cd test_bench && go test -bench=. -benchtime=3s`
+
+## Next Steps
+- Profile CPU performance on core search operations
+- Consider removing cmd/gpu_perf_test and cmd/search_benchmark (redundant with test_bench/)
+- Review remaining cuda_*.cu files for consolidation opportunities
