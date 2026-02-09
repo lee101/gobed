@@ -23,6 +23,14 @@ struct FusedContext {
     int num_vectors;
     int top_k;
     int embed_dim;
+    // Preallocated search buffers (avoid cudaMalloc per query)
+    uint16_t* d_tokens;
+    int* d_lengths;
+    float* d_distances;
+    int* d_indices;
+    int max_batch_size;
+    int max_tokens;
+    cudaStream_t stream;
 };
 
 // Optimized int8 dot product using dp4a intrinsic
@@ -45,17 +53,34 @@ __device__ __forceinline__ int32_t dot_product_int8(
     return sum;
 }
 
-// Parallel reduction to find max value in shared memory
+// Warp-level max reduction using shuffle (no syncthreads needed within warp)
+__device__ __forceinline__ float warp_reduce_max(float val) {
+    #pragma unroll
+    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
+        val = fmaxf(val, __shfl_down_sync(0xFFFFFFFF, val, offset));
+    }
+    return val;
+}
+
+// Optimized parallel reduction - uses warp shuffles for final stages
 __device__ float reduce_max_shared(float* sdata, int tid) {
     __syncthreads();
 
-    // Parallel reduction
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+    // Block-level reduction down to warp size using shared memory
+    for (int s = blockDim.x / 2; s > WARP_SIZE; s >>= 1) {
         if (tid < s) {
             sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
         }
         __syncthreads();
     }
+
+    // Final warp-level reduction using shuffles (no syncthreads needed)
+    float val = (tid < WARP_SIZE) ? sdata[tid] : 0.0f;
+    if (tid < WARP_SIZE) {
+        val = warp_reduce_max(val);
+        if (tid == 0) sdata[0] = val;
+    }
+    __syncthreads();
 
     return sdata[0];
 }
@@ -292,6 +317,17 @@ void* create_fused_context(
     cudaMemcpy(ctx->d_database, database, db_size, cudaMemcpyHostToDevice);
     cudaMemcpy(ctx->d_db_scales, db_scales, num_vectors * sizeof(float), cudaMemcpyHostToDevice);
 
+    // Preallocate search buffers (default: batch=32, tokens=128)
+    ctx->max_batch_size = 32;
+    ctx->max_tokens = 128;
+    cudaMalloc(&ctx->d_tokens, ctx->max_batch_size * ctx->max_tokens * sizeof(uint16_t));
+    cudaMalloc(&ctx->d_lengths, ctx->max_batch_size * sizeof(int));
+    cudaMalloc(&ctx->d_distances, ctx->max_batch_size * top_k * sizeof(float));
+    cudaMalloc(&ctx->d_indices, ctx->max_batch_size * top_k * sizeof(int));
+
+    // Create stream for async ops
+    cudaStreamCreate(&ctx->stream);
+
     cudaDeviceSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -317,20 +353,29 @@ void fused_search(
 
     FusedContext* ctx = (FusedContext*)context;
 
-    // Allocate device memory
-    uint16_t* d_tokens;
-    int* d_lengths;
-    float* d_distances;
-    int* d_indices;
+    // Grow preallocated buffers if needed (rare path)
+    if (batch_size > ctx->max_batch_size || max_tokens > ctx->max_tokens) {
+        int new_batch = (batch_size > ctx->max_batch_size) ? batch_size * 2 : ctx->max_batch_size;
+        int new_tokens = (max_tokens > ctx->max_tokens) ? max_tokens * 2 : ctx->max_tokens;
 
-    cudaMalloc(&d_tokens, batch_size * max_tokens * sizeof(uint16_t));
-    cudaMalloc(&d_lengths, batch_size * sizeof(int));
-    cudaMalloc(&d_distances, batch_size * ctx->top_k * sizeof(float));
-    cudaMalloc(&d_indices, batch_size * ctx->top_k * sizeof(int));
+        cudaFree(ctx->d_tokens);
+        cudaFree(ctx->d_lengths);
+        cudaFree(ctx->d_distances);
+        cudaFree(ctx->d_indices);
 
-    // Copy inputs
-    cudaMemcpy(d_tokens, token_batch, batch_size * max_tokens * sizeof(uint16_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_lengths, token_lengths, batch_size * sizeof(int), cudaMemcpyHostToDevice);
+        ctx->max_batch_size = new_batch;
+        ctx->max_tokens = new_tokens;
+        cudaMalloc(&ctx->d_tokens, new_batch * new_tokens * sizeof(uint16_t));
+        cudaMalloc(&ctx->d_lengths, new_batch * sizeof(int));
+        cudaMalloc(&ctx->d_distances, new_batch * ctx->top_k * sizeof(float));
+        cudaMalloc(&ctx->d_indices, new_batch * ctx->top_k * sizeof(int));
+    }
+
+    // Async copy inputs using stream
+    cudaMemcpyAsync(ctx->d_tokens, token_batch, batch_size * max_tokens * sizeof(uint16_t),
+                    cudaMemcpyHostToDevice, ctx->stream);
+    cudaMemcpyAsync(ctx->d_lengths, token_lengths, batch_size * sizeof(int),
+                    cudaMemcpyHostToDevice, ctx->stream);
 
     // Calculate shared memory size
     size_t shared_size = EMBED_DIM * sizeof(float) +           // query_float
@@ -339,36 +384,33 @@ void fused_search(
                         BLOCK_SIZE * ctx->top_k * sizeof(float) +  // all_dists
                         BLOCK_SIZE * ctx->top_k * sizeof(int);     // all_indices
 
-    // Launch kernel
+    // Launch kernel on stream
     dim3 grid(batch_size);
     dim3 block(BLOCK_SIZE);
 
-    fused_embed_search_kernel<<<grid, block, shared_size>>>(
-        d_tokens, d_lengths,
+    fused_embed_search_kernel<<<grid, block, shared_size, ctx->stream>>>(
+        ctx->d_tokens, ctx->d_lengths,
         batch_size, max_tokens,
         ctx->d_embed_weights, ctx->d_embed_scales, ctx->vocab_size,
         ctx->d_database, ctx->d_db_scales, ctx->num_vectors,
         ctx->embed_dim,
-        d_distances, d_indices,
+        ctx->d_distances, ctx->d_indices,
         ctx->top_k
     );
 
-    cudaDeviceSynchronize();
+    // Async copy results back
+    cudaMemcpyAsync(output_distances, ctx->d_distances, batch_size * ctx->top_k * sizeof(float),
+                    cudaMemcpyDeviceToHost, ctx->stream);
+    cudaMemcpyAsync(output_indices, ctx->d_indices, batch_size * ctx->top_k * sizeof(int),
+                    cudaMemcpyDeviceToHost, ctx->stream);
+
+    // Wait for completion
+    cudaStreamSynchronize(ctx->stream);
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA error in fused_search kernel: %s\n", cudaGetErrorString(err));
     }
-
-    // Copy results back
-    cudaMemcpy(output_distances, d_distances, batch_size * ctx->top_k * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(output_indices, d_indices, batch_size * ctx->top_k * sizeof(int), cudaMemcpyDeviceToHost);
-
-    // Clean up
-    cudaFree(d_tokens);
-    cudaFree(d_lengths);
-    cudaFree(d_distances);
-    cudaFree(d_indices);
 }
 
 void destroy_fused_context(void* context) {
@@ -378,6 +420,12 @@ void destroy_fused_context(void* context) {
         cudaFree(ctx->d_embed_scales);
         cudaFree(ctx->d_database);
         cudaFree(ctx->d_db_scales);
+        // Free preallocated search buffers
+        cudaFree(ctx->d_tokens);
+        cudaFree(ctx->d_lengths);
+        cudaFree(ctx->d_distances);
+        cudaFree(ctx->d_indices);
+        cudaStreamDestroy(ctx->stream);
         delete ctx;
     }
 }

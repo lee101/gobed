@@ -9,6 +9,7 @@ struct SimpleSearchContext {
     int8_t* d_docs;
     float* d_scores;
     int* d_indices;
+    int8_t* d_query;  // Preallocated query buffer
     int max_docs;
     int dim;
     cudaStream_t stream;
@@ -49,30 +50,75 @@ __global__ void simple_int8_similarity_kernel(
     scores[idx] = (float)dot;
 }
 
-// Simple top-k selection kernel
+// Optimized top-k: each thread finds local top-k, then merge
+// Much faster than bubble sort O(k*n) -> O(n/threads + threads*k^2)
 __global__ void simple_topk_kernel(
     const float* scores,
     int* indices,
     int num_docs,
     int k
 ) {
-    // Initialize indices
-    for (int i = threadIdx.x; i < num_docs; i += blockDim.x) {
-        indices[i] = i;
+    extern __shared__ char smem[];
+    float* local_scores = (float*)smem;
+    int* local_indices = (int*)(local_scores + blockDim.x * k);
+
+    int tid = threadIdx.x;
+    int chunk_size = (num_docs + blockDim.x - 1) / blockDim.x;
+    int start = tid * chunk_size;
+    int end = min(start + chunk_size, num_docs);
+
+    // Initialize thread-local top-k
+    float* my_scores = local_scores + tid * k;
+    int* my_indices = local_indices + tid * k;
+    for (int i = 0; i < k; i++) {
+        my_scores[i] = -1e30f;
+        my_indices[i] = -1;
+    }
+
+    // Find local top-k for this thread's chunk
+    for (int i = start; i < end; i++) {
+        float score = scores[i];
+        if (score > my_scores[k-1]) {
+            // Insert into sorted position
+            int pos = k - 1;
+            while (pos > 0 && score > my_scores[pos-1]) {
+                my_scores[pos] = my_scores[pos-1];
+                my_indices[pos] = my_indices[pos-1];
+                pos--;
+            }
+            my_scores[pos] = score;
+            my_indices[pos] = i;
+        }
     }
     __syncthreads();
 
-    // Simple bubble sort for top-k (works well for small k)
-    for (int i = 0; i < k && i < num_docs; i++) {
-        for (int j = threadIdx.x + i + 1; j < num_docs; j += blockDim.x) {
-            if (scores[indices[j]] > scores[indices[i]]) {
-                // Swap indices
-                int temp = indices[i];
-                indices[i] = indices[j];
-                indices[j] = temp;
+    // Thread 0 merges all local top-k results
+    if (tid == 0) {
+        for (int i = 0; i < k; i++) {
+            indices[i] = -1;
+        }
+        float final_scores[64];  // Max k=64
+        for (int i = 0; i < k && i < 64; i++) {
+            final_scores[i] = -1e30f;
+        }
+
+        // Merge from all threads
+        for (int t = 0; t < blockDim.x; t++) {
+            float* t_scores = local_scores + t * k;
+            int* t_indices = local_indices + t * k;
+            for (int i = 0; i < k; i++) {
+                if (t_indices[i] >= 0 && t_scores[i] > final_scores[k-1]) {
+                    int pos = k - 1;
+                    while (pos > 0 && t_scores[i] > final_scores[pos-1]) {
+                        final_scores[pos] = final_scores[pos-1];
+                        indices[pos] = indices[pos-1];
+                        pos--;
+                    }
+                    final_scores[pos] = t_scores[i];
+                    indices[pos] = t_indices[i];
+                }
             }
         }
-        __syncthreads();
     }
 }
 
@@ -111,12 +157,23 @@ void* simple_search_create(int max_docs, int dim) {
         return nullptr;
     }
 
+    // Preallocate query buffer
+    err = cudaMalloc(&ctx->d_query, dim * sizeof(int8_t));
+    if (err != cudaSuccess) {
+        cudaFree(ctx->d_docs);
+        cudaFree(ctx->d_scores);
+        cudaFree(ctx->d_indices);
+        delete ctx;
+        return nullptr;
+    }
+
     // Create stream for async operations
     err = cudaStreamCreate(&ctx->stream);
     if (err != cudaSuccess) {
         cudaFree(ctx->d_docs);
         cudaFree(ctx->d_scores);
         cudaFree(ctx->d_indices);
+        cudaFree(ctx->d_query);
         delete ctx;
         return nullptr;
     }
@@ -131,6 +188,7 @@ void simple_search_destroy(void* handle) {
     cudaFree(ctx->d_docs);
     cudaFree(ctx->d_scores);
     cudaFree(ctx->d_indices);
+    cudaFree(ctx->d_query);
     cudaStreamDestroy(ctx->stream);
 
     delete ctx;
@@ -162,7 +220,7 @@ int simple_search_add_vectors(void* handle, const int8_t* docs, int num_docs) {
     return 0;
 }
 
-// Perform search
+// Perform search (zero-allocation hot path)
 int simple_search_query(
     void* handle,
     const int8_t* query,
@@ -173,29 +231,10 @@ int simple_search_query(
     if (!handle) return -1;
     SimpleSearchContext* ctx = (SimpleSearchContext*)handle;
 
-    // Allocate temporary GPU memory for query
-    int8_t* d_query;
-    cudaError_t err = cudaMalloc(&d_query, ctx->dim * sizeof(int8_t));
-    if (err != cudaSuccess) {
-        return -1;
-    }
+    // Copy query to preallocated GPU buffer
+    cudaMemcpyAsync(ctx->d_query, query, ctx->dim * sizeof(int8_t),
+                    cudaMemcpyHostToDevice, ctx->stream);
 
-    // Copy query to GPU
-    err = cudaMemcpyAsync(
-        d_query,
-        query,
-        ctx->dim * sizeof(int8_t),
-        cudaMemcpyHostToDevice,
-        ctx->stream
-    );
-
-    if (err != cudaSuccess) {
-        cudaFree(d_query);
-        return -1;
-    }
-
-    // For this simple version, we'll assume all slots are used
-    // In a real implementation, you'd track the actual number of documents
     int num_docs = ctx->max_docs;
 
     // Launch similarity kernel
@@ -203,71 +242,24 @@ int simple_search_query(
     int blocks = (num_docs + threads_per_block - 1) / threads_per_block;
 
     simple_int8_similarity_kernel<<<blocks, threads_per_block, 0, ctx->stream>>>(
-        d_query,
-        ctx->d_docs,
-        ctx->d_scores,
-        num_docs,
-        ctx->dim
-    );
+        ctx->d_query, ctx->d_docs, ctx->d_scores, num_docs, ctx->dim);
 
-    err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        cudaFree(d_query);
-        return -1;
-    }
-
-    // Launch top-k kernel
-    simple_topk_kernel<<<1, min(1024, num_docs), 0, ctx->stream>>>(
-        ctx->d_scores,
-        ctx->d_indices,
-        num_docs,
-        k
-    );
-
-    err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        cudaFree(d_query);
-        return -1;
-    }
+    // Launch top-k kernel with shared memory for local top-k
+    int topk_threads = min(256, num_docs);
+    size_t smem_size = topk_threads * k * (sizeof(float) + sizeof(int));
+    simple_topk_kernel<<<1, topk_threads, smem_size, ctx->stream>>>(
+        ctx->d_scores, ctx->d_indices, num_docs, k);
 
     // Copy results back
-    err = cudaMemcpyAsync(
-        out_indices,
-        ctx->d_indices,
-        k * sizeof(int),
-        cudaMemcpyDeviceToHost,
-        ctx->stream
-    );
+    cudaMemcpyAsync(out_indices, ctx->d_indices, k * sizeof(int),
+                    cudaMemcpyDeviceToHost, ctx->stream);
+    cudaMemcpyAsync(out_scores, ctx->d_scores, k * sizeof(float),
+                    cudaMemcpyDeviceToHost, ctx->stream);
 
-    if (err != cudaSuccess) {
-        cudaFree(d_query);
-        return -1;
-    }
+    cudaStreamSynchronize(ctx->stream);
 
-    err = cudaMemcpyAsync(
-        out_scores,
-        ctx->d_scores,
-        k * sizeof(float),
-        cudaMemcpyDeviceToHost,
-        ctx->stream
-    );
-
-    if (err != cudaSuccess) {
-        cudaFree(d_query);
-        return -1;
-    }
-
-    // Synchronize to ensure completion
-    err = cudaStreamSynchronize(ctx->stream);
-    if (err != cudaSuccess) {
-        cudaFree(d_query);
-        return -1;
-    }
-
-    // Clean up
-    cudaFree(d_query);
-
-    return 0;
+    cudaError_t err = cudaGetLastError();
+    return (err == cudaSuccess) ? 0 : -1;
 }
 
 } // extern "C"

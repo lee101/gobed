@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -66,10 +67,22 @@ type SimilarityResult struct {
 
 // findModelFile attempts to locate a model file across common paths
 func findModelFile(filename string) (string, error) {
+	// Check environment variable first
+	if envPath := os.Getenv("GOBED_MODEL_PATH"); envPath != "" {
+		fullPath := filepath.Join(envPath, filename)
+		if _, err := os.Stat(fullPath); err == nil {
+			return fullPath, nil
+		}
+	}
+
+	// Standard search paths
+	homeDir, _ := os.UserHomeDir()
 	paths := []string{
 		"model/" + filename,
 		"../../model/" + filename,
 		"./model/" + filename,
+		filepath.Join(homeDir, "code/gobed/model", filename), // Absolute fallback
+		"/home/lee/code/gobed/model/" + filename,              // Hard-coded fallback
 	}
 
 	for _, path := range paths {

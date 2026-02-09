@@ -662,3 +662,15 @@ func (m *Int8EmbeddingModel512) GetMemoryUsage() string {
 		float64(ms.Sys)/(1024*1024),
 	)
 }
+
+// GetInt8Weights returns flattened embedding weights and scales for GPU use
+func (m *Int8EmbeddingModel512) GetInt8Weights() ([]int8, []float32) {
+	vocabSize := len(m.embeddings)
+	flatWeights := make([]int8, vocabSize*Int8EmbeddingDim)
+	for i := 0; i < vocabSize; i++ {
+		copy(flatWeights[i*Int8EmbeddingDim:(i+1)*Int8EmbeddingDim], m.embeddings[i])
+	}
+	scalesCopy := make([]float32, len(m.scales))
+	copy(scalesCopy, m.scales)
+	return flatWeights, scalesCopy
+}

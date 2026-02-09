@@ -27,15 +27,15 @@ const (
 
 // FastBedSearcher uses the optimized int8 model for fast semantic search
 type FastBedSearcher struct {
-	model          *gobed.SimpleInt8Model512
-	documents      []Document
-	embeddings     [][]float32
+	model            *gobed.SimpleInt8Model512
+	documents        []Document
+	embeddings       [][]float32
 	precomputedNorms []float32
-	mu             sync.RWMutex
-	ignoreFilter   *EnhancedIgnoreFilter
-	queryProcessor *QueryProcessor
-	verbose        bool
-	indexed        int64
+	mu               sync.RWMutex
+	ignoreFilter     *EnhancedIgnoreFilter
+	queryProcessor   *QueryProcessor
+	verbose          bool
+	indexed          int64
 }
 
 // NewFastBedSearcher creates a new fast searcher using int8 model
@@ -54,12 +54,12 @@ func NewFastBedSearcher() (*FastBedSearcher, error) {
 	}
 
 	return &FastBedSearcher{
-		model:          model,
-		documents:      make([]Document, 0, 10000),
-		embeddings:     make([][]float32, 0, 10000),
+		model:            model,
+		documents:        make([]Document, 0, 10000),
+		embeddings:       make([][]float32, 0, 10000),
 		precomputedNorms: make([]float32, 0, 10000),
-		ignoreFilter:   ignoreFilter,
-		queryProcessor: NewQueryProcessor(),
+		ignoreFilter:     ignoreFilter,
+		queryProcessor:   NewQueryProcessor(),
 	}, nil
 }
 
@@ -212,6 +212,25 @@ func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions)
 
 // Search performs fast semantic search with pre-computed norms
 func (fs *FastBedSearcher) Search(options BedSearchOptions) error {
+	matches, err := fs.SearchMatches(options)
+	if err != nil {
+		return err
+	}
+
+	fs.mu.RLock()
+	hasDocs := len(fs.documents) > 0
+	fs.mu.RUnlock()
+	if !hasDocs {
+		fmt.Println("No documents indexed")
+		return nil
+	}
+
+	fs.displayResults(matches, options)
+	return nil
+}
+
+// SearchMatches performs fast semantic search and returns matches for programmatic use.
+func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatch, error) {
 	fs.verbose = options.Verbose
 
 	// Process query - use original query, not enhanced (enhanced hurts embedding quality)
@@ -223,7 +242,7 @@ func (fs *FastBedSearcher) Search(options BedSearchOptions) error {
 	// Index if needed
 	if !options.NoIndex {
 		if err := fs.IndexDirectory(".", options); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -241,13 +260,10 @@ func (fs *FastBedSearcher) Search(options BedSearchOptions) error {
 	defer fs.mu.RUnlock()
 
 	// Parallel search with pre-computed norms
-
 	numDocs := len(fs.documents)
 	if numDocs == 0 {
-		fmt.Println("No documents indexed")
-		return nil
+		return nil, nil
 	}
-
 
 	// Use parallel workers for large corpora
 	numWorkers := runtime.NumCPU()
@@ -334,13 +350,18 @@ func (fs *FastBedSearcher) Search(options BedSearchOptions) error {
 		allResults = allResults[:options.Limit]
 	}
 
-	// Display results
-	fs.displayResults(allResults, options)
+	matches := make([]SearchMatch, len(allResults))
+	for i, r := range allResults {
+		matches[i] = SearchMatch{
+			Document:   fs.documents[r.idx],
+			Similarity: r.score,
+		}
+	}
 
-	return nil
+	return matches, nil
 }
 
-func (fs *FastBedSearcher) displayResults(results []scored, options BedSearchOptions) {
+func (fs *FastBedSearcher) displayResults(results []SearchMatch, options BedSearchOptions) {
 	if len(results) == 0 {
 		fmt.Println("No results found")
 		return
@@ -349,7 +370,7 @@ func (fs *FastBedSearcher) displayResults(results []scored, options BedSearchOpt
 	fmt.Printf("Found %d result(s)\n\n", len(results))
 
 	for i, r := range results {
-		doc := fs.documents[r.idx]
+		doc := r.Document
 
 		if shouldUseColor("auto") {
 			fmt.Printf("\033[35m%s\033[0m:\033[32m%d\033[0m: %s\n",
@@ -359,7 +380,7 @@ func (fs *FastBedSearcher) displayResults(results []scored, options BedSearchOpt
 		}
 
 		if options.Verbose {
-			fmt.Printf("  [Similarity: %.3f]\n", r.score)
+			fmt.Printf("  [Similarity: %.3f]\n", r.Similarity)
 		}
 
 		if i < len(results)-1 && options.Context > 0 {
