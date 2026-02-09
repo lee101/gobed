@@ -1,0 +1,16 @@
+[Unit]
+Description=Bed Semantic Search Daemon (User)
+Documentation=https://github.com/lee101/gobed
+
+[Service]
+Type=simple
+
+# Main process - watches home directory by default
+ExecStart=%h/.local/bin/bed daemon %h --port 8765 --socket %t/bed.sock
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,44 @@
+[Unit]
+Description=Bed Semantic Search Daemon
+Documentation=https://github.com/lee101/gobed
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+
+# Environment
+Environment=HOME=%h
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+# Main process
+ExecStart=/usr/local/bin/bed daemon %h --port 8765 --socket /run/bed/bed.sock
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Resource limits
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitInterval=60
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/bed
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Runtime directory for socket
+RuntimeDirectory=bed
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target

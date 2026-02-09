@@ -80,6 +80,25 @@ var configCmd = &cobra.Command{
 	RunE:  runConfig,
 }
 
+var daemonCmd = &cobra.Command{
+	Use:   "daemon [paths...]",
+	Short: "Run as persistent daemon with inotify watching",
+	Long: `Run bed as a persistent daemon that maintains an in-memory index
+and watches for file changes via inotify. Exposes search via HTTP and Unix socket.
+
+Examples:
+  bed daemon .                           # Watch current directory
+  bed daemon /home/user/code --port 8080 # Watch with HTTP API
+  bed daemon . --socket /tmp/bed.sock    # Unix socket for local clients`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: runDaemon,
+}
+
+var (
+	flagDaemonPort   int
+	flagDaemonSocket string
+)
+
 func Execute() error {
 	return rootCmd.Execute()
 }
@@ -108,10 +127,31 @@ func init() {
 	indexCmd.Flags().BoolVar(&flagForceIndex, "force", false, "Force complete re-indexing")
 	indexCmd.Flags().IntVar(&flagContext, "batch-size", 1000, "Indexing batch size")
 
+	// Daemon-specific flags
+	daemonCmd.Flags().IntVar(&flagDaemonPort, "port", 8765, "HTTP server port")
+	daemonCmd.Flags().StringVar(&flagDaemonSocket, "socket", "", "Unix socket path")
+
 	// Add subcommands
 	rootCmd.AddCommand(indexCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(daemonCmd)
+}
+
+func runDaemon(cmd *cobra.Command, args []string) error {
+	config := DaemonConfig{
+		WatchPaths: args,
+		HTTPPort:   flagDaemonPort,
+		SocketPath: flagDaemonSocket,
+		Verbose:    flagVerbose,
+	}
+
+	daemon, err := NewBedDaemon(config)
+	if err != nil {
+		return err
+	}
+
+	return daemon.Run()
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
