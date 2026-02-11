@@ -33,5 +33,3 @@ require (
 	github.com/sugarme/regexpset v0.0.0-20200920021344-4d4ec8eaf93c // indirect
 	golang.org/x/text v0.25.0 // indirect
 )
-
-exclude github.com/sugarme/gotch v0.9.1
