@@ -10,7 +10,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/klauspost/compress v1.18.0
-	github.com/lee101/gobed v0.0.0
+	github.com/lee101/gobed v1.0.0
 	github.com/schollz/progressbar/v3 v3.14.1
 	github.com/spf13/cobra v1.8.0
 	golang.org/x/sync v0.17.0

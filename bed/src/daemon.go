@@ -17,12 +17,12 @@ import (
 )
 
 type DaemonConfig struct {
-	WatchPaths   []string
-	SocketPath   string
-	HTTPPort     int
-	Verbose      bool
-	BatchDelay   time.Duration
-	MaxFileSize  int64
+	WatchPaths  []string
+	SocketPath  string
+	HTTPPort    int
+	Verbose     bool
+	BatchDelay  time.Duration
+	MaxFileSize int64
 }
 
 type BedDaemon struct {
@@ -31,11 +31,23 @@ type BedDaemon struct {
 	watcher      *fsnotify.Watcher
 	ignoreFilter *EnhancedIgnoreFilter
 
-	pendingUpdates map[string]time.Time
+	pendingUpdates map[string]pendingUpdate
 	updateMu       sync.Mutex
 
 	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+type updateOperation uint8
+
+const (
+	updateOpUpsert updateOperation = iota
+	updateOpDelete
+)
+
+type pendingUpdate struct {
+	op       updateOperation
+	updateAt time.Time
 }
 
 type SearchRequest struct {
@@ -61,7 +73,10 @@ func NewBedDaemon(config DaemonConfig) (*BedDaemon, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create searcher: %w", err)
 	}
+	return newBedDaemonWithSearcher(config, searcher)
+}
 
+func newBedDaemonWithSearcher(config DaemonConfig, searcher *FastBedSearcher) (*BedDaemon, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create watcher: %w", err)
@@ -73,6 +88,18 @@ func NewBedDaemon(config DaemonConfig) (*BedDaemon, error) {
 	if config.MaxFileSize == 0 {
 		config.MaxFileSize = 10 * 1024 * 1024
 	}
+	if len(config.WatchPaths) > 0 {
+		normalized := make([]string, 0, len(config.WatchPaths))
+		for _, p := range config.WatchPaths {
+			absPath, err := filepath.Abs(p)
+			if err != nil {
+				normalized = append(normalized, filepath.Clean(p))
+				continue
+			}
+			normalized = append(normalized, filepath.Clean(absPath))
+		}
+		config.WatchPaths = normalized
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -80,7 +107,7 @@ func NewBedDaemon(config DaemonConfig) (*BedDaemon, error) {
 		config:         config,
 		searcher:       searcher,
 		watcher:        watcher,
-		pendingUpdates: make(map[string]time.Time),
+		pendingUpdates: make(map[string]pendingUpdate),
 		ctx:            ctx,
 		cancel:         cancel,
 	}, nil
@@ -91,13 +118,15 @@ func (d *BedDaemon) Run() error {
 
 	// Initial index build
 	fmt.Printf("Building initial index...\n")
-	for _, path := range d.config.WatchPaths {
-		if err := d.searcher.IndexDirectory(path, BedSearchOptions{Verbose: d.config.Verbose}); err != nil {
-			return fmt.Errorf("failed to index %s: %w", path, err)
-		}
+	if err := d.searcher.IndexPaths(d.config.WatchPaths, BedSearchOptions{
+		Verbose:        d.config.Verbose,
+		ForceIndex:     false,
+		SearchBinaries: false,
+	}); err != nil {
+		return fmt.Errorf("failed to build initial index: %w", err)
 	}
 	fmt.Printf("Initial index: %d documents in %.2fs\n",
-		len(d.searcher.documents), time.Since(startTime).Seconds())
+		d.searcher.NumDocuments(), time.Since(startTime).Seconds())
 
 	// Setup file watching
 	for _, path := range d.config.WatchPaths {
@@ -166,10 +195,24 @@ func (d *BedDaemon) watchLoop() {
 			if !ok {
 				return
 			}
-			if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-				d.updateMu.Lock()
-				d.pendingUpdates[event.Name] = time.Now()
-				d.updateMu.Unlock()
+			path := normalizeIndexPath(event.Name)
+
+			if event.Op&fsnotify.Create != 0 {
+				if info, err := os.Stat(path); err == nil && info.IsDir() {
+					if err := d.addWatchRecursive(path); err != nil && d.config.Verbose {
+						fmt.Printf("Failed to watch new directory %s: %v\n", path, err)
+					}
+					continue
+				}
+			}
+
+			if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+				d.enqueueUpdate(path, updateOpDelete)
+				continue
+			}
+
+			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Chmod) != 0 {
+				d.enqueueUpdate(path, updateOpUpsert)
 			}
 		case err, ok := <-d.watcher.Errors:
 			if !ok {
@@ -181,6 +224,24 @@ func (d *BedDaemon) watchLoop() {
 		case <-d.ctx.Done():
 			return
 		}
+	}
+}
+
+func (d *BedDaemon) enqueueUpdate(path string, op updateOperation) {
+	d.updateMu.Lock()
+	defer d.updateMu.Unlock()
+
+	existing, ok := d.pendingUpdates[path]
+	if ok {
+		// Deletion has precedence for the same path in a batch.
+		if existing.op == updateOpDelete && op == updateOpUpsert {
+			return
+		}
+	}
+
+	d.pendingUpdates[path] = pendingUpdate{
+		op:       op,
+		updateAt: time.Now(),
 	}
 }
 
@@ -207,54 +268,72 @@ func (d *BedDaemon) processPendingUpdates() {
 
 	// Collect files older than batch delay
 	cutoff := time.Now().Add(-d.config.BatchDelay)
-	var toProcess []string
-	for path, t := range d.pendingUpdates {
-		if t.Before(cutoff) {
-			toProcess = append(toProcess, path)
+	ready := make(map[string]pendingUpdate)
+	for path, update := range d.pendingUpdates {
+		if update.updateAt.Before(cutoff) {
+			ready[path] = update
 			delete(d.pendingUpdates, path)
 		}
 	}
 	d.updateMu.Unlock()
 
-	if len(toProcess) == 0 {
+	if len(ready) == 0 {
 		return
 	}
 
-	// Update embeddings for changed files
-	for _, path := range toProcess {
-		d.updateFile(path)
+	updated := 0
+	for path, update := range ready {
+		if d.applyUpdate(path, update.op) {
+			updated++
+		}
 	}
 
 	if d.config.Verbose {
-		fmt.Printf("Updated %d files\n", len(toProcess))
+		fmt.Printf("Applied %d index update(s)\n", updated)
 	}
 }
 
-func (d *BedDaemon) updateFile(path string) {
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() || info.Size() > d.config.MaxFileSize {
-		return
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-
-	// Check if binary
-	for i, b := range content {
-		if b == 0 {
-			return
+func (d *BedDaemon) applyUpdate(path string, op updateOperation) bool {
+	switch op {
+	case updateOpDelete:
+		d.searcher.RemoveFile(path)
+		if d.config.Verbose {
+			fmt.Printf("Removed from index: %s\n", path)
 		}
-		if i > 8192 {
-			break
+		return true
+
+	case updateOpUpsert:
+		info, err := os.Stat(path)
+		if err != nil {
+			d.searcher.RemoveFile(path)
+			if d.config.Verbose {
+				fmt.Printf("Removed missing path from index: %s\n", path)
+			}
+			return true
 		}
+		if info.IsDir() {
+			return false
+		}
+		if info.Size() > d.config.MaxFileSize {
+			d.searcher.RemoveFile(path)
+			if d.config.Verbose {
+				fmt.Printf("Removed oversized file from index: %s\n", path)
+			}
+			return true
+		}
+		if err := d.searcher.UpsertFile(path, BedSearchOptions{SearchBinaries: false}); err != nil {
+			if d.config.Verbose {
+				fmt.Printf("Failed to upsert %s: %v\n", path, err)
+			}
+			return false
+		}
+		if d.config.Verbose {
+			fmt.Printf("Upserted: %s\n", path)
+		}
+		return true
 	}
 
-	// Re-embed the file (for now just log - full incremental update needs more work)
-	if d.config.Verbose {
-		fmt.Printf("File changed: %s\n", path)
-	}
+	return false
 }
 
 func (d *BedDaemon) runUnixSocket() error {
@@ -360,12 +439,8 @@ func (d *BedDaemon) runHTTPServer() error {
 	})
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		d.searcher.mu.RLock()
-		indexed := len(d.searcher.documents)
-		d.searcher.mu.RUnlock()
-
 		resp := StatusResponse{
-			Indexed:    indexed,
+			Indexed:    d.searcher.NumDocuments(),
 			WatchPaths: len(d.config.WatchPaths),
 			Uptime:     time.Since(startTime).Seconds(),
 		}

@@ -83,30 +83,49 @@ func NewCAGRABedSearcher() (*CAGRABedSearcher, error) {
 
 // Search mirrors the SimpleBedSearcher API but uses CAGRA on GPU.
 func (c *CAGRABedSearcher) Search(options BedSearchOptions) error {
-	c.verbose = options.Verbose
-	if err := c.ensureIndex(".", options); err != nil {
-		return fmt.Errorf("indexing failed: %w", err)
+	matches, err := c.SearchMatches(options)
+	if err != nil {
+		return err
 	}
 
-	// Tokenize+embed query to int8
+	// Keep same display as SimpleBedSearcher for consistency
+	s := &SimpleBedSearcher{verbose: c.verbose}
+	s.displayResults(matches, options)
+	return nil
+}
+
+// BuildIndex forces an index build for the specified path.
+func (c *CAGRABedSearcher) BuildIndex(path string, options BedSearchOptions) error {
+	c.verbose = options.Verbose
+	if err := c.ensureBasePath(path); err != nil {
+		return err
+	}
+	return c.buildIndex(c.basePath, options)
+}
+
+// SearchMatches performs GPU search and returns structured results.
+func (c *CAGRABedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatch, error) {
+	c.verbose = options.Verbose
+	if err := c.ensureIndex(c.basePath, options); err != nil {
+		return nil, fmt.Errorf("indexing failed: %w", err)
+	}
+
 	qr, err := c.model.EmbedInt8(options.Query)
 	if err != nil {
-		return fmt.Errorf("failed to embed query: %w", err)
+		return nil, fmt.Errorf("failed to embed query: %w", err)
 	}
 	var qv simdpkg.Vec512
 	copy(qv[:], qr.Vector)
 
-	// Run CAGRA search
 	k := options.Limit
 	if k <= 0 {
 		k = 10
 	}
 	results, err := c.index.Search(qv, qr.Scale, k)
 	if err != nil {
-		return fmt.Errorf("cagra search failed: %w", err)
+		return nil, fmt.Errorf("cagra search failed: %w", err)
 	}
 
-	// Convert and display
 	matches := make([]SearchMatch, 0, len(results))
 	for _, r := range results {
 		if r.ID < 0 || r.ID >= len(c.docs) {
@@ -125,10 +144,11 @@ func (c *CAGRABedSearcher) Search(options BedSearchOptions) error {
 		})
 	}
 
-	// Keep same display as SimpleBedSearcher for consistency
-	s := &SimpleBedSearcher{verbose: c.verbose}
-	s.displayResults(matches, options)
-	return nil
+	return matches, nil
+}
+
+func (c *CAGRABedSearcher) NumDocuments() int {
+	return len(c.docs)
 }
 
 func (c *CAGRABedSearcher) ensureIndex(path string, options BedSearchOptions) error {
@@ -137,6 +157,9 @@ func (c *CAGRABedSearcher) ensureIndex(path string, options BedSearchOptions) er
 	}
 
 	if options.NoIndex {
+		if len(c.docs) > 0 && c.index != nil {
+			return nil
+		}
 		return c.loadCachedIndex(options)
 	}
 	return c.buildIndex(c.basePath, options)

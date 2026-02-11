@@ -3,6 +3,7 @@ package src
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lee101/gobed"
 	"github.com/spf13/cobra"
@@ -24,6 +25,10 @@ var (
 	flagConfig         string
 	flagProgressive    bool
 	flagSearchBinaries bool
+
+	// Index flags
+	flagIndexBatchSize int
+	flagIndexWatch     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -95,8 +100,9 @@ Examples:
 }
 
 var (
-	flagDaemonPort   int
-	flagDaemonSocket string
+	flagDaemonPort       int
+	flagDaemonSocket     string
+	flagDaemonBatchDelay time.Duration
 )
 
 func Execute() error {
@@ -125,11 +131,13 @@ func init() {
 
 	// Index-specific flags
 	indexCmd.Flags().BoolVar(&flagForceIndex, "force", false, "Force complete re-indexing")
-	indexCmd.Flags().IntVar(&flagContext, "batch-size", 1000, "Indexing batch size")
+	indexCmd.Flags().IntVar(&flagIndexBatchSize, "batch-size", 1000, "Indexing batch size")
+	indexCmd.Flags().BoolVar(&flagIndexWatch, "watch", false, "Keep watching filesystem changes and live-update the index")
 
 	// Daemon-specific flags
 	daemonCmd.Flags().IntVar(&flagDaemonPort, "port", 8765, "HTTP server port")
 	daemonCmd.Flags().StringVar(&flagDaemonSocket, "socket", "", "Unix socket path")
+	daemonCmd.Flags().DurationVar(&flagDaemonBatchDelay, "batch-delay", 100*time.Millisecond, "Debounce window for filesystem update batching")
 
 	// Add subcommands
 	rootCmd.AddCommand(indexCmd)
@@ -144,6 +152,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 		HTTPPort:   flagDaemonPort,
 		SocketPath: flagDaemonSocket,
 		Verbose:    flagVerbose,
+		BatchDelay: flagDaemonBatchDelay,
 	}
 
 	daemon, err := NewBedDaemon(config)
@@ -258,16 +267,37 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		useGPU = flagGPU
 	}
 
+	if flagIndexWatch {
+		config := DaemonConfig{
+			WatchPaths: []string{path},
+			HTTPPort:   0,
+			SocketPath: "",
+			Verbose:    flagVerbose,
+			BatchDelay: flagDaemonBatchDelay,
+		}
+
+		daemon, err := NewBedDaemon(config)
+		if err != nil {
+			return fmt.Errorf("failed to start watch mode: %w", err)
+		}
+		return daemon.Run()
+	}
+
 	indexer, err := NewIndexer()
 	if err != nil {
 		return fmt.Errorf("failed to initialize indexer: %w", err)
 	}
 	defer indexer.Close()
 
+	batchSize := flagIndexBatchSize
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+
 	options := IndexOptions{
 		Path:      path,
 		Force:     flagForceIndex,
-		BatchSize: flagContext, // reusing context flag as batch size
+		BatchSize: batchSize,
 		UseGPU:    useGPU,
 		Verbose:   flagVerbose,
 	}
