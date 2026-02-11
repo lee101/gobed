@@ -109,3 +109,5 @@ netwrck_gpu_server
 *.prof
 .bed
 *.bin
+ivf_bench
+fused_bench
