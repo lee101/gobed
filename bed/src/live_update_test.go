@@ -191,6 +191,135 @@ func TestFastBedSearcherIgnoresLongLines(t *testing.T) {
 	}
 }
 
+func TestFastBedSearcherNoIndexLoadsCachedIndex(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "cache.txt")
+	token := "bed_no_index_cache_token_98765"
+	if err := os.WriteFile(target, []byte(token+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write cache file: %v", err)
+	}
+
+	indexer := newTestFastSearcher(t, dir)
+	if err := indexer.IndexDirectory(dir, BedSearchOptions{ForceIndex: true}); err != nil {
+		t.Fatalf("failed to build index: %v", err)
+	}
+	indexer.Close()
+
+	if _, err := os.Stat(filepath.Join(dir, ".bed", "fast_index.bin")); err != nil {
+		t.Fatalf("expected on-disk cache to exist: %v", err)
+	}
+
+	searcher := newTestFastSearcher(t, dir)
+	defer searcher.Close()
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+	defer os.Chdir(wd)
+
+	matches, err := searcher.SearchMatches(BedSearchOptions{
+		Query:     token,
+		NoIndex:   true,
+		Threshold: 0.1,
+		Limit:     5,
+	})
+	if err != nil {
+		t.Fatalf("expected cache-backed no-index search to succeed: %v", err)
+	}
+	if len(matches) == 0 {
+		t.Fatalf("expected matches from cached index")
+	}
+	if !strings.Contains(matches[0].Document.Content, token) {
+		t.Fatalf("expected cached result to include token %q, got %q", token, matches[0].Document.Content)
+	}
+}
+
+func TestFastBedSearcherNoIndexWithoutCacheReturnsHelpfulError(t *testing.T) {
+	dir := t.TempDir()
+	searcher := newTestFastSearcher(t, dir)
+	defer searcher.Close()
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+	defer os.Chdir(wd)
+
+	_, err = searcher.SearchMatches(BedSearchOptions{
+		Query:   "no cache exists",
+		NoIndex: true,
+		Limit:   5,
+	})
+	if err == nil {
+		t.Fatalf("expected no-index search without cache to fail")
+	}
+	if !strings.Contains(err.Error(), "no cached index found") {
+		t.Fatalf("expected actionable no-cache error, got: %v", err)
+	}
+}
+
+func TestEnhancedIgnoreFilterDirectoryRules(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("secret/\n"), 0644); err != nil {
+		t.Fatalf("failed to write .gitignore: %v", err)
+	}
+
+	secretFile := filepath.Join(dir, "secret", "keys.txt")
+	vendorFile := filepath.Join(dir, "vendor", "lib", "dep.txt")
+	modelFile := filepath.Join(dir, "model", "tokenizer.json")
+	cacheFile := filepath.Join(dir, ".bed", "fast_index.bin")
+	keepFile := filepath.Join(dir, "src", "keep.go")
+
+	for _, p := range []string{
+		filepath.Dir(secretFile),
+		filepath.Dir(vendorFile),
+		filepath.Dir(modelFile),
+		filepath.Dir(cacheFile),
+		filepath.Dir(keepFile),
+	} {
+		if err := os.MkdirAll(p, 0755); err != nil {
+			t.Fatalf("failed to create %s: %v", p, err)
+		}
+	}
+
+	writeText := func(path string, content string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", path, err)
+		}
+	}
+	writeText(secretFile, "secret token")
+	writeText(vendorFile, "vendored dep")
+	writeText(modelFile, "{}")
+	writeText(cacheFile, "index")
+	writeText(keepFile, "package src")
+
+	filter, err := NewEnhancedIgnoreFilter(dir)
+	if err != nil {
+		t.Fatalf("failed to build enhanced ignore filter: %v", err)
+	}
+
+	for _, ignored := range []string{secretFile, vendorFile, modelFile, cacheFile} {
+		shouldProcess, _ := filter.ShouldProcess(ignored)
+		if shouldProcess {
+			t.Fatalf("expected %s to be ignored", ignored)
+		}
+	}
+
+	shouldProcess, _ := filter.ShouldProcess(keepFile)
+	if !shouldProcess {
+		t.Fatalf("expected regular source file to be indexed")
+	}
+}
+
 func waitForTokenState(t *testing.T, searcher *FastBedSearcher, token string, wantPresent bool) {
 	t.Helper()
 

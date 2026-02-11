@@ -10,6 +10,10 @@ import (
 )
 
 var (
+	buildVersion = "dev"
+	buildCommit  = ""
+	buildDate    = ""
+
 	// Global flags
 	flagLimit          int
 	flagContext        int
@@ -110,6 +114,9 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.Version = cliVersion()
+	rootCmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
+
 	// Global flags
 	rootCmd.PersistentFlags().IntVarP(&flagLimit, "limit", "l", 10, "Maximum number of results")
 	rootCmd.PersistentFlags().IntVarP(&flagContext, "context", "c", 2, "Lines of context around matches")
@@ -191,6 +198,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		} else if flagVerbose {
 			fmt.Printf("Fast searcher unavailable: %v\n", e)
 		}
+	}
+
+	if srch == nil && flagNoIndex {
+		return fmt.Errorf("--no-index requires a reusable fast index cache in the current directory; run `bed index .` first or rerun without --no-index")
 	}
 
 	// Fallback to adaptive searcher
@@ -283,9 +294,31 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		return daemon.Run()
 	}
 
-	indexer, err := NewIndexer()
-	if err != nil {
-		return fmt.Errorf("failed to initialize indexer: %w", err)
+	searcher, err := NewFastBedSearcher()
+	if err == nil {
+		defer searcher.Close()
+
+		start := time.Now()
+		if err := searcher.IndexDirectory(path, BedSearchOptions{
+			ForceIndex:     flagForceIndex,
+			SearchBinaries: flagSearchBinaries,
+			UseGPU:         useGPU,
+			Verbose:        flagVerbose,
+		}); err != nil {
+			return err
+		}
+
+		fmt.Printf("Indexed %d documents in %.2fs\n", searcher.NumDocuments(), time.Since(start).Seconds())
+		return nil
+	}
+
+	if flagVerbose {
+		fmt.Printf("Fast indexer unavailable (%v), falling back to full model indexer\n", err)
+	}
+
+	indexer, legacyErr := NewIndexer()
+	if legacyErr != nil {
+		return fmt.Errorf("failed to initialize indexer: %w", legacyErr)
 	}
 	defer indexer.Close()
 
@@ -294,15 +327,14 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		batchSize = 1000
 	}
 
-	options := IndexOptions{
-		Path:      path,
-		Force:     flagForceIndex,
-		BatchSize: batchSize,
-		UseGPU:    useGPU,
-		Verbose:   flagVerbose,
-	}
+	legacyOpts := DefaultIndexOptions()
+	legacyOpts.Path = path
+	legacyOpts.Force = flagForceIndex
+	legacyOpts.BatchSize = batchSize
+	legacyOpts.UseGPU = useGPU
+	legacyOpts.Verbose = flagVerbose
 
-	return indexer.Index(options)
+	return indexer.Index(legacyOpts)
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -350,4 +382,18 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	}
 
 	return config.Display()
+}
+
+func cliVersion() string {
+	version := buildVersion
+	if version == "" {
+		version = "dev"
+	}
+	if buildCommit != "" {
+		version += "+" + buildCommit
+	}
+	if buildDate != "" {
+		version += " (" + buildDate + ")"
+	}
+	return version
 }

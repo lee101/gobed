@@ -76,7 +76,7 @@ func DefaultConfig() *Config {
 			// Common build/cache directories
 			"node_modules", ".git", ".svn", ".hg",
 			"build", "dist", "target", "bin", "obj",
-			".cache", ".tmp", "temp", "vendor",
+			".cache", ".tmp", "temp", "vendor", ".bed", "model",
 
 			// Binary/media files
 			"*.exe", "*.dll", "*.so", "*.dylib",

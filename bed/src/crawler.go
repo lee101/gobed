@@ -41,22 +41,23 @@ type Crawler struct {
 	basePath     string
 	ignoreFilter *IgnoreFilter
 	config       *Config
-	
+
 	// Async processing
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	workerWG sync.WaitGroup
+
 	// Channels for pipeline
-	filePaths    chan string
-	fileInfos    chan *FileInfo
-	results      chan *FileInfo
-	errors       chan error
-	
+	filePaths chan string
+	fileInfos chan *FileInfo
+	results   chan *FileInfo
+	errors    chan error
+
 	// Stats
-	stats        *CrawlStats
-	statsLock    sync.RWMutex
-	
+	stats     *CrawlStats
+	statsLock sync.RWMutex
+
 	// File watcher for incremental updates
 	watcher      *fsnotify.Watcher
 	watchEnabled bool
@@ -129,10 +130,22 @@ func (c *Crawler) Crawl(options CrawlOptions) (<-chan *FileInfo, <-chan error, e
 	go c.discoverFiles(options)
 
 	// Start file processing workers
-	for i := 0; i < options.MaxWorkers; i++ {
-		c.wg.Add(1)
+	workerCount := options.MaxWorkers
+	if workerCount <= 0 {
+		workerCount = 1
+	}
+	for i := 0; i < workerCount; i++ {
+		c.workerWG.Add(1)
 		go c.processFiles(options)
 	}
+
+	// Close fileInfo stream when all workers are done.
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.workerWG.Wait()
+		close(c.fileInfos)
+	}()
 
 	// Start result aggregation
 	c.wg.Add(1)
@@ -225,7 +238,7 @@ func (c *Crawler) discoverFiles(options CrawlOptions) {
 
 // processFiles processes discovered files
 func (c *Crawler) processFiles(options CrawlOptions) {
-	defer c.wg.Done()
+	defer c.workerWG.Done()
 
 	for {
 		select {
@@ -358,9 +371,9 @@ func (c *Crawler) watchFiles() {
 			}
 
 			// Only care about write and create events
-			if event.Op&fsnotify.Write == fsnotify.Write || 
-			   event.Op&fsnotify.Create == fsnotify.Create {
-				
+			if event.Op&fsnotify.Write == fsnotify.Write ||
+				event.Op&fsnotify.Create == fsnotify.Create {
+
 				// Check if we should ignore this file
 				if c.ignoreFilter.ShouldIgnore(event.Name) {
 					continue
@@ -383,7 +396,7 @@ func (c *Crawler) watchFiles() {
 			if !ok {
 				return
 			}
-			
+
 			select {
 			case c.errors <- fmt.Errorf("watcher error: %w", err):
 			case <-c.ctx.Done():
@@ -400,14 +413,14 @@ func (c *Crawler) watchFiles() {
 func (c *Crawler) Stats() CrawlStats {
 	c.statsLock.RLock()
 	defer c.statsLock.RUnlock()
-	
+
 	stats := *c.stats
 	if stats.EndTime.IsZero() {
 		stats.ElapsedTime = time.Since(stats.StartTime)
 	} else {
 		stats.ElapsedTime = stats.EndTime.Sub(stats.StartTime)
 	}
-	
+
 	return stats
 }
 
@@ -415,17 +428,17 @@ func (c *Crawler) Stats() CrawlStats {
 func (c *Crawler) Close() error {
 	c.cancel()
 	c.wg.Wait()
-	
+
 	c.statsLock.Lock()
 	if c.stats.EndTime.IsZero() {
 		c.stats.EndTime = time.Now()
 	}
 	c.statsLock.Unlock()
-	
+
 	if c.watcher != nil {
 		return c.watcher.Close()
 	}
-	
+
 	return nil
 }
 
@@ -434,19 +447,19 @@ func isTextContent(data []byte) bool {
 	if len(data) == 0 {
 		return true
 	}
-	
+
 	// Check for null bytes (common in binary files)
 	for i, b := range data {
 		if b == 0 {
 			return false
 		}
-		
+
 		// Only check first 8KB for performance
 		if i > 8192 {
 			break
 		}
 	}
-	
+
 	// Check for valid UTF-8 (simple check - strings.ValidString is not available in all Go versions)
 	return utf8.Valid(data)
 }
@@ -456,13 +469,13 @@ func countLines(content string) int {
 	if content == "" {
 		return 0
 	}
-	
+
 	lines := 1
 	for _, c := range content {
 		if c == '\n' {
 			lines++
 		}
 	}
-	
+
 	return lines
 }

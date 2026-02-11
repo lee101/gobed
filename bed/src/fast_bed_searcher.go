@@ -153,6 +153,19 @@ func (fs *FastBedSearcher) IndexDirectoryAppend(path string, options BedSearchOp
 
 func (fs *FastBedSearcher) indexDirectory(path string, options BedSearchOptions, appendMode bool) error {
 	startTime := time.Now()
+	indexBasePath := normalizeIndexPath(path)
+
+	runFilter, err := NewEnhancedIgnoreFilter(indexBasePath,
+		WithMaxFileSize(fs.ignoreFilter.maxFileSize),
+		WithBinarySearch(options.SearchBinaries),
+	)
+	if err != nil {
+		return err
+	}
+
+	fs.mu.Lock()
+	fs.ignoreFilter = runFilter
+	fs.mu.Unlock()
 
 	// Try loading cached index first for single-path full index builds.
 	if !appendMode && !options.ForceIndex && fs.tryLoadCachedIndex(path, options.Verbose) {
@@ -187,7 +200,7 @@ func (fs *FastBedSearcher) indexDirectory(path string, options BedSearchOptions,
 			}
 
 			normalizedPath := normalizeIndexPath(filePath)
-			shouldProcess, fileType := fs.ignoreFilter.ShouldProcess(normalizedPath)
+			shouldProcess, fileType := runFilter.ShouldProcess(normalizedPath)
 			if !shouldProcess {
 				if fileType == FileTypeBinary && options.SearchBinaries {
 					workChan <- workItem{
@@ -289,7 +302,7 @@ func (fs *FastBedSearcher) indexDirectory(path string, options BedSearchOptions,
 	// Save cache only for non-append mode to keep a stable single-root cache file.
 	if !appendMode {
 		saveStart := time.Now()
-		if err := fs.saveCachedIndex(path); err != nil {
+		if err := fs.saveCachedIndex(path, runFilter); err != nil {
 			if options.Verbose {
 				fmt.Printf("Warning: failed to save index cache: %v\n", err)
 			}
@@ -334,7 +347,16 @@ func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatc
 	}
 
 	// Index if needed
-	if !options.NoIndex {
+	if options.NoIndex {
+		fs.mu.RLock()
+		hasDocs := len(fs.documents) > 0
+		fs.mu.RUnlock()
+		if !hasDocs {
+			if !fs.tryLoadCachedIndex(".", options.Verbose) {
+				return nil, fmt.Errorf("no cached index found for current directory; run `bed index .` first or remove --no-index")
+			}
+		}
+	} else {
 		if err := fs.IndexDirectory(".", options); err != nil {
 			return nil, err
 		}
@@ -957,12 +979,12 @@ func (fs *FastBedSearcher) tryLoadCachedIndex(basePath string, verbose bool) boo
 }
 
 // saveCachedIndex saves index with directory hash
-func (fs *FastBedSearcher) saveCachedIndex(basePath string) error {
+func (fs *FastBedSearcher) saveCachedIndex(basePath string, filter *EnhancedIgnoreFilter) error {
 	if err := fs.saveIndex(basePath); err != nil {
 		return err
 	}
 
-	hash, err := computeDirHash(basePath, fs.ignoreFilter)
+	hash, err := computeDirHash(basePath, filter)
 	if err != nil {
 		return err
 	}
