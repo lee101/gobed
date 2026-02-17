@@ -111,3 +111,4 @@ netwrck_gpu_server
 *.bin
 ivf_bench
 fused_bench
+src/model
