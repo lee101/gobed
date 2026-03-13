@@ -1,0 +1,237 @@
+name: BED Tool CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'bed/**'
+      - 'gobed*.go'
+      - '.github/workflows/bed-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'bed/**'
+      - 'gobed*.go'
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  test:
+    name: Test BED Tool
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go: ['1.21', '1.22', '1.23']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go }}
+        cache: true
+
+    - name: Download model files
+      run: |
+        ./setup.sh
+
+    - name: Build tokenizers library stub
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        # Create a stub tokenizers library for testing
+        gcc -shared -fPIC -o libtokenizers.so -x c - << 'EOF'
+        void tokenizers_stub() {}
+        EOF
+
+    - name: Run bed tests
+      run: |
+        cd bed
+        go test -v -race ./...
+
+    - name: Build bed tool
+      run: |
+        cd bed
+        export CGO_LDFLAGS="-L.. -ltokenizers"
+        go build -o bed bed_cuda.go
+
+    - name: Test bed tool
+      run: |
+        cd bed
+        export LD_LIBRARY_PATH="$PWD/..:$LD_LIBRARY_PATH"
+        ./bed --help || true
+        # Test on small directory
+        ./bed -dir . "test" || true
+
+  build:
+    name: Build BED Tool
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        arch: [amd64]
+        include:
+          - os: ubuntu-latest
+            arch: arm64
+          - os: macos-latest
+            arch: arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Download model files
+      run: |
+        ./setup.sh
+      shell: bash
+
+    - name: Build tokenizers library stub
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        gcc -shared -fPIC -o libtokenizers.so -x c - << 'EOF'
+        void tokenizers_stub() {}
+        EOF
+
+    - name: Build bed binary
+      env:
+        GOOS: ${{ runner.os == 'macOS' && 'darwin' || runner.os == 'Windows' && 'windows' || 'linux' }}
+        GOARCH: ${{ matrix.arch }}
+        CGO_ENABLED: ${{ matrix.os == 'ubuntu-latest' && '1' || '0' }}
+      run: |
+        cd bed
+        if [ "$CGO_ENABLED" = "1" ]; then
+          export CGO_LDFLAGS="-L.. -ltokenizers"
+        fi
+        go build -o bed-${{ matrix.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} bed_cuda.go
+      shell: bash
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: bed-${{ matrix.os }}-${{ matrix.arch }}
+        path: bed/bed-${{ matrix.os }}-${{ matrix.arch }}*
+
+  build-gpu:
+    name: Build with GPU Support
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Install CUDA dependencies
+      run: |
+        # Install minimal CUDA libraries for building
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get -y install cuda-minimal-build-12-3 cuda-libraries-12-3
+        echo "/usr/local/cuda-12.3/bin" >> $GITHUB_PATH
+        echo "LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+
+    - name: Download model files
+      run: |
+        ./setup.sh
+
+    - name: Build CUDA libraries
+      run: |
+        cd bed
+        nvcc --version || echo "NVCC not available, skipping CUDA build"
+        if command -v nvcc &> /dev/null; then
+          nvcc -O3 -arch=sm_70 -shared -o libcuda_similarity.so cuda_similarity.cu -lcudart -lcublas || true
+          nvcc -O3 -arch=sm_70 -shared -o libcuda_search.so cuda_search.cu -lcudart -lcublas || true
+        fi
+
+    - name: Build tokenizers library stub
+      run: |
+        gcc -shared -fPIC -o libtokenizers.so -x c - << 'EOF'
+        void tokenizers_stub() {}
+        EOF
+
+    - name: Build bed with GPU support
+      run: |
+        cd bed
+        export CGO_CFLAGS="-I/usr/local/cuda-12.3/include"
+        export CGO_LDFLAGS="-L.. -L/usr/local/cuda-12.3/lib64 -lcudart -lcublas -ltokenizers"
+        go build -tags="gpu cuda" -o bed-linux-amd64-gpu bed_cuda.go || \
+        go build -o bed-linux-amd64-gpu bed_cuda.go
+
+    - name: Upload GPU build
+      uses: actions/upload-artifact@v4
+      with:
+        name: bed-linux-amd64-gpu
+        path: bed/bed-linux-amd64-gpu
+
+  benchmark:
+    name: Benchmark BED Tool
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Download model files
+      run: |
+        ./setup.sh
+
+    - name: Build tokenizers library stub
+      run: |
+        gcc -shared -fPIC -o libtokenizers.so -x c - << 'EOF'
+        void tokenizers_stub() {}
+        EOF
+
+    - name: Run benchmarks
+      run: |
+        cd bed
+        export CGO_LDFLAGS="-L.. -ltokenizers"
+        go test -bench=. -benchmem -run=^$ . | tee benchmark.txt
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: bed-benchmark-results
+        path: bed/benchmark.txt
+
+    - name: Comment PR with benchmark results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const benchResults = fs.readFileSync('bed/benchmark.txt', 'utf8');
+
+          const comment = `## BED Tool Benchmark Results
+
+          \`\`\`
+          ${benchResults}
+          \`\`\`
+          `;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

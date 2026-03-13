@@ -109,3 +109,4 @@ netwrck_gpu_server
 *.prof
 .bed
 *.bin
+hf_model/

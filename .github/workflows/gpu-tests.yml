@@ -1,0 +1,43 @@
+name: GPU CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.25'
+  CUDA_VERSION: '12.9'
+
+jobs:
+  gpu:
+    name: Self-Hosted GPU Checks
+    runs-on: [self-hosted, gpu, cuda-12.9]
+    timeout-minutes: 45
+    env:
+      CUDA_PATH: /usr/local/cuda
+      CUVS_PATH: /usr/local/cuvs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '${{ env.GO_VERSION }}.x'
+
+      - name: Ensure model assets
+        run: |
+          if [ ! -f model/real_model.safetensors ]; then
+            ./setup.sh
+          fi
+        shell: bash
+
+      - name: Run GPU validation
+        run: ./scripts/ci/run_gpu_checks.sh
+        shell: bash
