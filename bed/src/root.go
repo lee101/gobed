@@ -3,12 +3,17 @@ package src
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lee101/gobed"
 	"github.com/spf13/cobra"
 )
 
 var (
+	buildVersion = "dev"
+	buildCommit  = ""
+	buildDate    = ""
+
 	// Global flags
 	flagLimit          int
 	flagContext        int
@@ -24,6 +29,10 @@ var (
 	flagConfig         string
 	flagProgressive    bool
 	flagSearchBinaries bool
+
+	// Index flags
+	flagIndexBatchSize int
+	flagIndexWatch     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -95,8 +104,9 @@ Examples:
 }
 
 var (
-	flagDaemonPort   int
-	flagDaemonSocket string
+	flagDaemonPort       int
+	flagDaemonSocket     string
+	flagDaemonBatchDelay time.Duration
 )
 
 func Execute() error {
@@ -104,6 +114,9 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.Version = cliVersion()
+	rootCmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
+
 	// Global flags
 	rootCmd.PersistentFlags().IntVarP(&flagLimit, "limit", "l", 10, "Maximum number of results")
 	rootCmd.PersistentFlags().IntVarP(&flagContext, "context", "c", 2, "Lines of context around matches")
@@ -125,11 +138,13 @@ func init() {
 
 	// Index-specific flags
 	indexCmd.Flags().BoolVar(&flagForceIndex, "force", false, "Force complete re-indexing")
-	indexCmd.Flags().IntVar(&flagContext, "batch-size", 1000, "Indexing batch size")
+	indexCmd.Flags().IntVar(&flagIndexBatchSize, "batch-size", 1000, "Indexing batch size")
+	indexCmd.Flags().BoolVar(&flagIndexWatch, "watch", false, "Keep watching filesystem changes and live-update the index")
 
 	// Daemon-specific flags
 	daemonCmd.Flags().IntVar(&flagDaemonPort, "port", 8765, "HTTP server port")
 	daemonCmd.Flags().StringVar(&flagDaemonSocket, "socket", "", "Unix socket path")
+	daemonCmd.Flags().DurationVar(&flagDaemonBatchDelay, "batch-delay", 100*time.Millisecond, "Debounce window for filesystem update batching")
 
 	// Add subcommands
 	rootCmd.AddCommand(indexCmd)
@@ -144,6 +159,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 		HTTPPort:   flagDaemonPort,
 		SocketPath: flagDaemonSocket,
 		Verbose:    flagVerbose,
+		BatchDelay: flagDaemonBatchDelay,
 	}
 
 	daemon, err := NewBedDaemon(config)
@@ -182,6 +198,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		} else if flagVerbose {
 			fmt.Printf("Fast searcher unavailable: %v\n", e)
 		}
+	}
+
+	if srch == nil && flagNoIndex {
+		return fmt.Errorf("--no-index requires a reusable fast index cache in the current directory; run `bed index .` first or rerun without --no-index")
 	}
 
 	// Fallback to adaptive searcher
@@ -258,21 +278,63 @@ func runIndex(cmd *cobra.Command, args []string) error {
 		useGPU = flagGPU
 	}
 
-	indexer, err := NewIndexer()
-	if err != nil {
-		return fmt.Errorf("failed to initialize indexer: %w", err)
+	if flagIndexWatch {
+		config := DaemonConfig{
+			WatchPaths: []string{path},
+			HTTPPort:   0,
+			SocketPath: "",
+			Verbose:    flagVerbose,
+			BatchDelay: flagDaemonBatchDelay,
+		}
+
+		daemon, err := NewBedDaemon(config)
+		if err != nil {
+			return fmt.Errorf("failed to start watch mode: %w", err)
+		}
+		return daemon.Run()
+	}
+
+	searcher, err := NewFastBedSearcher()
+	if err == nil {
+		defer searcher.Close()
+
+		start := time.Now()
+		if err := searcher.IndexDirectory(path, BedSearchOptions{
+			ForceIndex:     flagForceIndex,
+			SearchBinaries: flagSearchBinaries,
+			UseGPU:         useGPU,
+			Verbose:        flagVerbose,
+		}); err != nil {
+			return err
+		}
+
+		fmt.Printf("Indexed %d documents in %.2fs\n", searcher.NumDocuments(), time.Since(start).Seconds())
+		return nil
+	}
+
+	if flagVerbose {
+		fmt.Printf("Fast indexer unavailable (%v), falling back to full model indexer\n", err)
+	}
+
+	indexer, legacyErr := NewIndexer()
+	if legacyErr != nil {
+		return fmt.Errorf("failed to initialize indexer: %w", legacyErr)
 	}
 	defer indexer.Close()
 
-	options := IndexOptions{
-		Path:      path,
-		Force:     flagForceIndex,
-		BatchSize: flagContext, // reusing context flag as batch size
-		UseGPU:    useGPU,
-		Verbose:   flagVerbose,
+	batchSize := flagIndexBatchSize
+	if batchSize <= 0 {
+		batchSize = 1000
 	}
 
-	return indexer.Index(options)
+	legacyOpts := DefaultIndexOptions()
+	legacyOpts.Path = path
+	legacyOpts.Force = flagForceIndex
+	legacyOpts.BatchSize = batchSize
+	legacyOpts.UseGPU = useGPU
+	legacyOpts.Verbose = flagVerbose
+
+	return indexer.Index(legacyOpts)
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -320,4 +382,18 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	}
 
 	return config.Display()
+}
+
+func cliVersion() string {
+	version := buildVersion
+	if version == "" {
+		version = "dev"
+	}
+	if buildCommit != "" {
+		version += "+" + buildCommit
+	}
+	if buildDate != "" {
+		version += " (" + buildDate + ")"
+	}
+	return version
 }

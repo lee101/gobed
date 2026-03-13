@@ -2,6 +2,7 @@ package src
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -27,15 +28,63 @@ const (
 
 // FastBedSearcher uses the optimized int8 model for fast semantic search
 type FastBedSearcher struct {
-	model            *gobed.SimpleInt8Model512
+	model            fastEmbeddingModel
 	documents        []Document
 	embeddings       [][]float32
 	precomputedNorms []float32
+	precomputedInv   []float32
 	mu               sync.RWMutex
 	ignoreFilter     *EnhancedIgnoreFilter
 	queryProcessor   *QueryProcessor
 	verbose          bool
 	indexed          int64
+
+	minLineLength  int
+	maxLineLength  int
+	ignoreLongLine bool
+}
+
+type fastEmbeddingModel interface {
+	EmbedFast(string) ([]float32, func())
+	Close() error
+}
+
+type fastSearcherOptions struct {
+	maxFileSize     int64
+	searchBinaries  bool
+	minLineLength   int
+	maxLineLength   int
+	ignoreLongLines bool
+}
+
+func defaultFastSearcherOptions() fastSearcherOptions {
+	return fastSearcherOptions{
+		maxFileSize:     10 * 1024 * 1024,
+		searchBinaries:  false,
+		minLineLength:   3,
+		maxLineLength:   1200,
+		ignoreLongLines: true,
+	}
+}
+
+func fastSearcherOptionsFromConfig(cfg *Config) fastSearcherOptions {
+	opts := defaultFastSearcherOptions()
+	if cfg == nil {
+		return opts
+	}
+
+	if cfg.MaxFileSize > 0 {
+		opts.maxFileSize = cfg.MaxFileSize
+	}
+	opts.searchBinaries = cfg.SearchBinaries
+	if cfg.MinLineLength > 0 {
+		opts.minLineLength = cfg.MinLineLength
+	}
+	if cfg.MaxLineLength > 0 {
+		opts.maxLineLength = cfg.MaxLineLength
+	}
+	opts.ignoreLongLines = cfg.IgnoreLongLines
+	return opts
 }
 
 // NewFastBedSearcher creates a new fast searcher using int8 model
@@ -45,9 +94,18 @@ func NewFastBedSearcher() (*FastBedSearcher, error) {
 		return nil, fmt.Errorf("failed to load int8 model: %w", err)
 	}
 
-	ignoreFilter, err := NewEnhancedIgnoreFilter(".",
-		WithMaxFileSize(10*1024*1024),
-		WithBinarySearch(false),
+	baseDir, err := os.Getwd()
+	if err != nil {
+		baseDir = "."
+	}
+	cfg, _ := LoadConfig()
+	return newFastBedSearcherWithModel(model, baseDir, fastSearcherOptionsFromConfig(cfg))
+}
+
+func newFastBedSearcherWithModel(model fastEmbeddingModel, baseDir string, opts fastSearcherOptions) (*FastBedSearcher, error) {
+	ignoreFilter, err := NewEnhancedIgnoreFilter(baseDir,
+		WithMaxFileSize(opts.maxFileSize),
+		WithBinarySearch(opts.searchBinaries),
 	)
 	if err != nil {
 		return nil, err
@@ -58,8 +116,12 @@ func NewFastBedSearcher() (*FastBedSearcher, error) {
 		documents:        make([]Document, 0, 10000),
 		embeddings:       make([][]float32, 0, 10000),
 		precomputedNorms: make([]float32, 0, 10000),
+		precomputedInv:   make([]float32, 0, 10000),
 		ignoreFilter:     ignoreFilter,
 		queryProcessor:   NewQueryProcessor(),
+		minLineLength:    opts.minLineLength,
+		maxLineLength:    opts.maxLineLength,
+		ignoreLongLine:   opts.ignoreLongLines,
 	}, nil
 }
 
@@ -78,13 +140,40 @@ type scored struct {
 	score float32
 }
 
-// IndexDirectory indexes all files using the fast int8 model
+// IndexDirectory indexes all files using the fast int8 model.
+// Existing in-memory entries are replaced.
 func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions) error {
-	startTime := time.Now()
+	return fs.indexDirectory(path, options, false)
+}
 
-	// Try loading cached index first (unless force reindex)
-	if !options.ForceIndex && fs.tryLoadCachedIndex(path, options.Verbose) {
+// IndexDirectoryAppend indexes an additional directory and appends it to the current in-memory index.
+func (fs *FastBedSearcher) IndexDirectoryAppend(path string, options BedSearchOptions) error {
+	return fs.indexDirectory(path, options, true)
+}
+
+func (fs *FastBedSearcher) indexDirectory(path string, options BedSearchOptions, appendMode bool) error {
+	startTime := time.Now()
+	indexBasePath := normalizeIndexPath(path)
+
+	runFilter, err := NewEnhancedIgnoreFilter(indexBasePath,
+		WithMaxFileSize(fs.ignoreFilter.maxFileSize),
+		WithBinarySearch(options.SearchBinaries),
+	)
+	if err != nil {
+		return err
+	}
+
+	fs.mu.Lock()
+	fs.ignoreFilter = runFilter
+	fs.mu.Unlock()
+
+	// Try loading cached index first for single-path full index builds.
+	if !appendMode && !options.ForceIndex && fs.tryLoadCachedIndex(path, options.Verbose) {
 		return nil
+	}
+
+	if !appendMode {
+		fs.resetIndex()
 	}
 
 	workChan := make(chan workItem, 256)
@@ -92,11 +181,10 @@ func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions)
 
 	var wg sync.WaitGroup
 
-	// Collect results in batches for efficiency
 	type embedResult struct {
-		doc  Document
-		emb  []float32
-		norm float32
+		docs  []Document
+		embs  [][]float32
+		norms []float32
 	}
 	resultChan := make(chan embedResult, 1000)
 
@@ -106,33 +194,40 @@ func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions)
 		defer wg.Done()
 		defer close(workChan)
 
-		filepath.WalkDir(path, func(filePath string, d os.DirEntry, err error) error {
+		_ = filepath.WalkDir(path, func(filePath string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
 			}
 
-			shouldProcess, fileType := fs.ignoreFilter.ShouldProcess(filePath)
-			if !shouldProcess || fileType == FileTypeBinary {
+			normalizedPath := normalizeIndexPath(filePath)
+			shouldProcess, fileType := runFilter.ShouldProcess(normalizedPath)
+			if !shouldProcess {
+				if fileType == FileTypeBinary && options.SearchBinaries {
+					workChan <- workItem{
+						path: normalizedPath,
+						lines: []lineInfo{
+							{
+								num:     1,
+								content: fmt.Sprintf("%s binary file", filepath.Base(normalizedPath)),
+							},
+						},
+					}
+				}
+				return nil
+			}
+			if fileType == FileTypeBinary && !options.SearchBinaries {
 				return nil
 			}
 
-			content, err := os.ReadFile(filePath)
+			content, err := os.ReadFile(normalizedPath)
 			if err != nil {
 				return nil
 			}
 
-			lines := strings.Split(string(content), "\n")
-			lineInfos := make([]lineInfo, 0, len(lines))
-			for i, line := range lines {
-				trimmed := strings.TrimSpace(line)
-				if trimmed == "" || len(trimmed) < 3 {
-					continue
-				}
-				lineInfos = append(lineInfos, lineInfo{num: i + 1, content: line})
-			}
+			lineInfos := fs.buildLineInfos(content)
 
 			if len(lineInfos) > 0 {
-				workChan <- workItem{path: filePath, lines: lineInfos}
+				workChan <- workItem{path: normalizedPath, lines: lineInfos}
 			}
 			return nil
 		})
@@ -143,12 +238,14 @@ func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
 			for item := range workChan {
+				docs := make([]Document, 0, len(item.lines))
+				embs := make([][]float32, 0, len(item.lines))
+				norms := make([]float32, 0, len(item.lines))
+
 				for _, line := range item.lines {
 					emb, release := fs.model.EmbedFast(line.content)
 
-					// Copy embedding and compute norm
 					embCopy := make([]float32, len(emb))
 					var normSq float32
 					for j, v := range emb {
@@ -157,16 +254,22 @@ func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions)
 					}
 					release()
 
+					docs = append(docs, Document{
+						Path:       item.path,
+						LineNumber: line.num,
+						Content:    line.content,
+					})
+					embs = append(embs, embCopy)
+					norms = append(norms, normSq)
+				}
+
+				if len(docs) > 0 {
 					resultChan <- embedResult{
-						doc: Document{
-							Path:       item.path,
-							LineNumber: line.num,
-							Content:    line.content,
-						},
-						emb:  embCopy,
-						norm: normSq,
+						docs:  docs,
+						embs:  embs,
+						norms: norms,
 					}
-					atomic.AddInt64(&fs.indexed, 1)
+					atomic.AddInt64(&fs.indexed, int64(len(docs)))
 				}
 			}
 		}()
@@ -177,10 +280,7 @@ func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions)
 	go func() {
 		for result := range resultChan {
 			fs.mu.Lock()
-			result.doc.ID = len(fs.documents)
-			fs.documents = append(fs.documents, result.doc)
-			fs.embeddings = append(fs.embeddings, result.emb)
-			fs.precomputedNorms = append(fs.precomputedNorms, result.norm)
+			fs.appendDocumentsLocked(result.docs, result.embs, result.norms)
 			fs.mu.Unlock()
 		}
 		close(done)
@@ -192,19 +292,23 @@ func (fs *FastBedSearcher) IndexDirectory(path string, options BedSearchOptions)
 
 	elapsed := time.Since(startTime)
 	if options.Verbose {
+		fs.mu.RLock()
+		docCount := len(fs.documents)
+		fs.mu.RUnlock()
 		fmt.Printf("Indexed %d lines in %.2fs (%.0f lines/sec)\n",
-			len(fs.documents), elapsed.Seconds(),
-			float64(len(fs.documents))/elapsed.Seconds())
+			docCount, elapsed.Seconds(), float64(docCount)/elapsed.Seconds())
 	}
 
-	// Save cache (synchronous to ensure it completes before program exits)
-	saveStart := time.Now()
-	if err := fs.saveCachedIndex(path); err != nil {
-		if options.Verbose {
-			fmt.Printf("Warning: failed to save index cache: %v\n", err)
+	// Save cache only for non-append mode to keep a stable single-root cache file.
+	if !appendMode {
+		saveStart := time.Now()
+		if err := fs.saveCachedIndex(path, runFilter); err != nil {
+			if options.Verbose {
+				fmt.Printf("Warning: failed to save index cache: %v\n", err)
+			}
+		} else if options.Verbose {
+			fmt.Printf("Saved index cache in %.2fs\n", time.Since(saveStart).Seconds())
 		}
-	} else if options.Verbose {
-		fmt.Printf("Saved index cache in %.2fs\n", time.Since(saveStart).Seconds())
 	}
 
 	return nil
@@ -232,6 +336,9 @@ func (fs *FastBedSearcher) Search(options BedSearchOptions) error {
 // SearchMatches performs fast semantic search and returns matches for programmatic use.
 func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatch, error) {
 	fs.verbose = options.Verbose
+	if options.Limit <= 0 {
+		options.Limit = 10
+	}
 
 	// Process query - use original query, not enhanced (enhanced hurts embedding quality)
 	queryText := options.Query
@@ -240,7 +347,16 @@ func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatc
 	}
 
 	// Index if needed
-	if !options.NoIndex {
+	if options.NoIndex {
+		fs.mu.RLock()
+		hasDocs := len(fs.documents) > 0
+		fs.mu.RUnlock()
+		if !hasDocs {
+			if !fs.tryLoadCachedIndex(".", options.Verbose) {
+				return nil, fmt.Errorf("no cached index found for current directory; run `bed index .` first or remove --no-index")
+			}
+		}
+	} else {
 		if err := fs.IndexDirectory(".", options); err != nil {
 			return nil, err
 		}
@@ -255,6 +371,10 @@ func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatc
 	for _, v := range qEmb {
 		queryNormSq += v * v
 	}
+	if queryNormSq <= 0 {
+		return nil, nil
+	}
+	invQueryNorm := fastInvSqrtSafe(queryNormSq)
 
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
@@ -294,7 +414,10 @@ func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatc
 
 			for i := start; i < end; i++ {
 				docEmb := fs.embeddings[i]
-				docNormSq := fs.precomputedNorms[i]
+				docInv := fs.precomputedInv[i]
+				if docInv <= 0 {
+					continue
+				}
 
 				// Compute dot product (unrolled for 512 dims)
 				var dot float32
@@ -305,12 +428,8 @@ func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatc
 						qEmb[j+6]*docEmb[j+6] + qEmb[j+7]*docEmb[j+7]
 				}
 
-				// Cosine similarity with pre-computed norms
-				normProduct := queryNormSq * docNormSq
-				if normProduct <= 0 {
-					continue
-				}
-				sim := dot / fastSqrt(normProduct)
+				// Cosine similarity using pre-computed inverse norms.
+				sim := dot * invQueryNorm * docInv
 
 				if sim >= options.Threshold {
 					topK = append(topK, scored{idx: i, score: sim})
@@ -361,6 +480,232 @@ func (fs *FastBedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatc
 	return matches, nil
 }
 
+// NumDocuments returns number of indexed documents.
+func (fs *FastBedSearcher) NumDocuments() int {
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+	return len(fs.documents)
+}
+
+// IndexPaths builds a single in-memory index for multiple roots.
+func (fs *FastBedSearcher) IndexPaths(paths []string, options BedSearchOptions) error {
+	if len(paths) == 0 {
+		return nil
+	}
+
+	for i, p := range paths {
+		if i == 0 {
+			if err := fs.IndexDirectory(p, options); err != nil {
+				return err
+			}
+			continue
+		}
+
+		appendOpts := options
+		appendOpts.ForceIndex = true // append mode never uses cache.
+		if err := fs.IndexDirectoryAppend(p, appendOpts); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// UpsertFile removes any existing entries for path, then re-indexes it if eligible.
+func (fs *FastBedSearcher) UpsertFile(path string, options BedSearchOptions) error {
+	normalizedPath := normalizeIndexPath(path)
+
+	lines, err := fs.collectFileLines(normalizedPath, options.SearchBinaries)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fs.RemoveFile(normalizedPath)
+			return nil
+		}
+		return err
+	}
+
+	// No content to index for this file type/state: remove stale entries.
+	if len(lines) == 0 {
+		fs.RemoveFile(normalizedPath)
+		return nil
+	}
+
+	docs := make([]Document, 0, len(lines))
+	embeddings := make([][]float32, 0, len(lines))
+	norms := make([]float32, 0, len(lines))
+
+	for _, line := range lines {
+		emb, release := fs.model.EmbedFast(line.content)
+		embCopy := make([]float32, len(emb))
+		var normSq float32
+		for j, v := range emb {
+			embCopy[j] = v
+			normSq += v * v
+		}
+		release()
+
+		docs = append(docs, Document{
+			Path:       normalizedPath,
+			LineNumber: line.num,
+			Content:    line.content,
+		})
+		embeddings = append(embeddings, embCopy)
+		norms = append(norms, normSq)
+	}
+
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	fs.removeFileLocked(normalizedPath)
+	fs.appendDocumentsLocked(docs, embeddings, norms)
+	return nil
+}
+
+// RemoveFile removes all indexed entries for the file.
+func (fs *FastBedSearcher) RemoveFile(path string) {
+	normalizedPath := normalizeIndexPath(path)
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.removeFileLocked(normalizedPath)
+}
+
+func (fs *FastBedSearcher) appendDocumentsLocked(docs []Document, embeddings [][]float32, norms []float32) {
+	for i := range docs {
+		docs[i].ID = len(fs.documents)
+		fs.documents = append(fs.documents, docs[i])
+		fs.embeddings = append(fs.embeddings, embeddings[i])
+		fs.precomputedNorms = append(fs.precomputedNorms, norms[i])
+		fs.precomputedInv = append(fs.precomputedInv, fastInvSqrtSafe(norms[i]))
+	}
+}
+
+func (fs *FastBedSearcher) removeFileLocked(path string) int {
+	if len(fs.documents) == 0 {
+		return 0
+	}
+
+	writeIdx := 0
+	for readIdx := range fs.documents {
+		if fs.documents[readIdx].Path == path {
+			continue
+		}
+
+		if writeIdx != readIdx {
+			fs.documents[writeIdx] = fs.documents[readIdx]
+			fs.embeddings[writeIdx] = fs.embeddings[readIdx]
+			fs.precomputedNorms[writeIdx] = fs.precomputedNorms[readIdx]
+			fs.precomputedInv[writeIdx] = fs.precomputedInv[readIdx]
+		}
+		fs.documents[writeIdx].ID = writeIdx
+		writeIdx++
+	}
+
+	removed := len(fs.documents) - writeIdx
+	if removed <= 0 {
+		return 0
+	}
+
+	fs.documents = fs.documents[:writeIdx]
+	fs.embeddings = fs.embeddings[:writeIdx]
+	fs.precomputedNorms = fs.precomputedNorms[:writeIdx]
+	fs.precomputedInv = fs.precomputedInv[:writeIdx]
+	return removed
+}
+
+func (fs *FastBedSearcher) resetIndex() {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.documents = fs.documents[:0]
+	fs.embeddings = fs.embeddings[:0]
+	fs.precomputedNorms = fs.precomputedNorms[:0]
+	fs.precomputedInv = fs.precomputedInv[:0]
+	atomic.StoreInt64(&fs.indexed, 0)
+}
+
+func normalizeIndexPath(path string) string {
+	if abs, err := filepath.Abs(path); err == nil {
+		return filepath.Clean(abs)
+	}
+	return filepath.Clean(path)
+}
+
+func (fs *FastBedSearcher) collectFileLines(path string, searchBinaries bool) ([]lineInfo, error) {
+	shouldProcess, fileType := fs.ignoreFilter.ShouldProcess(path)
+	if !shouldProcess {
+		if fileType == FileTypeBinary && searchBinaries {
+			return []lineInfo{
+				{
+					num:     1,
+					content: fmt.Sprintf("%s binary file", filepath.Base(path)),
+				},
+			}, nil
+		}
+		return nil, nil
+	}
+
+	// Keep binary handling deterministic: include a synthetic line when enabled.
+	if fileType == FileTypeBinary {
+		if !searchBinaries {
+			return nil, nil
+		}
+		return []lineInfo{
+			{
+				num:     1,
+				content: fmt.Sprintf("%s binary file", filepath.Base(path)),
+			},
+		}, nil
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return fs.buildLineInfos(content), nil
+}
+
+func (fs *FastBedSearcher) buildLineInfos(content []byte) []lineInfo {
+	if len(content) == 0 {
+		return nil
+	}
+
+	estimatedLines := bytes.Count(content, []byte{'\n'}) + 1
+	lines := make([]lineInfo, 0, estimatedLines)
+
+	lineStart := 0
+	lineNum := 1
+	for i := 0; i <= len(content); i++ {
+		if i < len(content) && content[i] != '\n' {
+			continue
+		}
+
+		rawLine := content[lineStart:i]
+		lineStart = i + 1
+
+		trimmed := bytes.TrimSpace(rawLine)
+		if len(trimmed) < fs.minLineLength {
+			lineNum++
+			continue
+		}
+
+		if fs.maxLineLength > 0 && len(trimmed) > fs.maxLineLength {
+			if fs.ignoreLongLine {
+				lineNum++
+				continue
+			}
+			trimmed = trimmed[:fs.maxLineLength]
+		}
+
+		lines = append(lines, lineInfo{
+			num:     lineNum,
+			content: string(trimmed),
+		})
+		lineNum++
+	}
+
+	return lines
+}
+
 func (fs *FastBedSearcher) displayResults(results []SearchMatch, options BedSearchOptions) {
 	if len(results) == 0 {
 		fmt.Println("No results found")
@@ -397,6 +742,13 @@ func (fs *FastBedSearcher) Close() error {
 
 func fastSqrt(x float32) float32 {
 	return float32(math.Sqrt(float64(x)))
+}
+
+func fastInvSqrtSafe(x float32) float32 {
+	if x <= 0 {
+		return 0
+	}
+	return 1.0 / fastSqrt(x)
 }
 
 func partialSort(s []scored, k int) {
@@ -512,6 +864,7 @@ func (fs *FastBedSearcher) loadIndex(basePath string) error {
 	fs.documents = make([]Document, numDocs)
 	fs.embeddings = make([][]float32, numDocs)
 	fs.precomputedNorms = make([]float32, numDocs)
+	fs.precomputedInv = make([]float32, numDocs)
 
 	pathBuf := make([]byte, 1024)
 	contentBuf := make([]byte, 4096)
@@ -567,7 +920,9 @@ func (fs *FastBedSearcher) loadIndex(basePath string) error {
 		return err
 	}
 	for i := uint32(0); i < numDocs; i++ {
-		fs.precomputedNorms[i] = math.Float32frombits(binary.LittleEndian.Uint32(normData[i*4:]))
+		norm := math.Float32frombits(binary.LittleEndian.Uint32(normData[i*4:]))
+		fs.precomputedNorms[i] = norm
+		fs.precomputedInv[i] = fastInvSqrtSafe(norm)
 	}
 
 	return nil
@@ -576,8 +931,9 @@ func (fs *FastBedSearcher) loadIndex(basePath string) error {
 // computeDirHash computes a quick hash of directory state (file paths + mod times)
 func computeDirHash(basePath string, filter *EnhancedIgnoreFilter) (string, error) {
 	h := sha256.New()
-	cachePath := filepath.Join(basePath, cacheDir)
-	filepath.WalkDir(basePath, func(p string, d os.DirEntry, err error) error {
+	root := normalizeIndexPath(basePath)
+	cachePath := filepath.Join(root, cacheDir)
+	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
@@ -623,12 +979,12 @@ func (fs *FastBedSearcher) tryLoadCachedIndex(basePath string, verbose bool) boo
 }
 
 // saveCachedIndex saves index with directory hash
-func (fs *FastBedSearcher) saveCachedIndex(basePath string) error {
+func (fs *FastBedSearcher) saveCachedIndex(basePath string, filter *EnhancedIgnoreFilter) error {
 	if err := fs.saveIndex(basePath); err != nil {
 		return err
 	}
 
-	hash, err := computeDirHash(basePath, fs.ignoreFilter)
+	hash, err := computeDirHash(basePath, filter)
 	if err != nil {
 		return err
 	}

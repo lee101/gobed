@@ -86,7 +86,7 @@ func (f *IgnoreFilter) ShouldIgnore(path string) bool {
 // IsTextFile returns true if the file appears to be text-based
 func (f *IgnoreFilter) IsTextFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
-	
+
 	// Known text extensions
 	textExtensions := map[string]bool{
 		".txt": true, ".md": true, ".rst": true, ".tex": true,
@@ -116,7 +116,7 @@ func (f *IgnoreFilter) IsTextFile(path string) bool {
 			"dockerfile": true, "rakefile": true, "gemfile": true, "podfile": true,
 			"cmakelist": true, "authors": true, "contributors": true, "copying": true,
 		}
-		
+
 		if commonTextFiles[name] {
 			return true
 		}
@@ -148,7 +148,7 @@ func loadIgnoreFile(path string) ([]*ignorePattern, error) {
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -185,28 +185,37 @@ func parseIgnorePattern(pattern string) (*ignorePattern, error) {
 		p.isGlobal = true
 		pattern = pattern[1:]
 	}
+	p.pattern = filepath.ToSlash(pattern)
 
 	// Convert gitignore pattern to regex
 	regexPattern := gitignoreToRegex(pattern)
-	
+
 	regex, err := regexp.Compile(regexPattern)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	p.regex = regex
 	return p, nil
 }
 
 // matches checks if a path matches this pattern
 func (p *ignorePattern) matches(path string) bool {
-	// For directory patterns, only match directories
-	if p.isDir && !strings.HasSuffix(path, "/") {
-		// Check if any parent directory matches
-		parts := strings.Split(path, "/")
+	path = filepath.ToSlash(path)
+
+	// For directory patterns, match the directory itself and any descendants.
+	if p.isDir {
+		trimmed := strings.Trim(path, "/")
+		if trimmed == "" {
+			return false
+		}
+		parts := strings.Split(trimmed, "/")
 		for i := 1; i <= len(parts); i++ {
-			dirPath := strings.Join(parts[:i], "/") + "/"
+			dirPath := strings.Join(parts[:i], "/")
 			if p.regex.MatchString(dirPath) {
+				return true
+			}
+			if p.regex.MatchString(parts[i-1]) {
 				return true
 			}
 		}
@@ -234,12 +243,12 @@ func (p *ignorePattern) matches(path string) bool {
 func gitignoreToRegex(pattern string) string {
 	// Escape special regex characters except * and ?
 	pattern = regexp.QuoteMeta(pattern)
-	
+
 	// Convert gitignore wildcards to regex
-	pattern = strings.ReplaceAll(pattern, "\\*\\*", ".*")  // ** matches any number of directories
+	pattern = strings.ReplaceAll(pattern, "\\*\\*", ".*") // ** matches any number of directories
 	pattern = strings.ReplaceAll(pattern, "\\*", "[^/]*") // * matches within directory
 	pattern = strings.ReplaceAll(pattern, "\\?", "[^/]")  // ? matches single character
-	
+
 	// Anchor the pattern
 	if !strings.HasPrefix(pattern, ".*") {
 		pattern = "^" + pattern
@@ -247,7 +256,7 @@ func gitignoreToRegex(pattern string) string {
 	if !strings.HasSuffix(pattern, ".*") {
 		pattern = pattern + "$"
 	}
-	
+
 	return pattern
 }
 
@@ -255,24 +264,24 @@ func gitignoreToRegex(pattern string) string {
 func getGlobalGitignore() string {
 	// Check git config for global ignore file
 	// This is a simplified version - in practice you'd run `git config --get core.excludesfile`
-	
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	
+
 	// Common locations for global gitignore
 	candidates := []string{
 		filepath.Join(homeDir, ".gitignore_global"),
 		filepath.Join(homeDir, ".config", "git", "ignore"),
 		filepath.Join(homeDir, ".gitignore"),
 	}
-	
+
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err == nil {
 			return path
 		}
 	}
-	
+
 	return ""
 }

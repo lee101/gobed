@@ -108,6 +108,14 @@ Real benchmarks on commodity hardware:
 projects. It can index and search using CPU-only mode or take advantage of a
 CUDA-enabled GPU (via cuVS/CAGRA) for sub-millisecond querying.
 
+### Install v1
+
+```bash
+go install github.com/lee101/gobed/cmd/bed@v1.0.0
+# or:
+go install github.com/lee101/gobed/bed/cmd/bed@v1.0.0
+```
+
 ### Quick Start (GPU-accelerated)
 
 ```bash
@@ -116,24 +124,26 @@ CUDA-enabled GPU (via cuVS/CAGRA) for sub-millisecond querying.
 
 # 2. Run bed with GPU support (CAGRA + CUDA)
 export LD_LIBRARY_PATH="$(pwd)/gpu:/usr/local/cuda-12.8/lib64:${LD_LIBRARY_PATH}"
-go run -tags "cuda gpu cagra" ./cmd/bed --gpu "search query"
-
-# Optional: pre-build the CLI
-go build -tags "cuda gpu cagra" -o bed ./cmd/bed
-./bed --gpu "memory leak in handler"  # searches the current directory
+bed --gpu "memory leak in handler"  # searches the current directory
 ```
 
 Useful sub-commands:
 
 ```bash
 # Index a project (stores the embedding index for faster repeat searches)
-go run -tags "cuda gpu cagra" ./cmd/bed index /path/to/project
+bed index /path/to/project
 
 # Run a GPU search against an indexed project
-go run -tags "cuda gpu cagra" ./cmd/bed --gpu --limit 15 "database connection"
+bed --gpu --limit 15 "database connection"
 
 # CPU fallback
-go run ./cmd/bed "keyword"            # no tags required
+bed "keyword"
+
+# Live index mode
+bed index . --watch
+
+# Performance + quality
+bed bench . --queries 200 --ndcg
 ```
 
 ### Benchmark Against `testdata/`
