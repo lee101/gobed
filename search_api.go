@@ -2,6 +2,7 @@ package gobed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -87,6 +88,8 @@ type IndexingStats struct {
 	EmbeddingTime      time.Duration
 	IndexingTime       time.Duration
 }
+
+var ErrDocumentIDExists = errors.New("document ID already exists")
 
 // DefaultSearchConfig returns optimized default configuration
 // Automatically detects and enables GPU with CAGRA when available
@@ -239,6 +242,35 @@ func (se *SearchEngine) IndexBatchWithIDs(ids []int, texts []string) error {
 	return se.indexBatchInternal(ids, texts)
 }
 
+func (se *SearchEngine) AppendWithID(id int, text string) error {
+	return se.AppendBatchWithIDs([]int{id}, []string{text})
+}
+
+func (se *SearchEngine) AppendBatchWithIDs(ids []int, texts []string) error {
+	if len(ids) != len(texts) {
+		return fmt.Errorf("ids and texts must have the same length")
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	se.mu.Lock()
+	defer se.mu.Unlock()
+
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if _, exists := seen[id]; exists {
+			return fmt.Errorf("%w: %d", ErrDocumentIDExists, id)
+		}
+		seen[id] = struct{}{}
+		if _, exists := se.documents[id]; exists {
+			return fmt.Errorf("%w: %d", ErrDocumentIDExists, id)
+		}
+	}
+
+	return se.indexBatchInternal(ids, texts)
+}
+
 // IndexBatchAsync asynchronously indexes multiple texts and returns a channel for the result
 func (se *SearchEngine) IndexBatchAsync(texts []string) <-chan IndexResponse {
 	ids := make([]int, len(texts))
@@ -365,6 +397,9 @@ func (se *SearchEngine) indexBatchInternal(ids []int, texts []string) error {
 	// For GPU mode, limit workers to avoid contention
 	if numWorkers > 8 {
 		numWorkers = 8
+	}
+	if numWorkers > len(texts) {
+		numWorkers = len(texts)
 	}
 
 	type embeddingJob struct {
