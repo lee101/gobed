@@ -32,9 +32,8 @@ type Engine struct {
 	size    int
 	mu      sync.RWMutex
 
-	// Object pools for reducing allocations
-	candidatePool *sync.Pool
-	resultPool    *sync.Pool
+	// Per-query scratch buffers
+	scratchPool sync.Pool
 }
 
 // Config holds engine configuration
@@ -110,20 +109,6 @@ func NewEngine(config Config) *Engine {
 		rawVectors: make([]simd.Vec512, 0, initialCap),
 		scales:     make([]float32, 0, initialCap),
 		ids:        make([]int, 0, initialCap),
-	}
-
-	// Initialize object pools
-	e.candidatePool = &sync.Pool{
-		New: func() interface{} {
-			slice := make([]int, 0, config.NProbe*100)
-			return &slice
-		},
-	}
-	e.resultPool = &sync.Pool{
-		New: func() interface{} {
-			slice := make([]SearchResult, 0, config.RerankSize)
-			return &slice
-		},
 	}
 
 	return e
@@ -295,26 +280,14 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 			flatResults = e.flatIndex.SearchTopK(query, k)
 		}
 
-		// Convert results using pool
-		resultsPtr := e.resultPool.Get().(*[]SearchResult)
-		results := (*resultsPtr)[:0]
-
-		// Ensure capacity
-		if cap(results) < len(flatResults) {
-			results = make([]SearchResult, 0, len(flatResults))
-		}
-
-		for _, r := range flatResults {
-			results = append(results, SearchResult{
+		results := make([]SearchResult, len(flatResults))
+		for i, r := range flatResults {
+			results[i] = SearchResult{
 				ID:       r.ID,
 				Score:    float32(r.Score),
 				Distance: float32(-r.Score), // Convert similarity to distance
-			})
+			}
 		}
-		defer func() {
-			*resultsPtr = results
-			e.resultPool.Put(resultsPtr)
-		}()
 		return results, nil
 	}
 
@@ -337,198 +310,155 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 		clusters = e.ivfIndex.KMeans.PredictMultiple(query, e.config.NProbe)
 	}
 
+	return e.searchClusters(query, clusters, k), nil
+}
+
+// searchClusters scores candidates from the given clusters and returns the top k.
+func (e *Engine) searchClusters(query *simd.Vec512, clusters []int, k int) []SearchResult {
+	sc := e.getScratch()
+	defer e.scratchPool.Put(sc)
+
 	// Step 2: Collect candidates from selected clusters
-	candidates := e.collectCandidates(clusters)
+	candidates := e.collectCandidates(sc, clusters)
 
-	// Step 3: Score with PQ if available, otherwise use exact distance
-	var topCandidates []int
+	// Step 3/4: PQ shortlist then exact rerank, or exact top-k directly
+	var results []SearchResult
 	if e.pq != nil && e.pq.Trained {
-		topCandidates = e.scorePQCandidates(query, candidates, e.config.RerankSize)
+		top := e.scorePQCandidates(sc, query, candidates, e.config.RerankSize)
+		results = e.rerankCandidates(sc, query, top, k)
 	} else {
-		topCandidates = e.scoreExactCandidates(query, candidates, e.config.RerankSize)
+		// Exact top-R sorted by score then position; its first k equal the
+		// exact rerank of that shortlist.
+		h := e.scoreExactTop(sc, query, candidates, e.config.RerankSize)
+		if k < len(h) {
+			h = h[:k]
+		}
+		results = e.toResults(h, candidates)
 	}
 
-	// Step 4: Rerank top candidates with exact SIMD distance
-	results := e.rerankCandidates(query, topCandidates, k)
-
-	return results, nil
+	return results
 }
 
-// collectCandidates collects vector indices from selected clusters
-func (e *Engine) collectCandidates(clusters []int) []int {
-	// Estimate total size first to avoid map reallocations
-	totalSize := 0
-	for _, cluster := range clusters {
-		if cluster >= 0 && cluster < len(e.ivfIndex.Lists) {
-			totalSize += len(e.ivfIndex.Lists[cluster])
-		}
+// searchScratch holds per-query buffers reused across searches.
+type searchScratch struct {
+	seen  []uint32
+	gen   uint32
+	cands []int
+	exact []scored[int32]
+	pqs   []scored[float32]
+}
+
+func (e *Engine) getScratch() *searchScratch {
+	if v := e.scratchPool.Get(); v != nil {
+		return v.(*searchScratch)
 	}
+	return &searchScratch{}
+}
 
-	// Use a map with pre-allocated size hint
-	candidateSet := make(map[int]bool, totalSize)
-
+// collectCandidates collects deduplicated vector indices from selected clusters
+// in cluster order, then list order. The returned slice aliases sc.cands.
+func (e *Engine) collectCandidates(sc *searchScratch, clusters []int) []int {
+	n := len(e.rawVectors)
+	if len(sc.seen) < n {
+		sc.seen = make([]uint32, n+n/4)
+		sc.gen = 0
+	}
+	sc.gen++
+	if sc.gen == 0 {
+		clear(sc.seen)
+		sc.gen = 1
+	}
+	gen, seen := sc.gen, sc.seen
+	cands := sc.cands[:0]
 	for _, cluster := range clusters {
-		if cluster >= 0 && cluster < len(e.ivfIndex.Lists) {
-			e.ivfIndex.ListLocks[cluster].RLock()
-			for _, idx := range e.ivfIndex.Lists[cluster] {
-				candidateSet[idx] = true
+		if cluster < 0 || cluster >= len(e.ivfIndex.Lists) {
+			continue
+		}
+		e.ivfIndex.ListLocks[cluster].RLock()
+		for _, idx := range e.ivfIndex.Lists[cluster] {
+			if uint(idx) >= uint(len(seen)) {
+				grown := make([]uint32, idx+1+idx/4)
+				copy(grown, seen)
+				seen = grown
+				sc.seen = grown
 			}
-			e.ivfIndex.ListLocks[cluster].RUnlock()
+			if seen[idx] != gen {
+				seen[idx] = gen
+				cands = append(cands, idx)
+			}
 		}
+		e.ivfIndex.ListLocks[cluster].RUnlock()
 	}
-
-	// Get candidates from pool
-	candidatesPtr := e.candidatePool.Get().(*[]int)
-	candidates := (*candidatesPtr)[:0]
-
-	// Ensure capacity
-	if cap(candidates) < len(candidateSet) {
-		candidates = make([]int, 0, len(candidateSet))
-	}
-
-	for idx := range candidateSet {
-		candidates = append(candidates, idx)
-	}
-
-	// Return to pool later (caller must handle)
-	return candidates
+	sc.cands = cands
+	return cands
 }
 
-// scorePQCandidates scores candidates using PQ and returns top R
-func (e *Engine) scorePQCandidates(query *simd.Vec512, candidates []int, R int) []int {
-	if len(candidates) == 0 {
+// scorePQCandidates scores candidates using PQ and returns top R (lowest distance,
+// ties broken by candidate position).
+func (e *Engine) scorePQCandidates(sc *searchScratch, query *simd.Vec512, candidates []int, R int) []int {
+	if len(candidates) == 0 || R <= 0 {
 		return nil
 	}
-
-	// Dequantize query for PQ
-	queryFloat := dequantizeVector(query, 1.0)
-
-	// Compute ADC table
-	adcTable := e.pq.ComputeADCTable(queryFloat)
-
-	// Score all candidates
-	type scorePair struct {
-		idx   int
-		score float32
-	}
-
-	scores := make([]scorePair, len(candidates))
+	adcTable := e.pq.ComputeADCTable(dequantizeVector(query, 1.0))
+	h := sc.pqs[:0]
 	for i, idx := range candidates {
-		scores[i] = scorePair{
-			idx:   idx,
-			score: adcTable.Distance(e.pqCodes[idx]),
-		}
+		h = topRPush(h, R, scored[float32]{s: -adcTable.Distance(e.pqCodes[idx]), pos: int32(i)})
 	}
-
-	// Partial sort to get top R
-	if R > len(scores) {
-		R = len(scores)
+	topRSort(h)
+	sc.pqs = h
+	top := make([]int, len(h))
+	for i := range h {
+		top[i] = candidates[h[i].pos]
 	}
+	return top
+}
 
-	for i := 0; i < R; i++ {
-		minIdx := i
-		for j := i + 1; j < len(scores); j++ {
-			if scores[j].score < scores[minIdx].score {
-				minIdx = j
-			}
-		}
-		scores[i], scores[minIdx] = scores[minIdx], scores[i]
+// scoreExactTop scores candidates with exact dot product and returns the top R
+// sorted by score desc, ties broken by candidate position. Aliases sc.exact.
+func (e *Engine) scoreExactTop(sc *searchScratch, query *simd.Vec512, candidates []int, R int) []scored[int32] {
+	if len(candidates) == 0 || R <= 0 {
+		return nil
 	}
-
-	// Extract top R indices
-	topIndices := make([]int, R)
-	for i := 0; i < R; i++ {
-		topIndices[i] = scores[i].idx
+	h := sc.exact[:0]
+	for i, idx := range candidates {
+		h = topRPush(h, R, scored[int32]{s: simd.Dot512(query, &e.rawVectors[idx]), pos: int32(i)})
 	}
-
-	return topIndices
+	topRSort(h)
+	sc.exact = h
+	return h
 }
 
 // scoreExactCandidates scores candidates with exact distance
-func (e *Engine) scoreExactCandidates(query *simd.Vec512, candidates []int, R int) []int {
-	if len(candidates) == 0 {
+func (e *Engine) scoreExactCandidates(sc *searchScratch, query *simd.Vec512, candidates []int, R int) []int {
+	h := e.scoreExactTop(sc, query, candidates, R)
+	if h == nil {
 		return nil
 	}
-
-	type scorePair struct {
-		idx   int
-		score int32
+	top := make([]int, len(h))
+	for i := range h {
+		top[i] = candidates[h[i].pos]
 	}
-
-	scores := make([]scorePair, len(candidates))
-	for i, idx := range candidates {
-		scores[i] = scorePair{
-			idx:   idx,
-			score: simd.Dot512(query, &e.rawVectors[idx]),
-		}
-	}
-
-	// Partial sort to get top R (higher score is better for dot product)
-	if R > len(scores) {
-		R = len(scores)
-	}
-
-	for i := 0; i < R; i++ {
-		maxIdx := i
-		for j := i + 1; j < len(scores); j++ {
-			if scores[j].score > scores[maxIdx].score {
-				maxIdx = j
-			}
-		}
-		scores[i], scores[maxIdx] = scores[maxIdx], scores[i]
-	}
-
-	topIndices := make([]int, R)
-	for i := 0; i < R; i++ {
-		topIndices[i] = scores[i].idx
-	}
-
-	return topIndices
+	return top
 }
 
 // rerankCandidates performs exact reranking on top candidates
-func (e *Engine) rerankCandidates(query *simd.Vec512, candidates []int, k int) []SearchResult {
-	if len(candidates) == 0 {
+func (e *Engine) rerankCandidates(sc *searchScratch, query *simd.Vec512, candidates []int, k int) []SearchResult {
+	h := e.scoreExactTop(sc, query, candidates, k)
+	return e.toResults(h, candidates)
+}
+
+func (e *Engine) toResults(h []scored[int32], candidates []int) []SearchResult {
+	if len(h) == 0 {
 		return nil
 	}
-
-	type scorePair struct {
-		idx   int
-		score int32
-	}
-
-	scores := make([]scorePair, len(candidates))
-	for i, idx := range candidates {
-		scores[i] = scorePair{
-			idx:   idx,
-			score: simd.Dot512(query, &e.rawVectors[idx]),
-		}
-	}
-
-	// Sort by score (descending)
-	for i := 0; i < len(scores); i++ {
-		for j := i + 1; j < len(scores); j++ {
-			if scores[j].score > scores[i].score {
-				scores[i], scores[j] = scores[j], scores[i]
-			}
-		}
-	}
-
-	// Return top k
-	if k > len(scores) {
-		k = len(scores)
-	}
-
-	results := make([]SearchResult, k)
-	for i := 0; i < k; i++ {
-		idx := scores[i].idx
+	results := make([]SearchResult, len(h))
+	for i, p := range h {
 		results[i] = SearchResult{
-			ID:       e.ids[idx],
-			Score:    float32(scores[i].score),
-			Distance: float32(-scores[i].score),
+			ID:       e.ids[candidates[p.pos]],
+			Score:    float32(p.s),
+			Distance: float32(-p.s),
 		}
 	}
-
 	return results
 }
 
