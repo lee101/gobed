@@ -22,7 +22,7 @@ type KMeansOptimized struct {
 	Centroids []simd.Vec512 // Cluster centroids (quantized)
 	Scales    []float32     // Centroid scales for dequantization
 	Counts    []int         // Number of points per cluster
-	
+
 	// Pre-allocated buffers to reduce allocations
 	assignments     []int
 	prevAssignments []int
@@ -70,7 +70,7 @@ func (km *KMeansOptimized) Fit(vectors []simd.Vec512, scales []float32) {
 	for iter := 0; iter < km.MaxIters && !converged; iter++ {
 		// Assignment step: assign each point to nearest centroid
 		changed := km.assignToCentroidsOptimized(vectors)
-		
+
 		// Early convergence check
 		if !changed && iter > 0 {
 			converged = true
@@ -79,7 +79,7 @@ func (km *KMeansOptimized) Fit(vectors []simd.Vec512, scales []float32) {
 
 		// Update step: recompute centroids
 		km.updateCentroidsOptimized(vectors, scales, km.assignments)
-		
+
 		copy(km.prevAssignments, km.assignments)
 	}
 
@@ -108,35 +108,33 @@ func (km *KMeansOptimized) initializeCentroidsOptimized(vectors []simd.Vec512, s
 		km.distances = km.distances[:n]
 	}
 
+	for i := range km.distances {
+		km.distances[i] = float32(math.MaxFloat32)
+	}
+
 	for k := 1; k < km.K; k++ {
-		// Compute distances to nearest centroid using SIMD
-		totalDist := float32(0)
+		totalDist := float64(0)
+		centroid := &km.Centroids[k-1]
 		for i := range vectors {
-			minDist := float32(math.MaxFloat32)
-			for j := 0; j < k; j++ {
-				// Use SIMD-optimized squared distance
-				dist := float32(simd.L2Squared512(&vectors[i], &km.Centroids[j]))
-				if dist < minDist {
-					minDist = dist
-				}
+			dist := float32(simd.L2Squared512(&vectors[i], centroid))
+			if dist < km.distances[i] {
+				km.distances[i] = dist
 			}
-			km.distances[i] = minDist
-			totalDist += minDist
+			totalDist += float64(km.distances[i])
 		}
 
-		// Choose next centroid with probability proportional to squared distance
-		if totalDist == 0 {
-			// All remaining points are identical to existing centroids
-			km.Centroids[k] = vectors[rand.Intn(n)]
-			km.Scales[k] = scales[rand.Intn(n)]
+		if totalDist <= 0 || math.IsNaN(totalDist) || math.IsInf(totalDist, 0) {
+			chosen := rand.Intn(n)
+			km.Centroids[k] = vectors[chosen]
+			km.Scales[k] = scales[chosen]
 			continue
 		}
 
-		threshold := rand.Float32() * totalDist
-		cumSum := float32(0)
+		threshold := rand.Float64() * totalDist
+		cumSum := float64(0)
 		chosen := false
 		for i := range vectors {
-			cumSum += km.distances[i]
+			cumSum += float64(km.distances[i])
 			if cumSum >= threshold {
 				km.Centroids[k] = vectors[i]
 				km.Scales[k] = scales[i]
@@ -144,7 +142,7 @@ func (km *KMeansOptimized) initializeCentroidsOptimized(vectors []simd.Vec512, s
 				break
 			}
 		}
-		
+
 		if !chosen {
 			// Fallback: choose last vector
 			km.Centroids[k] = vectors[n-1]
@@ -195,7 +193,7 @@ func (km *KMeansOptimized) assignToCentroidsParallel(vectors []simd.Vec512) bool
 	// Process in chunks for better performance
 	numWorkers := 8
 	chunkSize := (n + numWorkers - 1) / numWorkers
-	
+
 	var wg sync.WaitGroup
 
 	for w := 0; w < numWorkers; w++ {
@@ -211,7 +209,7 @@ func (km *KMeansOptimized) assignToCentroidsParallel(vectors []simd.Vec512) bool
 		wg.Add(1)
 		go func(start, end int) {
 			defer wg.Done()
-			
+
 			localChanged := false
 			for i := start; i < end; i++ {
 				minDist := float32(math.MaxFloat32)
@@ -251,7 +249,7 @@ func (km *KMeansOptimized) updateCentroidsOptimized(vectors []simd.Vec512, scale
 		sum   [512]float32
 		count int
 	}
-	
+
 	// Reuse accumulator slice to reduce allocations
 	accumulators := make([]accumulator, km.K)
 
@@ -347,7 +345,7 @@ func quickSelect(arr []distPair, left, right, k int) {
 	}
 
 	pivotIndex := partition(arr, left, right)
-	
+
 	if pivotIndex == k {
 		return
 	} else if pivotIndex > k {
@@ -361,7 +359,7 @@ func quickSelect(arr []distPair, left, right, k int) {
 func partition(arr []distPair, left, right int) int {
 	pivot := arr[right].dist
 	i := left
-	
+
 	for j := left; j < right; j++ {
 		if arr[j].dist <= pivot {
 			arr[i], arr[j] = arr[j], arr[i]
@@ -376,14 +374,14 @@ func partition(arr []distPair, left, right int) int {
 func quantizeVectorOptimized(vec []float32) (simd.Vec512, float32) {
 	// Find min and max using vectorized approach
 	minVal, maxVal := vec[0], vec[0]
-	
+
 	// Unroll loop for better performance
 	for i := 0; i < len(vec); i += 8 {
 		end := i + 8
 		if end > len(vec) {
 			end = len(vec)
 		}
-		
+
 		for j := i; j < end; j++ {
 			if vec[j] < minVal {
 				minVal = vec[j]
@@ -407,7 +405,7 @@ func quantizeVectorOptimized(vec []float32) (simd.Vec512, float32) {
 
 	var result simd.Vec512
 	invScale := 1.0 / scale
-	
+
 	// Vectorized quantization
 	for i := 0; i < 512; i += 8 {
 		// Process 8 elements at once

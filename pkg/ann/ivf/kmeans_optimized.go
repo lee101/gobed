@@ -108,35 +108,33 @@ func (km *KMeansOptimized) initializeCentroidsOptimized(vectors []simd.Vec512, s
 		km.distances = km.distances[:n]
 	}
 
+	for i := range km.distances {
+		km.distances[i] = float32(math.MaxFloat32)
+	}
+
 	for k := 1; k < km.K; k++ {
-		// Compute distances to nearest centroid using SIMD
-		totalDist := float32(0)
+		totalDist := float64(0)
+		centroid := &km.Centroids[k-1]
 		for i := range vectors {
-			minDist := float32(math.MaxFloat32)
-			for j := 0; j < k; j++ {
-				// Use SIMD-optimized squared distance
-				dist := float32(simd.L2Squared512(&vectors[i], &km.Centroids[j]))
-				if dist < minDist {
-					minDist = dist
-				}
+			dist := float32(simd.L2Squared512(&vectors[i], centroid))
+			if dist < km.distances[i] {
+				km.distances[i] = dist
 			}
-			km.distances[i] = minDist
-			totalDist += minDist
+			totalDist += float64(km.distances[i])
 		}
 
-		// Choose next centroid with probability proportional to squared distance
-		if totalDist == 0 {
-			// All remaining points are identical to existing centroids
-			km.Centroids[k] = vectors[rand.Intn(n)]
-			km.Scales[k] = scales[rand.Intn(n)]
+		if totalDist <= 0 || math.IsNaN(totalDist) || math.IsInf(totalDist, 0) {
+			chosen := rand.Intn(n)
+			km.Centroids[k] = vectors[chosen]
+			km.Scales[k] = scales[chosen]
 			continue
 		}
 
-		threshold := rand.Float32() * totalDist
-		cumSum := float32(0)
+		threshold := rand.Float64() * totalDist
+		cumSum := float64(0)
 		chosen := false
 		for i := range vectors {
-			cumSum += km.distances[i]
+			cumSum += float64(km.distances[i])
 			if cumSum >= threshold {
 				km.Centroids[k] = vectors[i]
 				km.Scales[k] = scales[i]

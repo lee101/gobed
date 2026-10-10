@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/lee101/gobed"
+	"github.com/lee101/gobed/metrics"
 	simdpkg "github.com/lee101/gobed/pkg/ann/simd"
 )
 
@@ -34,6 +35,10 @@ type CAGRABedSearcher struct {
 	config    *Config
 	basePath  string
 	cagraConf gobed.CAGRAConfig
+
+	retainBenchmarkCorpus bool
+	retainedVecs          []simdpkg.Vec512
+	retainedScales        []float32
 }
 
 func NewCAGRABedSearcher() (*CAGRABedSearcher, error) {
@@ -151,6 +156,30 @@ func (c *CAGRABedSearcher) NumDocuments() int {
 	return len(c.docs)
 }
 
+func (c *CAGRABedSearcher) IndexedFiles() int {
+	return countUniqueCAGRADocPaths(c.docs)
+}
+
+func (c *CAGRABedSearcher) SetBenchmarkRetention(enabled bool) {
+	c.retainBenchmarkCorpus = enabled
+	if !enabled {
+		c.retainedVecs = nil
+		c.retainedScales = nil
+	}
+}
+
+func (c *CAGRABedSearcher) ApplyBenchConfig(settings cagraBenchSettings) {
+	if settings.GraphDegree > 0 {
+		c.cagraConf.GraphDegree = settings.GraphDegree
+	}
+	if settings.IntermediateGraphDegree > 0 {
+		c.cagraConf.IntermediateGraphDegree = settings.IntermediateGraphDegree
+	}
+	if settings.MaxIterations > 0 {
+		c.cagraConf.MaxIterations = settings.MaxIterations
+	}
+}
+
 func (c *CAGRABedSearcher) ensureIndex(path string, options BedSearchOptions) error {
 	if err := c.ensureBasePath(path); err != nil {
 		return err
@@ -238,6 +267,10 @@ func (c *CAGRABedSearcher) loadCachedIndex(options BedSearchOptions) error {
 		return err
 	}
 	c.docs = docs
+	if c.retainBenchmarkCorpus {
+		c.retainedVecs = append([]simdpkg.Vec512(nil), vecs...)
+		c.retainedScales = append([]float32(nil), scales...)
+	}
 	return nil
 }
 
@@ -476,6 +509,10 @@ func (c *CAGRABedSearcher) buildIndex(path string, options BedSearchOptions) err
 	}
 
 	c.docs = docs
+	if c.retainBenchmarkCorpus {
+		c.retainedVecs = append([]simdpkg.Vec512(nil), vecs...)
+		c.retainedScales = append([]float32(nil), scales...)
+	}
 
 	if c.cache != nil {
 		_ = c.cache.Cleanup()
@@ -532,4 +569,150 @@ func filterBinaryDocs(docs []CAGRADoc, vecs []simdpkg.Vec512, scales []float32) 
 		filteredScales = append(filteredScales, scales[i])
 	}
 	return filteredDocs, filteredVecs, filteredScales
+}
+
+func (c *CAGRABedSearcher) BenchmarkExactANN(k, numQueries int) (*exactANNStats, error) {
+	if len(c.docs) == 0 || len(c.retainedVecs) == 0 || len(c.retainedScales) == 0 {
+		return nil, fmt.Errorf("exact ANN evaluation requires a benchmark build with retained vectors")
+	}
+	if k <= 0 {
+		k = 10
+	}
+
+	queryIDs := benchmarkCandidateIDs(c.docs, numQueries)
+	if len(queryIDs) == 0 {
+		return nil, fmt.Errorf("no non-binary documents available for exact ANN evaluation")
+	}
+
+	totalNDCG := 0.0
+	totalRecall := 0.0
+	top1Hits := 0
+
+	for _, queryID := range queryIDs {
+		qv := c.retainedVecs[queryID]
+		qScale := c.retainedScales[queryID]
+
+		goldIDs, relevance := exactTopK(qv, qScale, c.retainedVecs, c.retainedScales, k)
+		predicted, err := c.index.Search(qv, qScale, k)
+		if err != nil {
+			return nil, fmt.Errorf("exact ANN search failed for doc %d: %w", queryID, err)
+		}
+
+		predictedIDs := make([]int, 0, len(predicted))
+		for _, result := range predicted {
+			predictedIDs = append(predictedIDs, result.ID)
+		}
+
+		if len(predictedIDs) > 0 && predictedIDs[0] == queryID {
+			top1Hits++
+		}
+		totalNDCG += metrics.ComputeNDCG(predictedIDs, relevance, k)
+		totalRecall += recallAtK(goldIDs, predictedIDs)
+	}
+
+	n := float64(len(queryIDs))
+	return &exactANNStats{
+		Name:        "GPU CAGRA Exact ANN",
+		Queries:     len(queryIDs),
+		K:           k,
+		AvgNDCG:     totalNDCG / n,
+		AvgRecall:   totalRecall / n,
+		Top1HitRate: float64(top1Hits) / n,
+	}, nil
+}
+
+type exactScore struct {
+	id    int
+	score float32
+}
+
+func exactTopK(query simdpkg.Vec512, queryScale float32, vecs []simdpkg.Vec512, scales []float32, k int) ([]int, map[int]float64) {
+	if k > len(vecs) {
+		k = len(vecs)
+	}
+
+	scores := make([]exactScore, len(vecs))
+	for i := range vecs {
+		score := float32(simdpkg.Dot512(&query, &vecs[i])) * queryScale * scales[i]
+		scores[i] = exactScore{id: i, score: score}
+	}
+
+	sort.Slice(scores, func(i, j int) bool {
+		if scores[i].score == scores[j].score {
+			return scores[i].id < scores[j].id
+		}
+		return scores[i].score > scores[j].score
+	})
+
+	ids := make([]int, 0, k)
+	relevance := make(map[int]float64, k)
+	maxScore := float32(0)
+	if len(scores) > 0 && scores[0].score > 0 {
+		maxScore = scores[0].score
+	}
+
+	for i := 0; i < k; i++ {
+		ids = append(ids, scores[i].id)
+		if maxScore > 0 {
+			relevance[scores[i].id] = float64(scores[i].score/maxScore) * 3
+			continue
+		}
+		relevance[scores[i].id] = float64(k - i)
+	}
+
+	return ids, relevance
+}
+
+func benchmarkCandidateIDs(docs []CAGRADoc, limit int) []int {
+	candidates := make([]int, 0, len(docs))
+	for i, doc := range docs {
+		if doc.IsBinary || strings.TrimSpace(doc.Content) == "" {
+			continue
+		}
+		candidates = append(candidates, i)
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	if limit <= 0 || limit >= len(candidates) {
+		return candidates
+	}
+
+	selected := make([]int, 0, limit)
+	step := len(candidates) / limit
+	if step < 1 {
+		step = 1
+	}
+	for i := 0; i < len(candidates) && len(selected) < limit; i += step {
+		selected = append(selected, candidates[i])
+	}
+	if len(selected) > limit {
+		selected = selected[:limit]
+	}
+	return selected
+}
+
+func recallAtK(gold, predicted []int) float64 {
+	if len(gold) == 0 {
+		return 0
+	}
+	seen := make(map[int]struct{}, len(gold))
+	for _, id := range gold {
+		seen[id] = struct{}{}
+	}
+	hits := 0
+	for _, id := range predicted {
+		if _, ok := seen[id]; ok {
+			hits++
+		}
+	}
+	return float64(hits) / float64(len(gold))
+}
+
+func countUniqueCAGRADocPaths(docs []CAGRADoc) int {
+	seen := make(map[string]struct{}, len(docs))
+	for _, doc := range docs {
+		seen[doc.Path] = struct{}{}
+	}
+	return len(seen)
 }

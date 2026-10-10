@@ -19,5 +19,11 @@ func (c *CAGRABedSearcher) SearchMatches(options BedSearchOptions) ([]SearchMatc
 func (c *CAGRABedSearcher) BuildIndex(path string, options BedSearchOptions) error {
 	return fmt.Errorf("CAGRA not available")
 }
-func (c *CAGRABedSearcher) NumDocuments() int { return 0 }
-func (c *CAGRABedSearcher) Close() error      { return nil }
+func (c *CAGRABedSearcher) NumDocuments() int                            { return 0 }
+func (c *CAGRABedSearcher) IndexedFiles() int                            { return 0 }
+func (c *CAGRABedSearcher) Close() error                                 { return nil }
+func (c *CAGRABedSearcher) ApplyBenchConfig(settings cagraBenchSettings) {}
+func (c *CAGRABedSearcher) SetBenchmarkRetention(enabled bool)           {}
+func (c *CAGRABedSearcher) BenchmarkExactANN(k, numQueries int) (*exactANNStats, error) {
+	return nil, fmt.Errorf("CAGRA not available")
+}

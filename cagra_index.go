@@ -45,11 +45,12 @@ type CAGRAIndex struct {
 
 // CAGRAConfig configures CAGRA for optimal performance
 type CAGRAConfig struct {
-	MaxVectors    int    // Maximum vectors to support
-	VectorDim     int    // Vector dimension (512 for gobed)
-	GraphDegree   int    // Graph connectivity (32-128, higher = better quality)
-	MaxIterations int    // Search iterations (32-128, higher = better recall)
-	CachePath     string // Path for persistent index storage
+	MaxVectors              int    // Maximum vectors to support
+	VectorDim               int    // Vector dimension (512 for gobed)
+	GraphDegree             int    // Graph connectivity (32-128, higher = better quality)
+	IntermediateGraphDegree int    // CAGRA intermediate degree used during graph build
+	MaxIterations           int    // Search iterations (32-128, higher = better recall)
+	CachePath               string // Path for persistent index storage
 
 	// Performance targets
 	TargetLatencyUs int     // Target search latency in microseconds (1000 = 1ms)
@@ -59,12 +60,13 @@ type CAGRAConfig struct {
 // DefaultCAGRAConfig returns configuration optimized for ultra-fast search
 func DefaultCAGRAConfig() CAGRAConfig {
 	config := CAGRAConfig{
-		MaxVectors:      1000000, // Support 1M vectors
-		VectorDim:       512,     // gobed dimension
-		GraphDegree:     64,      // Balance speed/quality
-		MaxIterations:   64,      // Balance speed/recall
-		TargetLatencyUs: 1000,    // <1ms target
-		TargetRecall:    0.95,    // 95% recall target
+		MaxVectors:              1000000, // Support 1M vectors
+		VectorDim:               512,     // gobed dimension
+		GraphDegree:             64,      // Balance speed/quality
+		IntermediateGraphDegree: 128,     // Common cuVS recommendation for balanced builds
+		MaxIterations:           64,      // Balance speed/recall
+		TargetLatencyUs:         1000,    // <1ms target
+		TargetRecall:            0.95,    // 95% recall target
 	}
 	config.CachePath = BuildCAGRACachePath("default", config.VectorDim, config.GraphDegree, config.MaxVectors)
 	return config
@@ -73,10 +75,11 @@ func DefaultCAGRAConfig() CAGRAConfig {
 // FastCAGRAConfig returns configuration optimized for speed over quality
 func FastCAGRAConfig() CAGRAConfig {
 	config := DefaultCAGRAConfig()
-	config.GraphDegree = 32      // Faster build/search
-	config.MaxIterations = 32    // Faster search
-	config.TargetLatencyUs = 500 // <0.5ms target
-	config.TargetRecall = 0.90   // 90% recall
+	config.GraphDegree = 32             // Faster build/search
+	config.IntermediateGraphDegree = 64 // Keep build fanout proportional to graph degree
+	config.MaxIterations = 32           // Faster search
+	config.TargetLatencyUs = 500        // <0.5ms target
+	config.TargetRecall = 0.90          // 90% recall
 	config.CachePath = BuildCAGRACachePath("fast", config.VectorDim, config.GraphDegree, config.MaxVectors)
 	return config
 }
@@ -84,10 +87,11 @@ func FastCAGRAConfig() CAGRAConfig {
 // QualityCAGRAConfig returns configuration optimized for quality over speed
 func QualityCAGRAConfig() CAGRAConfig {
 	config := DefaultCAGRAConfig()
-	config.GraphDegree = 128      // Better quality
-	config.MaxIterations = 128    // Better recall
-	config.TargetLatencyUs = 2000 // <2ms target
-	config.TargetRecall = 0.99    // 99% recall
+	config.GraphDegree = 128             // Better quality
+	config.IntermediateGraphDegree = 256 // Higher build fanout for stronger recall
+	config.MaxIterations = 128           // Better recall
+	config.TargetLatencyUs = 2000        // <2ms target
+	config.TargetRecall = 0.99           // 99% recall
 	config.CachePath = BuildCAGRACachePath("quality", config.VectorDim, config.GraphDegree, config.MaxVectors)
 	return config
 }
@@ -103,6 +107,15 @@ func NewCAGRAIndex(config CAGRAConfig) (*CAGRAIndex, error) {
 	handle := C.cagra_create(C.int(config.MaxVectors), C.int(config.VectorDim))
 	if handle == nil {
 		return nil, fmt.Errorf("failed to create CAGRA index")
+	}
+	if result := C.cagra_configure(
+		handle,
+		C.int(config.GraphDegree),
+		C.int(config.IntermediateGraphDegree),
+		C.int(config.MaxIterations),
+	); result != 0 {
+		C.cagra_destroy(handle)
+		return nil, fmt.Errorf("failed to configure CAGRA index")
 	}
 
 	index := &CAGRAIndex{
@@ -139,18 +152,10 @@ func (idx *CAGRAIndex) BuildIndex(vectors []simd.Vec512, scales []float32) error
 	Debugf("🔨 Building CAGRA index: %d vectors", n)
 	start := time.Now()
 
-	// Flatten vectors for C API
-	flatVectors := make([]int8, n*idx.vectorDim)
-	for i, vec := range vectors {
-		for j := 0; j < idx.vectorDim; j++ {
-			flatVectors[i*idx.vectorDim+j] = vec[j]
-		}
-	}
-
 	// Build index
 	result := C.cagra_build_index(
 		idx.handle,
-		(*C.int8_t)(unsafe.Pointer(&flatVectors[0])),
+		(*C.int8_t)(unsafe.Pointer(&vectors[0][0])),
 		(*C.float)(unsafe.Pointer(&scales[0])),
 		C.int(n),
 	)
@@ -178,17 +183,19 @@ func (idx *CAGRAIndex) BuildIndex(vectors []simd.Vec512, scales []float32) error
 // Search performs ultra-fast k-nearest neighbor search
 func (idx *CAGRAIndex) Search(query simd.Vec512, queryScale float32, k int) ([]SearchResult, error) {
 	idx.mutex.RLock()
-	defer idx.mutex.RUnlock()
 
 	if !idx.isBuilt {
+		idx.mutex.RUnlock()
 		return nil, fmt.Errorf("index not built")
 	}
 	if idx.numVectors == 0 {
+		idx.mutex.RUnlock()
 		return []SearchResult{}, nil
 	}
 
 	switch {
 	case k <= 0:
+		idx.mutex.RUnlock()
 		return []SearchResult{}, nil
 	case k > idx.numVectors:
 		k = idx.numVectors
@@ -211,12 +218,15 @@ func (idx *CAGRAIndex) Search(query simd.Vec512, queryScale float32, k int) ([]S
 	)
 
 	if result != 0 {
+		idx.mutex.RUnlock()
 		return nil, fmt.Errorf("CAGRA search failed")
 	}
+	idx.mutex.RUnlock()
 
 	searchTime := time.Since(start)
 
-	// Update performance tracking
+	// Update performance tracking under an exclusive lock.
+	idx.mutex.Lock()
 	idx.searchCount++
 	if idx.searchCount == 1 {
 		idx.avgSearchTime = searchTime
@@ -227,6 +237,8 @@ func (idx *CAGRAIndex) Search(query simd.Vec512, queryScale float32, k int) ([]S
 			float64(idx.avgSearchTime)*(1-alpha) + float64(searchTime)*alpha,
 		)
 	}
+	searchCount := idx.searchCount
+	idx.mutex.Unlock()
 
 	// Convert to SearchResult format (expose positive similarity)
 	results := make([]SearchResult, 0, k)
@@ -243,9 +255,9 @@ func (idx *CAGRAIndex) Search(query simd.Vec512, queryScale float32, k int) ([]S
 	}
 
 	// Log performance for first few searches
-	if idx.searchCount <= 5 {
+	if searchCount <= 5 {
 		Debugf("🔍 CAGRA search #%d: %.3fms (target: %.1fms)",
-			idx.searchCount,
+			searchCount,
 			float64(searchTime.Microseconds())/1000.0,
 			float64(idx.config.TargetLatencyUs)/1000.0)
 	}
@@ -283,14 +295,6 @@ func (idx *CAGRAIndex) SearchBatch(queries []simd.Vec512, queryScales []float32,
 
 	start := time.Now()
 
-	// Flatten queries
-	flatQueries := make([]int8, nQueries*idx.vectorDim)
-	for i, query := range queries {
-		for j := 0; j < idx.vectorDim; j++ {
-			flatQueries[i*idx.vectorDim+j] = query[j]
-		}
-	}
-
 	// Allocate result buffers
 	neighbors := make([]uint32, nQueries*k)
 	distances := make([]float32, nQueries*k)
@@ -298,7 +302,7 @@ func (idx *CAGRAIndex) SearchBatch(queries []simd.Vec512, queryScales []float32,
 	// Perform batch search
 	result := C.cagra_search_batch(
 		idx.handle,
-		(*C.int8_t)(unsafe.Pointer(&flatQueries[0])),
+		(*C.int8_t)(unsafe.Pointer(&queries[0][0])),
 		(*C.float)(unsafe.Pointer(&queryScales[0])),
 		C.int(nQueries),
 		C.int(k),

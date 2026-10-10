@@ -27,6 +27,12 @@ typedef struct {
 
 // Core API
 cagra_wrapper_t* cagra_create(int max_vectors, int dim);
+int cagra_configure(
+    cagra_wrapper_t* wrapper,
+    int graph_degree,
+    int intermediate_graph_degree,
+    int search_max_iterations
+);
 void cagra_destroy(cagra_wrapper_t* wrapper);
 
 // Index operations

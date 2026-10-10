@@ -245,9 +245,58 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 		// Use flat index for small datasets
 		e.flatIndex.AddBatch(vectors, scales, ids)
 	} else {
-		// This shouldn't happen - large dataset without trained IVF
-		return fmt.Errorf("index not properly trained for large dataset (size=%d, n=%d, MaxFlatSize=%d, trained=%v, ivfIndex=%v)",
-			e.size, n, e.config.MaxFlatSize, e.trained, e.ivfIndex != nil)
+		// Dataset outgrew MaxFlatSize -- auto-train IVF from existing data
+		// e.rawVectors/e.scales/e.ids already include the new batch (appended above)
+		totalVecs := len(e.rawVectors)
+		trainSize := totalVecs
+		if trainSize > 100000 {
+			trainSize = 100000
+		}
+
+		fmt.Printf("Auto-training IVF (size=%d, adding=%d, MaxFlatSize=%d)\n", e.size, n, e.config.MaxFlatSize)
+		start := time.Now()
+
+		e.ivfIndex = ivf.NewIVFIndex(e.config.NList, e.config.NProbe)
+		e.ivfIndex.Train(e.rawVectors[:trainSize], e.scales[:trainSize])
+
+		if e.config.HNSWEnabled {
+			e.hnswRouter = hnsw.NewHNSW(e.config.HNSWM, e.config.HNSWEfC)
+			for i, centroid := range e.ivfIndex.KMeans.Centroids {
+				e.hnswRouter.Add(centroid, e.ivfIndex.KMeans.Scales[i], i)
+			}
+		}
+
+		e.ivfIndex.AddBatch(e.rawVectors, e.scales, e.ids)
+
+		if e.config.M > 0 && trainSize >= e.config.M*256 {
+			buf := make([]float32, 512)
+			floatVectors := make([][]float32, trainSize)
+			flatBuf := make([]float32, trainSize*512)
+			for i := 0; i < trainSize; i++ {
+				fv := flatBuf[i*512 : (i+1)*512]
+				s := e.scales[i]
+				for j := 0; j < 512; j++ {
+					fv[j] = float32(e.rawVectors[i][j]) * s
+				}
+				floatVectors[i] = fv
+			}
+			e.pq = pq.NewProductQuantizer(512, e.config.M, 256)
+			e.pq.Train(floatVectors)
+
+			e.pqCodes = make([][]uint8, totalVecs)
+			for i := 0; i < totalVecs; i++ {
+				s := e.scales[i]
+				for j := 0; j < 512; j++ {
+					buf[j] = float32(e.rawVectors[i][j]) * s
+				}
+				e.pqCodes[i] = e.pq.Encode(buf)
+			}
+			_ = buf
+		}
+
+		e.flatIndex = nil
+		e.trained = true
+		fmt.Printf("Auto-training done in %v, migrated %d vectors to IVF\n", time.Since(start), totalVecs)
 	}
 
 	e.size += n
@@ -264,7 +313,7 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 	}
 
 	// Use flat index for small datasets
-	if e.size <= e.config.MaxFlatSize {
+	if e.size <= e.config.MaxFlatSize && e.flatIndex != nil {
 		var flatResults []flat.SearchResult
 		if e.config.UseParallel {
 			flatResults = e.flatIndex.SearchTopKParallel(query, k)

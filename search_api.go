@@ -247,28 +247,11 @@ func (se *SearchEngine) AppendWithID(id int, text string) error {
 }
 
 func (se *SearchEngine) AppendBatchWithIDs(ids []int, texts []string) error {
-	if len(ids) != len(texts) {
-		return fmt.Errorf("ids and texts must have the same length")
+	prepared, err := se.PrepareAppendBatchWithIDs(ids, texts)
+	if err != nil {
+		return err
 	}
-	if len(ids) == 0 {
-		return nil
-	}
-
-	se.mu.Lock()
-	defer se.mu.Unlock()
-
-	seen := make(map[int]struct{}, len(ids))
-	for _, id := range ids {
-		if _, exists := seen[id]; exists {
-			return fmt.Errorf("%w: %d", ErrDocumentIDExists, id)
-		}
-		seen[id] = struct{}{}
-		if _, exists := se.documents[id]; exists {
-			return fmt.Errorf("%w: %d", ErrDocumentIDExists, id)
-		}
-	}
-
-	return se.indexBatchInternal(ids, texts)
+	return se.CommitPreparedAppend(prepared)
 }
 
 // IndexBatchAsync asynchronously indexes multiple texts and returns a channel for the result

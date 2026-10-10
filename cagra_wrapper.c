@@ -296,6 +296,38 @@ cagra_wrapper_t* cagra_create(int max_vectors, int dim) {
     return wrapper;
 }
 
+int cagra_configure(
+    cagra_wrapper_t* wrapper,
+    int graph_degree,
+    int intermediate_graph_degree,
+    int search_max_iterations
+) {
+    if (!wrapper) return -1;
+
+    if (graph_degree > 0) {
+        wrapper->graph_degree = graph_degree;
+        if (wrapper->index_params) {
+            wrapper->index_params->graph_degree = graph_degree;
+        }
+    }
+
+    if (intermediate_graph_degree > 0) {
+        wrapper->intermediate_graph_degree = intermediate_graph_degree;
+        if (wrapper->index_params) {
+            wrapper->index_params->intermediate_graph_degree = intermediate_graph_degree;
+        }
+    }
+
+    if (search_max_iterations > 0) {
+        wrapper->max_iterations = search_max_iterations;
+        if (wrapper->search_params) {
+            wrapper->search_params->max_iterations = search_max_iterations;
+        }
+    }
+
+    return 0;
+}
+
 // Build CAGRA index from int8 vectors
 int cagra_build_index(
     cagra_wrapper_t* wrapper,

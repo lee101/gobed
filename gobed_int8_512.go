@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"unicode"
 )
 
 const (
@@ -20,9 +19,9 @@ const (
 	Int8VocabSize    = 30522
 )
 
-// wordPieceTokenizer implements a minimal WordPiece tokenizer optimized for BERT-style vocabularies.
+// wordPieceTokenizer is an allocation-free BERT WordPiece tokenizer; unknown words and symbols are dropped.
 type wordPieceTokenizer struct {
-	vocab map[string]int16
+	table *vocabTable
 
 	clsID int16
 	sepID int16
@@ -31,222 +30,16 @@ type wordPieceTokenizer struct {
 	addSpecial bool
 }
 
-// tokenize splits text using a lightweight WordPiece algorithm and returns int16 token IDs.
 func (t *wordPieceTokenizer) tokenize(text string) ([]int16, error) {
-	if len(t.vocab) == 0 {
+	if t.table == nil {
 		return nil, fmt.Errorf("wordpiece vocab not initialized")
 	}
-
-	text = strings.ToLower(text)
-	words := basicWordSplit(text)
-
-	result := make([]int16, 0, len(words)+2)
-	if t.addSpecial && t.clsID >= 0 {
-		result = append(result, t.clsID)
-	}
-
-	for _, word := range words {
-		if id, ok := t.vocab[word]; ok {
-			result = append(result, id)
-			continue
-		}
-
-		subwordIDs := t.tokenizeWordPiece(word)
-		if len(subwordIDs) == 0 {
-			if t.unkID < 0 {
-				return nil, fmt.Errorf("unknown token %q and [UNK] not in vocab", word)
-			}
-			result = append(result, t.unkID)
-			continue
-		}
-		result = append(result, subwordIDs...)
-	}
-
-	if t.addSpecial && t.sepID >= 0 {
-		result = append(result, t.sepID)
-	}
-
-	return result, nil
-}
-
-func (t *wordPieceTokenizer) tokenizeWordPiece(word string) []int16 {
-	if word == "" {
-		return nil
-	}
-
-	var ids []int16
-	chars := []rune(word)
-	start := 0
-
-	for start < len(chars) {
-		end := len(chars)
-		var matched int16 = -1
-		var matchedLen int
-
-		for end > start {
-			sub := string(chars[start:end])
-			if start > 0 {
-				sub = "##" + sub
-			}
-
-			if id, ok := t.vocab[sub]; ok {
-				matched = id
-				matchedLen = end - start
-				break
-			}
-			end--
-		}
-
-		if matched == -1 {
-			return nil
-		}
-
-		ids = append(ids, matched)
-		start += matchedLen
-	}
-
-	return ids
-}
-
-// basicWordSplit performs a simple word split focusing on ASCII letters/digits and treating punctuation as separators.
-func basicWordSplit(text string) []string {
-	var tokens []string
-	var buf strings.Builder
-
-	flush := func() {
-		if buf.Len() > 0 {
-			tokens = append(tokens, buf.String())
-			buf.Reset()
-		}
-	}
-
-	for _, r := range text {
-		switch {
-		case unicode.IsSpace(r):
-			flush()
-		case isWordChar(r):
-			buf.WriteRune(r)
-		default:
-			flush()
-			if !unicode.IsSpace(r) {
-				tokens = append(tokens, string(r))
-			}
-		}
-	}
-	flush()
-	return tokens
-}
-
-func isWordChar(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'' || r == '_'
-}
-
-// tokenizeZeroAlloc tokenizes directly into result slice, returns token count
-// Uses a pre-allocated scratch buffer for word processing
-func (t *wordPieceTokenizer) tokenizeZeroAlloc(text string, result []int16, scratch []byte) int {
-	if len(t.vocab) == 0 {
-		return 0
-	}
-
-	count := 0
-	maxLen := len(result)
-
-	// Add CLS token
-	if t.addSpecial && t.clsID >= 0 && count < maxLen {
-		result[count] = t.clsID
-		count++
-	}
-
-	// Process text directly without allocating word slices
-	textBytes := []byte(strings.ToLower(text))
-	wordStart := -1
-
-	processWord := func(word []byte) {
-		if len(word) == 0 || count >= maxLen {
-			return
-		}
-
-		wordStr := string(word)
-		if id, ok := t.vocab[wordStr]; ok {
-			result[count] = id
-			count++
-			return
-		}
-
-		// WordPiece tokenization inline
-		start := 0
-		for start < len(word) && count < maxLen {
-			end := len(word)
-			var matched int16 = -1
-
-			for end > start {
-				var sub string
-				if start > 0 {
-					sub = "##" + string(word[start:end])
-				} else {
-					sub = string(word[start:end])
-				}
-
-				if id, ok := t.vocab[sub]; ok {
-					matched = id
-					result[count] = id
-					count++
-					start = end
-					break
-				}
-				end--
-			}
-
-			if matched == -1 {
-				if t.unkID >= 0 && count < maxLen {
-					result[count] = t.unkID
-					count++
-				}
-				break
-			}
-		}
-	}
-
-	for i := 0; i < len(textBytes); i++ {
-		b := textBytes[i]
-		isWord := (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '\'' || b == '_'
-
-		if isWord {
-			if wordStart < 0 {
-				wordStart = i
-			}
-		} else {
-			if wordStart >= 0 {
-				processWord(textBytes[wordStart:i])
-				wordStart = -1
-			}
-			// Handle punctuation as single-char token
-			if b != ' ' && b != '\t' && b != '\n' && b != '\r' {
-				if id, ok := t.vocab[string(b)]; ok && count < maxLen {
-					result[count] = id
-					count++
-				}
-			}
-		}
-	}
-
-	// Process last word
-	if wordStart >= 0 {
-		processWord(textBytes[wordStart:])
-	}
-
-	// Add SEP token
-	if t.addSpecial && t.sepID >= 0 && count < maxLen {
-		result[count] = t.sepID
-		count++
-	}
-
-	return count
+	return t.tokenizeInto(text, make([]int16, 0, len(text)/3+4), 0), nil
 }
 
 func newWordPieceTokenizer(vocab map[string]int16) *wordPieceTokenizer {
 	tk := &wordPieceTokenizer{
-		vocab:      vocab,
+		table:      newVocabTable(vocab),
 		clsID:      -1,
 		sepID:      -1,
 		unkID:      -1,

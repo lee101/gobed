@@ -8,6 +8,7 @@ echo "🚀 Building CAGRA wrapper for ultra-fast search..."
 # Check for cuVS installation
 CUVS_PATH=${CUVS_PATH:-/usr/local/cuvs}
 CUDA_PATH=${CUDA_PATH:-/usr/local/cuda}
+CUDA_ARCH=${CUDA_ARCH:-sm_86}
 
 if [ ! -d "$CUVS_PATH" ]; then
     echo "❌ cuVS not found at $CUVS_PATH"
@@ -24,6 +25,7 @@ fi
 
 echo "📦 Found cuVS at: $CUVS_PATH"
 echo "📦 Found CUDA at: $CUDA_PATH"
+echo "📦 Using CUDA arch: $CUDA_ARCH"
 
 # Set environment
 export PATH=$CUDA_PATH/bin:$PATH
@@ -33,7 +35,7 @@ export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUVS_PATH/lib:$LD_LIBRARY_PATH
 echo "🔨 Compiling CAGRA wrapper..."
 
 nvcc -x cu -c cagra_wrapper.c -o cagra_wrapper.o \
-    -arch=sm_86 \
+    -arch=${CUDA_ARCH} \
     -O3 \
     -use_fast_math \
     --expt-relaxed-constexpr \

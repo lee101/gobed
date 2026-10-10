@@ -124,16 +124,33 @@ func loadSimpleVocab(path string) (map[string]int16, error) {
 	return vocab, nil
 }
 
-// SimpleTokenize performs basic tokenization (space-separated + subword)
+// SimpleTokenize returns BERT WordPiece token ids ([CLS] ... [SEP]); unknown words and symbols are dropped.
 func (m *SimpleInt8Model512) SimpleTokenize(text string) []int16 {
 	if m.tokenizer == nil {
 		return nil
 	}
-	tokens, err := m.tokenizer.tokenize(text)
-	if err != nil {
-		return []int16{}
+	return m.tokenizer.tokenizeInto(text, make([]int16, 0, len(text)/3+4), 0)
+}
+
+// TokenizeInto appends token ids to dst without allocating when dst has capacity.
+// Tokenization stops at limit tokens (limit <= 0 means unlimited); [SEP] is dropped when truncated.
+// Words over 100 bytes are dropped.
+func (m *SimpleInt8Model512) TokenizeInto(text string, dst []int16, limit int) []int16 {
+	if m.tokenizer == nil {
+		return dst
 	}
-	return tokens
+	return m.tokenizer.tokenizeInto(text, dst, limit)
+}
+
+// EmbedTextInto tokenizes text (up to limit tokens) and writes the mean embedding into result
+// (len must be Int8EmbeddingDim). tokScratch is reused for token ids. Returns the token count.
+func (m *SimpleInt8Model512) EmbedTextInto(text string, limit int, result []float32, tokScratch []int16) int {
+	if len(result) != Int8EmbeddingDim {
+		return 0
+	}
+	tokens := m.TokenizeInto(text, tokScratch[:0], limit)
+	m.EmbedTokensIntoSIMD(tokens, result)
+	return len(tokens)
 }
 
 // EmbeddingTable returns the vocab embedding matrix (read-only).
@@ -148,45 +165,28 @@ func (m *SimpleInt8Model512) ScaleTable() []float32 {
 
 // EmbedTokens embeds int16 token IDs directly
 func (m *SimpleInt8Model512) EmbedTokens(tokens []int16) ([]float32, error) {
-	if len(tokens) == 0 {
-		return make([]float32, Int8EmbeddingDim), nil
-	}
-
-	// Initialize result vector
 	result := make([]float32, Int8EmbeddingDim)
-
-	// Average the embeddings
-	validTokens := 0
-	for _, token := range tokens {
-		if token < 0 || int(token) >= len(m.embeddings) {
-			continue // Skip invalid tokens
-		}
-
-		embedding := m.embeddings[token]
-		scale := m.scales[token]
-
-		// Dequantize and add to result
-		for j := 0; j < Int8EmbeddingDim; j++ {
-			result[j] += float32(embedding[j]) * scale
-		}
-		validTokens++
+	if len(tokens) == 0 {
+		return result, nil
 	}
-
-	// Average
-	if validTokens > 0 {
-		count := float32(validTokens)
-		for i := range result {
-			result[i] /= count
-		}
-	}
-
+	m.EmbedTokensIntoSIMD(tokens, result)
 	return result, nil
 }
 
 // Embed embeds text using simple int8 model
 func (m *SimpleInt8Model512) Embed(text string) ([]float32, error) {
-	tokens := m.SimpleTokenize(text)
-	return m.EmbedTokens(tokens)
+	result := make([]float32, Int8EmbeddingDim)
+	if m.tokenizer == nil {
+		return result, nil
+	}
+	tp := tokenPool.Get().(*[]int16)
+	tokens := m.tokenizer.tokenizeInto(text, (*tp)[:0], 0)
+	m.EmbedTokensIntoSIMD(tokens, result)
+	if cap(tokens) <= 4096 {
+		*tp = tokens[:0]
+	}
+	tokenPool.Put(tp)
+	return result, nil
 }
 
 // EmbedTokensInto embeds tokens into a pre-allocated buffer (zero-alloc hot path)
@@ -263,16 +263,17 @@ func (m *SimpleInt8Model512) EmbedFast(text string) ([]float32, func()) {
 	tokens := *tokBufPtr
 
 	// Tokenize directly into buffer (zero-alloc)
-	var tokenCount int
 	if m.tokenizer != nil {
-		tokenCount = m.tokenizer.tokenizeZeroAlloc(text, tokens, nil)
+		tokens = m.tokenizer.tokenizeInto(text, tokens[:0], len(tokens))
+	} else {
+		tokens = tokens[:0]
 	}
 
 	// Get pooled result buffer
 	resultPtr := float32Pool512.Get().(*[]float32)
 	result := *resultPtr
 
-	m.EmbedTokensInto(tokens[:tokenCount], result)
+	m.EmbedTokensIntoSIMD(tokens, result)
 
 	return result, func() {
 		tokenBufPool.Put(tokBufPtr)

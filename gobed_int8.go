@@ -124,7 +124,7 @@ import (
 //         __m512i vb = _mm512_loadu_si512(&b[i]);
 //
 //         // Subtract 128 to center around 0
-//         __m512i offset = _mm512_set1_epi8(128);
+//         __m512i offset = _mm512_set1_epi8((char)0x80);
 //         va = _mm512_sub_epi8(va, offset);
 //         vb = _mm512_sub_epi8(vb, offset);
 //
