@@ -353,32 +353,46 @@ func (m *Int8EmbeddingModel512) EmbedInt8(text string) (*Int8Result512, error) {
 	return quantizeVector512(embedding), nil
 }
 
-// quantizeVector512 quantizes a float32 vector to int8
+// quantizeVector512 quantizes a float32 vector to int8.
+//
+// Kept entirely in float32. The previous version did, per element, a float64
+// conversion for math.Abs, a division by scale, and a math.Round float64 round
+// trip — roughly 1.5k float64 operations per embedded text, on a path that runs
+// once per character at index time.
 func quantizeVector512(vec []float32) *Int8Result512 {
-	// Find max absolute value
 	maxAbs := float32(0)
 	for _, v := range vec {
-		if abs := float32(math.Abs(float64(v))); abs > maxAbs {
-			maxAbs = abs
+		if v < 0 {
+			v = -v
+		}
+		if v > maxAbs {
+			maxAbs = v
 		}
 	}
 
-	// Calculate scale
 	scale := maxAbs / 127.0
 	if scale == 0 {
 		scale = 1.0
 	}
+	inv := 1.0 / scale
 
-	// Quantize
 	result := make([]int8, len(vec))
 	for i, v := range vec {
-		quantized := int8(math.Round(float64(v / scale)))
-		if quantized > 127 {
-			quantized = 127
-		} else if quantized < -128 {
-			quantized = -128
+		// Adding +/-0.5 then truncating toward zero reproduces math.Round,
+		// which rounds halves away from zero.
+		f := v * inv
+		if f >= 0 {
+			f += 0.5
+		} else {
+			f -= 0.5
 		}
-		result[i] = quantized
+		q := int32(f)
+		if q > 127 {
+			q = 127
+		} else if q < -128 {
+			q = -128
+		}
+		result[i] = int8(q)
 	}
 
 	return &Int8Result512{

@@ -1,6 +1,8 @@
 #ifndef PURE_CUDA_INDEXER_H
 #define PURE_CUDA_INDEXER_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,9 +19,20 @@ int cuda_load_embeddings_int8(void* index, const signed char* embeddings, const 
 
 // Add int8 vectors to index
 int cuda_index_add(void* index, const signed char* vectors, const float* scales, int num_vectors);
+int cuda_index_reserve(void* index, int num_vectors);
+int cuda_index_shrink_to_fit(void* index);
+size_t cuda_index_get_allocated_bytes(void* index);
 
 // Search with token IDs (generates embedding on GPU)
 int cuda_search_with_tokens(
+    void* index,
+    const int* token_ids,
+    int seq_len,
+    int* result_indices,
+    float* result_scores,
+    int k
+);
+int cuda_search_with_tokens_unbuffered(
     void* index,
     const int* token_ids,
     int seq_len,

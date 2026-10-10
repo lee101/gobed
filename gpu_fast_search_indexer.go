@@ -309,6 +309,12 @@ func (idx *GPUFastSearchIndexer) SearchSingle(query []int8, scale float32, k int
 	resultIDs := make([]int, k)
 	resultScores := make([]float32, k)
 	
+	// The CUDA call mutates device-side scratch buffers owned by idx.handle,
+	// so concurrent callers corrupt each other's state. This was previously
+	// unsynchronised (the mutex guarded only the stats counters) and showed up
+	// in production as std::bad_alloc: cudaErrorIllegalAddress aborting the
+	// process, which no Go recover can catch.
+	idx.mutex.Lock()
 	result := C.gpu_fast_search_single(
 		idx.handle,
 		(*C.schar)(unsafe.Pointer(&query[0])),
@@ -321,7 +327,6 @@ func (idx *GPUFastSearchIndexer) SearchSingle(query []int8, scale float32, k int
 	latencyUs := time.Since(start).Microseconds()
 	
 	// Update performance stats
-	idx.mutex.Lock()
 	idx.searchCount++
 	idx.totalLatencyUs += latencyUs
 	idx.mutex.Unlock()
@@ -379,6 +384,8 @@ func (idx *GPUFastSearchIndexer) SearchBatch(queries [][]int8, scales []float32,
 	resultIDs := make([]int, numQueries*k)
 	resultScores := make([]float32, numQueries*k)
 	
+	// Serialised: shared device buffers on idx.handle.
+	idx.mutex.Lock()
 	result := C.gpu_fast_search_batch(
 		idx.handle,
 		(*C.schar)(unsafe.Pointer(&flatQueries[0])),
@@ -393,7 +400,6 @@ func (idx *GPUFastSearchIndexer) SearchBatch(queries [][]int8, scales []float32,
 	avgLatencyUs := latencyUs / int64(numQueries)
 	
 	// Update performance stats
-	idx.mutex.Lock()
 	idx.searchCount += int64(numQueries)
 	idx.totalLatencyUs += latencyUs
 	idx.mutex.Unlock()
@@ -452,6 +458,10 @@ func (idx *GPUFastSearchIndexer) OptimizeForInference() error {
 	}
 	
 	log.Printf("Optimizing for inference performance...")
+
+	// Serialised against searches: these mutate handle-owned device state.
+	idx.mutex.Lock()
+	defer idx.mutex.Unlock()
 	
 	// GPU-side optimizations
 	C.gpu_fast_search_optimize_for_latency(idx.handle)

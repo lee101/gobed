@@ -1,3 +1,4 @@
+//go:build gpu
 // +build gpu
 
 package gobed
@@ -22,7 +23,7 @@ func (s *GPUSearchServer) gpuIndexerSearch(embedding *EmbedInt8Result, k int) ([
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	// Convert int32 to int
 	indices := make([]int, len(indices32))
 	for i, idx := range indices32 {
@@ -33,5 +34,5 @@ func (s *GPUSearchServer) gpuIndexerSearch(embedding *EmbedInt8Result, k int) ([
 
 // gpuIndexerAddVectors adds vectors with proper signature for GPU builds
 func (s *GPUSearchServer) gpuIndexerAddVectors(validEmbeddings [][]int8, validScales []float32) error {
-	return s.gpuIndexer.AddVectors(validEmbeddings, validScales)
+	return s.gpuIndexer.addKnownVectors(validEmbeddings, validScales)
 }

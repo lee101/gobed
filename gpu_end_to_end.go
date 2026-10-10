@@ -14,7 +14,8 @@ import (
 
 /*
 #cgo CFLAGS: -I./gpu
-#cgo LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.9/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.9/lib64
+#cgo !gpuopt LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.9/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.9/lib64
+#cgo gpuopt LDFLAGS: ${SRCDIR}/gpu/build-opt/libpure_cuda_indexer.so -L/usr/local/cuda-12.9/lib64 -lcudart -lcublas -Wl,-rpath,${SRCDIR}/gpu/build-opt -Wl,-rpath,/usr/local/cuda-12.9/lib64
 #include "pure_cuda_indexer.h"
 #include <stdlib.h>
 */

@@ -11,6 +11,8 @@
 #include <cooperative_groups.h>
 #include <cuda_fp16.h>
 #include <cfloat>
+#include <limits>
+#include <mutex>
 
 namespace cg = cooperative_groups;
 
@@ -21,6 +23,7 @@ struct CUDAIndex {
     int num_vectors;
     int vector_dim;
     size_t allocated_size;
+    size_t allocated_vectors;
 
     // Embedding table for token lookups
     float* d_embeddings;    // Token embeddings [vocab_size x embed_dim]
@@ -40,8 +43,15 @@ struct CUDAIndex {
     float* d_scores_buffer;     // [max_search_vectors] - similarity scores
     int* d_indices_buffer;      // [max_k] - top-k indices
     float* d_topk_scores_buffer; // [max_k] - top-k scores
+    int* d_sort_idx;            // [search_buffer_capacity] - scratch for top-k sort
+    float* d_sort_keys;         // [search_buffer_capacity] - scratch for top-k sort
+    int* d_tokens_buffer;
+    float* d_embedding_buffer;
+    float* d_query_scale_buffer;
+    int token_buffer_capacity;
     int search_buffer_capacity; // current max vectors the score buffer can hold
     int topk_buffer_capacity;   // current max k the topk buffers can hold
+    std::mutex search_mutex;
 
     // CUDA streams for async execution
     cudaStream_t compute_stream;
@@ -53,11 +63,15 @@ struct CUDAIndex {
     CUDAIndex() : d_database(nullptr), d_scales(nullptr), d_embeddings(nullptr),
                   d_embeddings_int8(nullptr), d_embedding_scales(nullptr),
                   num_vectors(0), vector_dim(0), allocated_size(0),
+                  allocated_vectors(0),
                   vocab_size(0), embed_dim(0), max_tokens(512),
                   use_int8_embeddings(false), d_batch_embeddings(nullptr),
                   batch_capacity(0),
                   d_query_buffer(nullptr), d_scores_buffer(nullptr),
                   d_indices_buffer(nullptr), d_topk_scores_buffer(nullptr),
+                  d_sort_idx(nullptr), d_sort_keys(nullptr),
+                  d_tokens_buffer(nullptr), d_embedding_buffer(nullptr),
+                  d_query_scale_buffer(nullptr), token_buffer_capacity(0),
                   search_buffer_capacity(0), topk_buffer_capacity(0),
                   compute_stream(0), transfer_stream(0),
                   initialized(false) {}
@@ -781,6 +795,73 @@ __global__ void topk_selection_kernel(
     }
 }
 
+static bool resize_index_storage(CUDAIndex* index, size_t vector_capacity) {
+    if (vector_capacity < static_cast<size_t>(index->num_vectors)) return false;
+    if (vector_capacity == index->allocated_vectors) return true;
+
+    if (vector_capacity == 0) {
+        if (index->d_database) cudaFree(index->d_database);
+        if (index->d_scales) cudaFree(index->d_scales);
+        index->d_database = nullptr;
+        index->d_scales = nullptr;
+        index->allocated_size = 0;
+        index->allocated_vectors = 0;
+        return true;
+    }
+
+    if (index->vector_dim <= 0 ||
+        vector_capacity > std::numeric_limits<size_t>::max() /
+                              static_cast<size_t>(index->vector_dim)) {
+        return false;
+    }
+
+    size_t database_bytes = vector_capacity * static_cast<size_t>(index->vector_dim);
+    if (vector_capacity > std::numeric_limits<size_t>::max() / sizeof(float)) {
+        return false;
+    }
+    size_t scale_bytes = vector_capacity * sizeof(float);
+
+    int8_t* new_database = nullptr;
+    float* new_scales = nullptr;
+    cudaError_t err = cudaMalloc(&new_database, database_bytes);
+    if (err != cudaSuccess) {
+        cudaGetLastError();
+        return false;
+    }
+    err = cudaMalloc(&new_scales, scale_bytes);
+    if (err != cudaSuccess) {
+        cudaFree(new_database);
+        cudaGetLastError();
+        return false;
+    }
+
+    if (index->num_vectors > 0) {
+        size_t used_database_bytes =
+            static_cast<size_t>(index->num_vectors) * index->vector_dim;
+        err = cudaMemcpy(new_database, index->d_database, used_database_bytes,
+                         cudaMemcpyDeviceToDevice);
+        if (err == cudaSuccess) {
+            err = cudaMemcpy(new_scales, index->d_scales,
+                             static_cast<size_t>(index->num_vectors) * sizeof(float),
+                             cudaMemcpyDeviceToDevice);
+        }
+        if (err != cudaSuccess) {
+            cudaFree(new_database);
+            cudaFree(new_scales);
+            cudaGetLastError();
+            return false;
+        }
+    }
+
+    if (index->d_database) cudaFree(index->d_database);
+    if (index->d_scales) cudaFree(index->d_scales);
+    index->d_database = new_database;
+    index->d_scales = new_scales;
+    index->allocated_size = database_bytes;
+    index->allocated_vectors = vector_capacity;
+    return true;
+}
+
 extern "C" {
 
 // Create a new CUDA index
@@ -894,86 +975,98 @@ int cuda_load_embeddings_int8(void* index_ptr, const int8_t* embeddings, const f
 // Add vectors to the index
 int cuda_index_add(void* index_ptr, const int8_t* vectors, const float* scales, int num_vectors) {
     CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
-    if (!index || !index->initialized) return 0;
-    
-    size_t new_size = (index->num_vectors + num_vectors) * index->vector_dim * sizeof(int8_t);
-    
-    // Reallocate if needed
-    if (new_size > index->allocated_size) {
-        int8_t* new_database;
-        float* new_scales;
-        
-        cudaMalloc(&new_database, new_size * 2); // Allocate with growth factor
-        cudaMalloc(&new_scales, (index->num_vectors + num_vectors) * sizeof(float) * 2);
-        
-        if (index->d_database && index->num_vectors > 0) {
-            // Copy existing data
-            cudaMemcpy(new_database, index->d_database, 
-                      index->num_vectors * index->vector_dim * sizeof(int8_t),
-                      cudaMemcpyDeviceToDevice);
-            cudaMemcpy(new_scales, index->d_scales,
-                      index->num_vectors * sizeof(float),
-                      cudaMemcpyDeviceToDevice);
-            cudaFree(index->d_database);
-            cudaFree(index->d_scales);
+    if (!index || !index->initialized || !vectors || !scales || num_vectors <= 0) return 0;
+    if (index->num_vectors > std::numeric_limits<int>::max() - num_vectors) return 0;
+
+    size_t required_vectors = static_cast<size_t>(index->num_vectors + num_vectors);
+    if (required_vectors > index->allocated_vectors) {
+        if (required_vectors > std::numeric_limits<size_t>::max() / 2 ||
+            !resize_index_storage(index, required_vectors * 2)) {
+            return 0;
         }
-        
-        index->d_database = new_database;
-        index->d_scales = new_scales;
-        index->allocated_size = new_size * 2;
     }
     
     // Copy new vectors
     size_t offset = index->num_vectors * index->vector_dim;
-    cudaMemcpy(index->d_database + offset, vectors,
-              num_vectors * index->vector_dim * sizeof(int8_t),
-              cudaMemcpyHostToDevice);
-    
-    cudaMemcpy(index->d_scales + index->num_vectors, scales,
-              num_vectors * sizeof(float),
-              cudaMemcpyHostToDevice);
+    cudaError_t err = cudaMemcpy(index->d_database + offset, vectors,
+                                 static_cast<size_t>(num_vectors) * index->vector_dim,
+                                 cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) return 0;
+
+    err = cudaMemcpy(index->d_scales + index->num_vectors, scales,
+                     static_cast<size_t>(num_vectors) * sizeof(float),
+                     cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) return 0;
     
     index->num_vectors += num_vectors;
-    
-    // Get GPU memory info
-    size_t free_mem, total_mem;
-    cudaMemGetInfo(&free_mem, &total_mem);
-    size_t used_mem = total_mem - free_mem;
-    
-    // Vectors added to GPU index
-    
     return 1;
 }
 
-// Search with token IDs (generates embedding on GPU)
-int cuda_search_with_tokens(
-    void* index_ptr,
+int cuda_index_reserve(void* index_ptr, int num_vectors) {
+    CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
+    if (!index || !index->initialized || num_vectors < 0) return 0;
+    size_t requested = static_cast<size_t>(num_vectors);
+    if (requested <= index->allocated_vectors) return 1;
+    return resize_index_storage(index, requested) ? 1 : 0;
+}
+
+int cuda_index_shrink_to_fit(void* index_ptr) {
+    CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
+    if (!index || !index->initialized) return 0;
+    return resize_index_storage(index, static_cast<size_t>(index->num_vectors)) ? 1 : 0;
+}
+
+size_t cuda_index_get_allocated_bytes(void* index_ptr) {
+    CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
+    if (!index || !index->initialized) return 0;
+    return index->allocated_size + index->allocated_vectors * sizeof(float);
+}
+
+static int search_with_tokens_per_query(
+    CUDAIndex* index,
     const int* token_ids,
     int seq_len,
     int* result_indices,
     float* result_scores,
     int k
 ) {
-    CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
-    if (!index || !index->initialized || index->num_vectors == 0) return 0;
-    
     auto start = std::chrono::high_resolution_clock::now();
     
     // Allocate GPU memory for tokens and embedding
-    int* d_tokens;
-    float* d_embedding;
-    int8_t* d_query;
-    float* d_query_scale;
-    float* d_scores;
-    
-    cudaMalloc(&d_tokens, seq_len * sizeof(int));
-    cudaMalloc(&d_embedding, index->embed_dim * sizeof(float));
-    cudaMalloc(&d_query, index->vector_dim * sizeof(int8_t));
-    cudaMalloc(&d_query_scale, sizeof(float));
-    cudaMalloc(&d_scores, index->num_vectors * sizeof(float));
+    int* d_tokens = nullptr;
+    float* d_embedding = nullptr;
+    int8_t* d_query = nullptr;
+    float* d_query_scale = nullptr;
+    float* d_scores = nullptr;
+    int* d_indices = nullptr;
+    float* d_top_scores = nullptr;
+
+    auto cleanup = [&]() {
+        if (d_tokens) cudaFree(d_tokens);
+        if (d_embedding) cudaFree(d_embedding);
+        if (d_query) cudaFree(d_query);
+        if (d_query_scale) cudaFree(d_query_scale);
+        if (d_scores) cudaFree(d_scores);
+        if (d_indices) cudaFree(d_indices);
+        if (d_top_scores) cudaFree(d_top_scores);
+    };
+
+    if (cudaMalloc(&d_tokens, static_cast<size_t>(seq_len) * sizeof(int)) != cudaSuccess ||
+        cudaMalloc(&d_embedding, static_cast<size_t>(index->embed_dim) * sizeof(float)) != cudaSuccess ||
+        cudaMalloc(&d_query, static_cast<size_t>(index->vector_dim) * sizeof(int8_t)) != cudaSuccess ||
+        cudaMalloc(&d_query_scale, sizeof(float)) != cudaSuccess ||
+        cudaMalloc(&d_scores, static_cast<size_t>(index->num_vectors) * sizeof(float)) != cudaSuccess) {
+        cleanup();
+        cudaGetLastError();
+        return 0;
+    }
     
     // Copy tokens to GPU
-    cudaMemcpy(d_tokens, token_ids, seq_len * sizeof(int), cudaMemcpyHostToDevice);
+    if (cudaMemcpy(d_tokens, token_ids, static_cast<size_t>(seq_len) * sizeof(int),
+                   cudaMemcpyHostToDevice) != cudaSuccess) {
+        cleanup();
+        return 0;
+    }
     
     // Generate embedding from tokens - only compute first 512 dimensions
     int block_size = 256;
@@ -989,7 +1082,10 @@ int cuda_search_with_tokens(
             index->vocab_size, index->max_tokens
         );
         // No need for separate quantization step - already int8!
-        cudaDeviceSynchronize();
+        if (cudaDeviceSynchronize() != cudaSuccess) {
+            cleanup();
+            return 0;
+        }
     } else {
         // Use float embeddings
         int grid_size = (output_dim + block_size - 1) / block_size;
@@ -1009,7 +1105,11 @@ int cuda_search_with_tokens(
     
     // Get query scale from device
     float query_scale;
-    cudaMemcpy(&query_scale, d_query_scale, sizeof(float), cudaMemcpyDeviceToHost);
+    if (cudaMemcpy(&query_scale, d_query_scale, sizeof(float),
+                   cudaMemcpyDeviceToHost) != cudaSuccess) {
+        cleanup();
+        return 0;
+    }
     
     // Use vectorized kernel for better performance
     int8_dot_product_vectorized_kernel<<<grid_size, block_size>>>(
@@ -1019,10 +1119,12 @@ int cuda_search_with_tokens(
     );
     
     // Find top-k using optimized heap kernel
-    int* d_indices;
-    float* d_top_scores;
-    cudaMalloc(&d_indices, k * sizeof(int));
-    cudaMalloc(&d_top_scores, k * sizeof(float));
+    if (cudaMalloc(&d_indices, static_cast<size_t>(k) * sizeof(int)) != cudaSuccess ||
+        cudaMalloc(&d_top_scores, static_cast<size_t>(k) * sizeof(float)) != cudaSuccess) {
+        cleanup();
+        cudaGetLastError();
+        return 0;
+    }
     
     // Use heap-based top-k for better performance
     if (k == 10) {
@@ -1042,17 +1144,16 @@ int cuda_search_with_tokens(
     }
     
     // Copy results back
-    cudaMemcpy(result_indices, d_indices, k * sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(result_scores, d_top_scores, k * sizeof(float), cudaMemcpyDeviceToHost);
+    if (cudaMemcpy(result_indices, d_indices, static_cast<size_t>(k) * sizeof(int),
+                   cudaMemcpyDeviceToHost) != cudaSuccess ||
+        cudaMemcpy(result_scores, d_top_scores, static_cast<size_t>(k) * sizeof(float),
+                   cudaMemcpyDeviceToHost) != cudaSuccess) {
+        cleanup();
+        return 0;
+    }
     
     // Cleanup
-    cudaFree(d_tokens);
-    cudaFree(d_embedding);
-    cudaFree(d_query);
-    cudaFree(d_query_scale);
-    cudaFree(d_scores);
-    cudaFree(d_indices);
-    cudaFree(d_top_scores);
+    cleanup();
     
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -1063,18 +1164,51 @@ int cuda_search_with_tokens(
 }
 
 // Helper: ensure search buffers are allocated for given capacity
-static void ensure_search_buffers(CUDAIndex* index, int num_vectors, int k) {
+// Returns false if any allocation failed, so the caller can fall back to CPU
+// instead of dereferencing a null device pointer.
+static bool ensure_search_buffers(CUDAIndex* index, int num_vectors, int k) {
     // Allocate/reallocate query buffer if needed
     if (index->d_query_buffer == nullptr) {
-        cudaMalloc(&index->d_query_buffer, index->vector_dim * sizeof(int8_t));
+        if (cudaMalloc(&index->d_query_buffer, index->vector_dim * sizeof(int8_t)) != cudaSuccess) {
+            index->d_query_buffer = nullptr;
+            return false;
+        }
     }
 
-    // Allocate/reallocate scores buffer if capacity insufficient
+    // Allocate/reallocate scores buffer if capacity insufficient.
+    // d_sort_idx/d_sort_keys are scratch for the top-k sort; they used to be
+    // thrust::device_vectors allocated on every single query, which both cost
+    // two alloc/free round trips per search and turned any transient GPU memory
+    // pressure into a hard process abort.
     if (index->search_buffer_capacity < num_vectors) {
         if (index->d_scores_buffer) cudaFree(index->d_scores_buffer);
+        if (index->d_sort_idx) cudaFree(index->d_sort_idx);
+        if (index->d_sort_keys) cudaFree(index->d_sort_keys);
+        index->d_scores_buffer = nullptr;
+        index->d_sort_idx = nullptr;
+        index->d_sort_keys = nullptr;
+        index->search_buffer_capacity = 0;
+
         // Allocate with 20% headroom for growth
         int new_cap = num_vectors + num_vectors / 5;
-        cudaMalloc(&index->d_scores_buffer, new_cap * sizeof(float));
+        if (cudaMalloc(&index->d_scores_buffer, new_cap * sizeof(float)) != cudaSuccess) {
+            index->d_scores_buffer = nullptr;
+            return false;
+        }
+        if (cudaMalloc(&index->d_sort_idx, new_cap * sizeof(int)) != cudaSuccess) {
+            cudaFree(index->d_scores_buffer);
+            index->d_scores_buffer = nullptr;
+            index->d_sort_idx = nullptr;
+            return false;
+        }
+        if (cudaMalloc(&index->d_sort_keys, new_cap * sizeof(float)) != cudaSuccess) {
+            cudaFree(index->d_scores_buffer);
+            cudaFree(index->d_sort_idx);
+            index->d_scores_buffer = nullptr;
+            index->d_sort_idx = nullptr;
+            index->d_sort_keys = nullptr;
+            return false;
+        }
         index->search_buffer_capacity = new_cap;
     }
 
@@ -1082,35 +1216,230 @@ static void ensure_search_buffers(CUDAIndex* index, int num_vectors, int k) {
     if (index->topk_buffer_capacity < k) {
         if (index->d_indices_buffer) cudaFree(index->d_indices_buffer);
         if (index->d_topk_scores_buffer) cudaFree(index->d_topk_scores_buffer);
+        index->d_indices_buffer = nullptr;
+        index->d_topk_scores_buffer = nullptr;
+        index->topk_buffer_capacity = 0;
+
         int new_k = k + 64; // headroom
-        cudaMalloc(&index->d_indices_buffer, new_k * sizeof(int));
-        cudaMalloc(&index->d_topk_scores_buffer, new_k * sizeof(float));
+        if (cudaMalloc(&index->d_indices_buffer, new_k * sizeof(int)) != cudaSuccess) {
+            index->d_indices_buffer = nullptr;
+            return false;
+        }
+        if (cudaMalloc(&index->d_topk_scores_buffer, new_k * sizeof(float)) != cudaSuccess) {
+            cudaFree(index->d_indices_buffer);
+            index->d_indices_buffer = nullptr;
+            index->d_topk_scores_buffer = nullptr;
+            return false;
+        }
         index->topk_buffer_capacity = new_k;
     }
+
+    return true;
+}
+
+static bool ensure_token_search_buffers(CUDAIndex* index, int seq_len, int k) {
+    if (!ensure_search_buffers(index, index->num_vectors, k)) return false;
+
+    if (index->token_buffer_capacity < seq_len) {
+        int new_capacity = index->token_buffer_capacity > 0
+            ? index->token_buffer_capacity * 2 : seq_len;
+        if (new_capacity < seq_len) new_capacity = seq_len;
+        int* new_tokens = nullptr;
+        if (cudaMalloc(&new_tokens, static_cast<size_t>(new_capacity) * sizeof(int)) != cudaSuccess) {
+            cudaGetLastError();
+            return false;
+        }
+        if (index->d_tokens_buffer) cudaFree(index->d_tokens_buffer);
+        index->d_tokens_buffer = new_tokens;
+        index->token_buffer_capacity = new_capacity;
+    }
+
+    if (!index->d_embedding_buffer &&
+        cudaMalloc(&index->d_embedding_buffer,
+                   static_cast<size_t>(index->embed_dim) * sizeof(float)) != cudaSuccess) {
+        index->d_embedding_buffer = nullptr;
+        cudaGetLastError();
+        return false;
+    }
+    if (!index->d_query_scale_buffer &&
+        cudaMalloc(&index->d_query_scale_buffer, sizeof(float)) != cudaSuccess) {
+        index->d_query_scale_buffer = nullptr;
+        cudaGetLastError();
+        return false;
+    }
+    return true;
+}
+
+static int search_with_tokens_buffered(
+    CUDAIndex* index,
+    const int* token_ids,
+    int seq_len,
+    int* result_indices,
+    float* result_scores,
+    int k
+) {
+    cudaError_t err = cudaMemcpyAsync(
+        index->d_tokens_buffer, token_ids, static_cast<size_t>(seq_len) * sizeof(int),
+        cudaMemcpyHostToDevice, index->compute_stream);
+    if (err != cudaSuccess) return 0;
+
+    int block_size = 256;
+    int output_dim = index->vector_dim;
+    int embedding_grid_size = (output_dim + block_size - 1) / block_size;
+
+    if (index->use_int8_embeddings && index->d_embeddings_int8) {
+        int grid_size = (output_dim / 4 + block_size - 1) / block_size;
+        embed_and_pool_int8_shared_kernel<<<
+            grid_size, block_size,
+            block_size * index->embed_dim * sizeof(int8_t), index->compute_stream>>>(
+            index->d_tokens_buffer, index->d_embeddings_int8,
+            index->d_query_buffer, index->d_query_scale_buffer, seq_len,
+            index->embed_dim, output_dim, index->vocab_size, index->max_tokens);
+    } else {
+        embed_and_pool_optimized_kernel<<<
+            embedding_grid_size, block_size, 0, index->compute_stream>>>(
+            index->d_tokens_buffer, index->d_embeddings, index->d_embedding_buffer,
+            seq_len, index->embed_dim, output_dim, index->vocab_size, index->max_tokens);
+        quantize_to_int8_kernel<<<
+            embedding_grid_size, block_size, 0, index->compute_stream>>>(
+            index->d_embedding_buffer, index->d_query_buffer,
+            index->d_query_scale_buffer, index->vector_dim);
+    }
+
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return 0;
+
+    float query_scale;
+    err = cudaMemcpyAsync(&query_scale, index->d_query_scale_buffer, sizeof(float),
+                          cudaMemcpyDeviceToHost, index->compute_stream);
+    if (err != cudaSuccess ||
+        cudaStreamSynchronize(index->compute_stream) != cudaSuccess) {
+        return 0;
+    }
+
+    int score_grid_size = (index->num_vectors + block_size - 1) / block_size;
+    int8_dot_product_vectorized_kernel<<<
+        score_grid_size, block_size, 0, index->compute_stream>>>(
+        index->d_query_buffer, index->d_database, index->d_scores_buffer,
+        query_scale, index->d_scales, index->num_vectors, index->vector_dim);
+
+    if (k == 10) {
+        topk_heap_kernel<10><<<1, 256, 0, index->compute_stream>>>(
+            index->d_scores_buffer, index->d_indices_buffer,
+            index->d_topk_scores_buffer, index->num_vectors);
+    } else if (k == 20) {
+        topk_heap_kernel<20><<<1, 256, 0, index->compute_stream>>>(
+            index->d_scores_buffer, index->d_indices_buffer,
+            index->d_topk_scores_buffer, index->num_vectors);
+    } else {
+        size_t shared_mem_size = static_cast<size_t>(k) * (sizeof(float) + sizeof(int));
+        topk_selection_kernel<<<1, 256, shared_mem_size, index->compute_stream>>>(
+            index->d_scores_buffer, index->d_indices_buffer,
+            index->d_topk_scores_buffer, index->num_vectors, k);
+    }
+
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return 0;
+    err = cudaMemcpyAsync(result_indices, index->d_indices_buffer,
+                          static_cast<size_t>(k) * sizeof(int),
+                          cudaMemcpyDeviceToHost, index->compute_stream);
+    if (err == cudaSuccess) {
+        err = cudaMemcpyAsync(result_scores, index->d_topk_scores_buffer,
+                              static_cast<size_t>(k) * sizeof(float),
+                              cudaMemcpyDeviceToHost, index->compute_stream);
+    }
+    if (err != cudaSuccess ||
+        cudaStreamSynchronize(index->compute_stream) != cudaSuccess) {
+        return 0;
+    }
+    return k;
+}
+
+int cuda_search_with_tokens(
+    void* index_ptr,
+    const int* token_ids,
+    int seq_len,
+    int* result_indices,
+    float* result_scores,
+    int k
+) {
+    CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
+    if (!index || !index->initialized || index->num_vectors == 0 ||
+        !token_ids || !result_indices || !result_scores || seq_len <= 0 ||
+        k <= 0 ||
+        (!index->d_embeddings && !index->d_embeddings_int8)) {
+        return 0;
+    }
+
+    std::lock_guard<std::mutex> lock(index->search_mutex);
+    if (ensure_token_search_buffers(index, seq_len, k)) {
+        return search_with_tokens_buffered(
+            index, token_ids, seq_len, result_indices, result_scores, k);
+    }
+    return search_with_tokens_per_query(
+        index, token_ids, seq_len, result_indices, result_scores, k);
+}
+
+int cuda_search_with_tokens_unbuffered(
+    void* index_ptr,
+    const int* token_ids,
+    int seq_len,
+    int* result_indices,
+    float* result_scores,
+    int k
+) {
+    CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
+    if (!index || !index->initialized || index->num_vectors == 0 ||
+        !token_ids || !result_indices || !result_scores || seq_len <= 0 ||
+        k <= 0 ||
+        (!index->d_embeddings && !index->d_embeddings_int8)) {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lock(index->search_mutex);
+    return search_with_tokens_per_query(
+        index, token_ids, seq_len, result_indices, result_scores, k);
 }
 
 // Fast parallel top-k using thrust (radix sort partial)
-static void thrust_topk(float* d_scores, int* d_indices, float* d_top_scores, int n, int k, cudaStream_t stream) {
-    // Create index array
-    thrust::device_vector<int> idx(n);
-    thrust::sequence(thrust::cuda::par.on(stream), idx.begin(), idx.end());
+// Sorts into caller-owned scratch (d_sort_idx/d_sort_keys) rather than allocating
+// per call. Returns false on any CUDA/thrust failure; thrust reports allocation
+// failure by throwing, and letting that escape an extern "C" frame calls
+// std::terminate, which aborted the whole server on transient GPU pressure.
+static bool thrust_topk(float* d_scores, int* d_indices, float* d_top_scores,
+                        int* d_sort_idx, float* d_sort_keys,
+                        int n, int k, cudaStream_t stream) {
+    if (!d_sort_idx || !d_sort_keys) return false;
+    try {
+        auto policy = thrust::cuda::par.on(stream);
 
-    // Wrap scores in device_ptr
-    thrust::device_ptr<float> scores_ptr(d_scores);
+        thrust::device_ptr<int> idx(d_sort_idx);
+        thrust::sequence(policy, idx, idx + n);
 
-    // Partial sort (only sorts enough to get top k) - use negative for descending
-    thrust::device_vector<float> neg_scores(n);
-    thrust::transform(thrust::cuda::par.on(stream), scores_ptr, scores_ptr + n, neg_scores.begin(),
-                      thrust::negate<float>());
+        thrust::device_ptr<float> scores_ptr(d_scores);
+        thrust::device_ptr<float> neg_scores(d_sort_keys);
 
-    // Sort by negative scores (gives descending order)
-    thrust::sort_by_key(thrust::cuda::par.on(stream), neg_scores.begin(), neg_scores.end(), idx.begin());
+        // Negate so an ascending sort yields descending scores
+        thrust::transform(policy, scores_ptr, scores_ptr + n, neg_scores,
+                          thrust::negate<float>());
 
-    // Copy top k results
-    cudaMemcpyAsync(d_indices, thrust::raw_pointer_cast(idx.data()), k * sizeof(int), cudaMemcpyDeviceToDevice, stream);
-    // Negate back to get original scores
-    thrust::transform(thrust::cuda::par.on(stream), neg_scores.begin(), neg_scores.begin() + k,
-                      thrust::device_ptr<float>(d_top_scores), thrust::negate<float>());
+        thrust::sort_by_key(policy, neg_scores, neg_scores + n, idx);
+
+        cudaMemcpyAsync(d_indices, d_sort_idx, k * sizeof(int),
+                        cudaMemcpyDeviceToDevice, stream);
+
+        // Negate back to get original scores
+        thrust::transform(policy, neg_scores, neg_scores + k,
+                          thrust::device_ptr<float>(d_top_scores), thrust::negate<float>());
+    } catch (const std::exception& e) {
+        std::cerr << "GPU top-k failed, falling back to CPU: " << e.what() << std::endl;
+        cudaGetLastError();  // clear the sticky error so later launches can succeed
+        return false;
+    } catch (...) {
+        std::cerr << "GPU top-k failed with an unknown error, falling back to CPU" << std::endl;
+        cudaGetLastError();
+        return false;
+    }
+    return true;
 }
 
 // Search with pre-computed int8 embedding (optimized: reuses pre-allocated buffers)
@@ -1124,9 +1453,14 @@ int cuda_search_with_embedding(
 ) {
     CUDAIndex* index = static_cast<CUDAIndex*>(index_ptr);
     if (!index || !index->initialized || index->num_vectors == 0) return 0;
+    std::lock_guard<std::mutex> lock(index->search_mutex);
 
     // Ensure buffers are allocated (only allocates once, then reused)
-    ensure_search_buffers(index, index->num_vectors, k);
+    if (!ensure_search_buffers(index, index->num_vectors, k)) {
+        std::cerr << "GPU search buffers unavailable (out of device memory), falling back to CPU" << std::endl;
+        cudaGetLastError();
+        return 0;
+    }
 
     // Copy query to pre-allocated GPU buffer (async on transfer stream)
     cudaMemcpyAsync(index->d_query_buffer, query, index->vector_dim * sizeof(int8_t),
@@ -1151,8 +1485,11 @@ int cuda_search_with_embedding(
     }
 
     // Use fast thrust-based top-k (O(n log n) but highly parallel)
-    thrust_topk(index->d_scores_buffer, index->d_indices_buffer, index->d_topk_scores_buffer,
-                index->num_vectors, k, index->compute_stream);
+    if (!thrust_topk(index->d_scores_buffer, index->d_indices_buffer, index->d_topk_scores_buffer,
+                     index->d_sort_idx, index->d_sort_keys,
+                     index->num_vectors, k, index->compute_stream)) {
+        return 0;
+    }
 
     cudaStreamSynchronize(index->compute_stream);
 
@@ -1180,6 +1517,11 @@ void cuda_index_destroy(void* index_ptr) {
     if (index->d_scores_buffer) cudaFree(index->d_scores_buffer);
     if (index->d_indices_buffer) cudaFree(index->d_indices_buffer);
     if (index->d_topk_scores_buffer) cudaFree(index->d_topk_scores_buffer);
+    if (index->d_sort_idx) cudaFree(index->d_sort_idx);
+    if (index->d_sort_keys) cudaFree(index->d_sort_keys);
+    if (index->d_tokens_buffer) cudaFree(index->d_tokens_buffer);
+    if (index->d_embedding_buffer) cudaFree(index->d_embedding_buffer);
+    if (index->d_query_scale_buffer) cudaFree(index->d_query_scale_buffer);
 
     // Destroy CUDA streams
     if (index->compute_stream) cudaStreamDestroy(index->compute_stream);
@@ -1267,29 +1609,16 @@ int cuda_bulk_index_tokens(
     }
     
     // Expand database if needed
-    size_t new_total = index->num_vectors + batch_size;
-    if (new_total * index->vector_dim > index->allocated_size / sizeof(int8_t)) {
-        size_t new_size = new_total * 2 * index->vector_dim * sizeof(int8_t);
-        int8_t* new_database;
-        float* new_scales;
-        
-        cudaMalloc(&new_database, new_size);
-        cudaMalloc(&new_scales, new_total * 2 * sizeof(float));
-        
-        if (index->d_database && index->num_vectors > 0) {
-            cudaMemcpy(new_database, index->d_database, 
-                      index->num_vectors * index->vector_dim * sizeof(int8_t), 
-                      cudaMemcpyDeviceToDevice);
-            cudaMemcpy(new_scales, index->d_scales,
-                      index->num_vectors * sizeof(float),
-                      cudaMemcpyDeviceToDevice);
-            cudaFree(index->d_database);
-            cudaFree(index->d_scales);
-        }
-        
-        index->d_database = new_database;
-        index->d_scales = new_scales;
-        index->allocated_size = new_size;
+    size_t new_total = static_cast<size_t>(index->num_vectors) + batch_size;
+    if (new_total > index->allocated_vectors &&
+        (new_total > std::numeric_limits<size_t>::max() / 2 ||
+         !resize_index_storage(index, new_total * 2))) {
+        cudaFree(d_tokens);
+        cudaFree(d_embeddings_batch);
+        cudaFree(d_vectors_batch);
+        cudaFree(d_scales_batch);
+        cudaFree(d_seq_lengths);
+        return 0;
     }
     
     // Copy batch vectors to database (all stays on GPU)

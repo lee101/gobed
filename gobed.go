@@ -94,8 +94,28 @@ func findModelFile(filename string) (string, error) {
 	return "", fmt.Errorf("file not found: %s", filename)
 }
 
-// LoadModel loads the real static-retrieval-mrl-en-v1 embedding model
+var (
+	sharedModelOnce sync.Once
+	sharedModel     *EmbeddingModel
+	sharedModelErr  error
+)
+
+// LoadModel returns the shared static-retrieval-mrl-en-v1 embedding model,
+// loading it on first use.
+//
+// The weights and tokenizer are immutable once loaded and every EmbeddingModel
+// method is read-only, so one instance is safely shared by all callers. This
+// used to re-read and re-parse the safetensors from disk on every call: a
+// production start logged 47 separate loads, which dominated startup time.
 func LoadModel() (*EmbeddingModel, error) {
+	sharedModelOnce.Do(func() {
+		sharedModel, sharedModelErr = loadModelUncached()
+	})
+	return sharedModel, sharedModelErr
+}
+
+// loadModelUncached performs the actual load. Prefer LoadModel.
+func loadModelUncached() (*EmbeddingModel, error) {
 	fmt.Println("🔄 Loading real static-retrieval-mrl-en-v1 model...")
 	start := time.Now()
 
@@ -197,14 +217,43 @@ func (m *EmbeddingModel) encodeWithTokenizer(text string) ([]float32, error) {
 	var encoding *tokenizer.Encoding
 	var err error
 
-	func() {
+	tokenize := func(in string) {
 		defer func() {
 			if r := recover(); r != nil {
 				err = fmt.Errorf("tokenizer panic recovered: %v", r)
 			}
 		}()
-		encoding, err = m.tokenizer.EncodeSingle(cleanText, false)
-	}()
+		encoding, err = m.tokenizer.EncodeSingle(in, false)
+	}
+	tokenize(cleanText)
+	if err != nil {
+		// Some exotic unicode sequences crash the tokenizer; retry with a
+		// plain-text version, and fall back to a zero embedding so one bad
+		// document cannot abort a whole index batch.
+		plain := strings.Map(func(r rune) rune {
+			if r < 128 && (r >= 32 || r == '\n') {
+				return r
+			}
+			if r >= 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+				return r
+			}
+			return ' '
+		}, cleanText)
+		encoding, err = nil, nil
+		tokenize(plain)
+		if err != nil {
+			encoding, err = nil, nil
+			tokenize(strings.Map(func(r rune) rune {
+				if r < 128 {
+					return r
+				}
+				return ' '
+			}, plain))
+		}
+		if err != nil {
+			return make([]float32, m.EmbedDim), nil
+		}
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("tokenization failed for text '%s': %v", truncateForError(text), err)

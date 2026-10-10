@@ -4,13 +4,15 @@ package gobed
 
 /*
 #cgo CFLAGS: -I./gpu
-#cgo LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.9/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.9/lib64
+#cgo !gpuopt LDFLAGS: -L./gpu -lpure_cuda_indexer -L/usr/local/cuda-12.9/lib64 -lcudart -lcublas -Wl,-rpath,./gpu -Wl,-rpath,/usr/local/cuda-12.9/lib64
+#cgo gpuopt LDFLAGS: ${SRCDIR}/gpu/build-opt/libpure_cuda_indexer.so -L/usr/local/cuda-12.9/lib64 -lcudart -lcublas -Wl,-rpath,${SRCDIR}/gpu/build-opt -Wl,-rpath,/usr/local/cuda-12.9/lib64
 #include "pure_cuda_indexer.h"
 #include <stdlib.h>
 */
 import "C"
 import (
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -193,6 +195,56 @@ func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	return nil
 }
 
+// Reserve ensures space for at least n total vectors.
+func (g *GPUIndexer) Reserve(n int) error {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	if n < 0 || int64(n) > int64(1<<31-1) {
+		return fmt.Errorf("invalid vector capacity: %d", n)
+	}
+	if result := C.cuda_index_reserve(g.handle, C.int(n)); result == 0 {
+		return fmt.Errorf("failed to reserve GPU index capacity for %d vectors", n)
+	}
+	return nil
+}
+
+func (g *GPUIndexer) addKnownVectors(vectors [][]int8, scales []float32) error {
+	g.mutex.RLock()
+	target := g.numVectors + len(vectors)
+	g.mutex.RUnlock()
+
+	if err := g.Reserve(target); err != nil {
+		return err
+	}
+	if err := g.AddVectors(vectors, scales); err != nil {
+		_ = g.ShrinkToFit()
+		return err
+	}
+	if err := g.ShrinkToFit(); err != nil {
+		log.Printf("GPU index shrink-to-fit failed after successful population: %v", err)
+	}
+	return nil
+}
+
+// ShrinkToFit releases database capacity beyond the vectors currently indexed.
+func (g *GPUIndexer) ShrinkToFit() error {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	if result := C.cuda_index_shrink_to_fit(g.handle); result == 0 {
+		return fmt.Errorf("failed to shrink GPU index capacity")
+	}
+	return nil
+}
+
+// GetAllocatedMemoryUsage returns bytes allocated for vectors and their scales.
+func (g *GPUIndexer) GetAllocatedMemoryUsage() uint64 {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+	return uint64(C.cuda_index_get_allocated_bytes(g.handle))
+}
+
 // SearchWithTokens searches using token IDs (generates embedding on GPU)
 func (g *GPUIndexer) SearchWithTokens(tokenIDs []int32, k int) ([]int32, []float32, error) {
 	g.mutex.RLock()
@@ -223,6 +275,33 @@ func (g *GPUIndexer) SearchWithTokens(tokenIDs []int32, k int) ([]int32, []float
 		return nil, nil, fmt.Errorf("GPU search failed")
 	}
 
+	return resultIndices, resultScores, nil
+}
+
+func (g *GPUIndexer) searchWithTokensUnbuffered(tokenIDs []int32, k int) ([]int32, []float32, error) {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+
+	if len(tokenIDs) == 0 {
+		return nil, nil, fmt.Errorf("no tokens provided")
+	}
+	if g.numVectors == 0 {
+		return nil, nil, fmt.Errorf("index is empty")
+	}
+
+	resultIndices := make([]int32, k)
+	resultScores := make([]float32, k)
+	result := C.cuda_search_with_tokens_unbuffered(
+		g.handle,
+		(*C.int)(unsafe.Pointer(&tokenIDs[0])),
+		C.int(len(tokenIDs)),
+		(*C.int)(unsafe.Pointer(&resultIndices[0])),
+		(*C.float)(unsafe.Pointer(&resultScores[0])),
+		C.int(k),
+	)
+	if result == 0 {
+		return nil, nil, fmt.Errorf("unbuffered GPU search failed")
+	}
 	return resultIndices, resultScores, nil
 }
 

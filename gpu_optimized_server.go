@@ -184,7 +184,7 @@ func OptimizedBatchIndex(indexer *GPUIndexer, embeddings []*EmbedInt8Result) err
 	}
 
 	// Add vectors to GPU
-	err := indexer.AddVectors(vectors, scales)
+	err := indexer.addKnownVectors(vectors, scales)
 
 	// Return buffers to pool
 	for _, vec := range vectors {

@@ -3,11 +3,14 @@
 #include <cublas_v2.h>
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
+#include <thrust/functional.h>
+#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <chrono>
+#include <iostream>
 #include <fstream>
 
 extern "C" {
@@ -28,6 +31,16 @@ typedef struct {
     int* d_ids;            // Document IDs
     float* d_centroids;    // Cluster centroids for IVF
     
+    // Per-query scratch, allocated once and reused. These used to be four
+    // cudaMalloc/device_vector allocations on every single search, which made
+    // every query a potential OOM and (unchecked) a source of illegal-address
+    // faults that aborted the whole process.
+    signed char* d_query_buf;   // [vector_dim]
+    float* d_distances_buf;     // [scratch_capacity]
+    float* d_sort_keys;         // [scratch_capacity]
+    int* d_sort_idx;            // [scratch_capacity]
+    int scratch_capacity;
+
     // Performance tracking
     double total_search_time_us;
     int search_count;
@@ -66,6 +79,10 @@ void gpu_fast_search_destroy(gpu_fast_search_t* searcher) {
     if (searcher->d_scales) cudaFree(searcher->d_scales);
     if (searcher->d_ids) cudaFree(searcher->d_ids);
     if (searcher->d_centroids) cudaFree(searcher->d_centroids);
+    if (searcher->d_query_buf) cudaFree(searcher->d_query_buf);
+    if (searcher->d_distances_buf) cudaFree(searcher->d_distances_buf);
+    if (searcher->d_sort_keys) cudaFree(searcher->d_sort_keys);
+    if (searcher->d_sort_idx) cudaFree(searcher->d_sort_idx);
     
     // Destroy cuBLAS handle
     if (searcher->handle) {
@@ -119,52 +136,124 @@ __global__ void ultra_fast_distance_kernel(const signed char* vectors, const flo
 }
 
 // Single query search (<1ms target)
+// Allocate (once) the per-query scratch buffers. Returns false on any failure so
+// the caller can report failure and let Go fall back to CPU search.
+static bool ensure_fast_search_scratch(gpu_fast_search_t* searcher) {
+    if (searcher->d_query_buf == nullptr) {
+        if (cudaMalloc(&searcher->d_query_buf,
+                       searcher->vector_dim * sizeof(signed char)) != cudaSuccess) {
+            searcher->d_query_buf = nullptr;
+            return false;
+        }
+    }
+    if (searcher->scratch_capacity >= searcher->total_vectors) return true;
+
+    if (searcher->d_distances_buf) cudaFree(searcher->d_distances_buf);
+    if (searcher->d_sort_keys) cudaFree(searcher->d_sort_keys);
+    if (searcher->d_sort_idx) cudaFree(searcher->d_sort_idx);
+    searcher->d_distances_buf = nullptr;
+    searcher->d_sort_keys = nullptr;
+    searcher->d_sort_idx = nullptr;
+    searcher->scratch_capacity = 0;
+
+    int cap = searcher->total_vectors + searcher->total_vectors / 5;  // 20% headroom
+    if (cudaMalloc(&searcher->d_distances_buf, cap * sizeof(float)) != cudaSuccess) {
+        searcher->d_distances_buf = nullptr;
+        return false;
+    }
+    if (cudaMalloc(&searcher->d_sort_keys, cap * sizeof(float)) != cudaSuccess) {
+        cudaFree(searcher->d_distances_buf);
+        searcher->d_distances_buf = nullptr;
+        searcher->d_sort_keys = nullptr;
+        return false;
+    }
+    if (cudaMalloc(&searcher->d_sort_idx, cap * sizeof(int)) != cudaSuccess) {
+        cudaFree(searcher->d_distances_buf);
+        cudaFree(searcher->d_sort_keys);
+        searcher->d_distances_buf = nullptr;
+        searcher->d_sort_keys = nullptr;
+        searcher->d_sort_idx = nullptr;
+        return false;
+    }
+    searcher->scratch_capacity = cap;
+    return true;
+}
+
 int gpu_fast_search_single(gpu_fast_search_t* searcher, const signed char* query, float scale,
                           int k, int* result_ids, float* result_scores) {
     if (!searcher || searcher->total_vectors == 0) return 0;
-    
+    if (k <= 0) return 0;
+    if (k > searcher->total_vectors) k = searcher->total_vectors;
+
     auto start = std::chrono::high_resolution_clock::now();
-    
-    // Copy query to GPU
-    signed char* d_query;
-    float* d_distances;
-    cudaMalloc(&d_query, searcher->vector_dim * sizeof(signed char));
-    cudaMalloc(&d_distances, searcher->total_vectors * sizeof(float));
-    
-    cudaMemcpy(d_query, query, searcher->vector_dim * sizeof(signed char), cudaMemcpyHostToDevice);
-    
+
+    if (!ensure_fast_search_scratch(searcher)) {
+        std::cerr << "gpu_fast_search: device scratch unavailable, falling back to CPU" << std::endl;
+        cudaGetLastError();
+        return 0;
+    }
+
+    const int n = searcher->total_vectors;
+
+    if (cudaMemcpy(searcher->d_query_buf, query, searcher->vector_dim * sizeof(signed char),
+                   cudaMemcpyHostToDevice) != cudaSuccess) {
+        cudaGetLastError();
+        return 0;
+    }
+
     // Launch ultra-fast distance kernel
     int threads = 256;
-    int blocks = (searcher->total_vectors + threads - 1) / threads;
+    int blocks = (n + threads - 1) / threads;
     ultra_fast_distance_kernel<<<blocks, threads>>>(
-        searcher->d_vectors, searcher->d_scales, d_query, scale,
-        d_distances, searcher->total_vectors, searcher->vector_dim
+        searcher->d_vectors, searcher->d_scales, searcher->d_query_buf, scale,
+        searcher->d_distances_buf, n, searcher->vector_dim
     );
-    
-    // Find top-k using thrust (GPU-accelerated sorting)
-    thrust::device_vector<float> distances_vec(d_distances, d_distances + searcher->total_vectors);
-    thrust::device_vector<int> indices_vec(searcher->total_vectors);
-    thrust::sequence(indices_vec.begin(), indices_vec.end());
-    
-    // Partial sort for top-k (much faster than full sort)
-    thrust::sort_by_key(distances_vec.begin(), distances_vec.begin() + k,
-                       indices_vec.begin());
-    
-    // Copy results back
-    cudaMemcpy(result_scores, thrust::raw_pointer_cast(distances_vec.data()), 
-               k * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(result_ids, thrust::raw_pointer_cast(indices_vec.data()),
-               k * sizeof(int), cudaMemcpyDeviceToHost);
-    
-    cudaFree(d_query);
-    cudaFree(d_distances);
-    
+    cudaError_t kerr = cudaGetLastError();
+    if (kerr != cudaSuccess) {
+        std::cerr << "gpu_fast_search kernel launch failed: " << cudaGetErrorString(kerr) << std::endl;
+        return 0;
+    }
+    if (cudaDeviceSynchronize() != cudaSuccess) {
+        cudaGetLastError();
+        return 0;
+    }
+
+    // Top-k over the WHOLE score array. The previous implementation sorted only
+    // distances[0..k), i.e. it ranked the first k vectors by index and ignored
+    // every vector after that, so the "top k" was not the top k at all.
+    try {
+        thrust::device_ptr<float> keys(searcher->d_sort_keys);
+        thrust::device_ptr<int> idx(searcher->d_sort_idx);
+        thrust::device_ptr<float> dist(searcher->d_distances_buf);
+
+        thrust::copy(dist, dist + n, keys);
+        thrust::sequence(idx, idx + n);
+        // Higher score is better, so sort descending.
+        thrust::sort_by_key(keys, keys + n, idx, thrust::greater<float>());
+    } catch (const std::exception& e) {
+        std::cerr << "gpu_fast_search top-k failed, falling back to CPU: " << e.what() << std::endl;
+        cudaGetLastError();
+        return 0;
+    } catch (...) {
+        std::cerr << "gpu_fast_search top-k failed (unknown error), falling back to CPU" << std::endl;
+        cudaGetLastError();
+        return 0;
+    }
+
+    if (cudaMemcpy(result_scores, searcher->d_sort_keys, k * sizeof(float),
+                   cudaMemcpyDeviceToHost) != cudaSuccess ||
+        cudaMemcpy(result_ids, searcher->d_sort_idx, k * sizeof(int),
+                   cudaMemcpyDeviceToHost) != cudaSuccess) {
+        cudaGetLastError();
+        return 0;
+    }
+
     // Track performance
     auto end = std::chrono::high_resolution_clock::now();
     double search_time_us = std::chrono::duration<double, std::micro>(end - start).count();
     searcher->total_search_time_us += search_time_us;
     searcher->search_count++;
-    
+
     return 1; // Success
 }
 

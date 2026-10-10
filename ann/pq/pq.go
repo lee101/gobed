@@ -3,6 +3,8 @@ package pq
 import (
 	"math"
 	"math/rand"
+	"runtime"
+	"sync"
 )
 
 // ProductQuantizer performs product quantization on vectors
@@ -46,26 +48,46 @@ func (pq *ProductQuantizer) Train(vectors [][]float32) {
 		panic("not enough training data for PQ")
 	}
 
-	// Train each subquantizer independently
-	for m := 0; m < pq.M; m++ {
-		startDim := m * pq.DSub
-		endDim := startDim + pq.DSub
-
-		// Extract subvectors for this subquantizer
-		subvectors := make([][]float32, n)
-		for i := range subvectors {
-			subvectors[i] = vectors[i][startDim:endDim]
-		}
-
-		// Run k-means on subvectors
-		pq.trainSubquantizer(m, subvectors)
+	// Subquantizers are independent: each only writes Codebooks[m]. Training
+	// them serially left all but one core idle (observed 1h3m47s for 10k
+	// vectors with M=64).
+	workers := runtime.NumCPU()
+	if workers > pq.M {
+		workers = pq.M
 	}
+
+	var wg sync.WaitGroup
+	next := make(chan int, pq.M)
+	for m := 0; m < pq.M; m++ {
+		next <- m
+	}
+	close(next)
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(seed int64) {
+			defer wg.Done()
+			rng := rand.New(rand.NewSource(seed))
+			for m := range next {
+				startDim := m * pq.DSub
+				endDim := startDim + pq.DSub
+
+				subvectors := make([][]float32, n)
+				for i := range subvectors {
+					subvectors[i] = vectors[i][startDim:endDim]
+				}
+
+				pq.trainSubquantizer(m, subvectors, rng)
+			}
+		}(int64(w) + 1)
+	}
+	wg.Wait()
 
 	pq.Trained = true
 }
 
 // trainSubquantizer trains a single subquantizer using k-means
-func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
+func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32, rng *rand.Rand) {
 	n := len(subvectors)
 	k := pq.KSub
 	maxIters := 25
@@ -84,7 +106,10 @@ func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
 			bestK := 0
 
 			for ki := 0; ki < k; ki++ {
-				dist := euclideanDistance(vec, centroids[ki])
+				// Squared distance: argmin is identical to euclidean, and this
+				// drops a math.Sqrt from the innermost loop, which dominated
+				// the 8 mul-adds at DSub=8.
+				dist := squaredDistance(vec, centroids[ki])
 				if dist < minDist {
 					minDist = dist
 					bestK = ki
@@ -124,7 +149,7 @@ func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
 				}
 			} else {
 				// Reinitialize empty cluster
-				idx := rand.Intn(n)
+				idx := rng.Intn(n)
 				copy(centroids[ki], subvectors[idx])
 			}
 		}
@@ -149,7 +174,7 @@ func (pq *ProductQuantizer) Encode(vec []float32) []uint8 {
 		bestK := uint8(0)
 
 		for k := 0; k < pq.KSub; k++ {
-			dist := euclideanDistance(subvec, pq.Codebooks[m][k])
+			dist := squaredDistance(subvec, pq.Codebooks[m][k])
 			if dist < minDist {
 				minDist = dist
 				bestK = uint8(k)
@@ -229,14 +254,18 @@ func (pq *ProductQuantizer) initializeKMeansPlusPlus(vectors [][]float32, centro
 		// Compute distances to nearest centroid
 		totalDist := float32(0)
 		for i, vec := range vectors {
+			// squaredDistance is exactly what k-means++ weights by; the old
+			// code took a sqrt here and squared it straight back. This loop is
+			// O(n*k^2/2) overall, several times the cost of the Lloyd
+			// iterations that follow, so the removed sqrt dominates.
 			minDist := float32(math.MaxFloat32)
 			for j := 0; j < ki; j++ {
-				dist := euclideanDistance(vec, centroids[j])
+				dist := squaredDistance(vec, centroids[j])
 				if dist < minDist {
 					minDist = dist
 				}
 			}
-			distances[i] = minDist * minDist // Square for k-means++
+			distances[i] = minDist
 			totalDist += distances[i]
 		}
 
@@ -255,12 +284,18 @@ func (pq *ProductQuantizer) initializeKMeansPlusPlus(vectors [][]float32, centro
 
 // euclideanDistance computes L2 distance between two vectors
 func euclideanDistance(a, b []float32) float32 {
+	return float32(math.Sqrt(float64(squaredDistance(a, b))))
+}
+
+// squaredDistance omits the final sqrt. Callers that only compare distances
+// (nearest-centroid selection) must prefer this.
+func squaredDistance(a, b []float32) float32 {
 	sum := float32(0)
 	for i := range a {
 		diff := a[i] - b[i]
 		sum += diff * diff
 	}
-	return float32(math.Sqrt(float64(sum)))
+	return sum
 }
 
 // ADCTable stores precomputed distances for Asymmetric Distance Computation
