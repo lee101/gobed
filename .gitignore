@@ -109,6 +109,7 @@ netwrck_gpu_server
 *.prof
 .bed
 *.bin
+hf_model/
 ivf_bench
 fused_bench
 src/model

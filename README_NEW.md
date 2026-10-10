@@ -167,7 +167,27 @@ sudo apt install nvidia-cuda-toolkit
 go get -tags gpu github.com/lee101/gobed
 ```
 
-The model files (~119MB) will be downloaded automatically on first use.
+The model files (~15MB) will be downloaded automatically on first use.
+
+### Manual Model Download
+
+The int8 quantized model is available on HuggingFace:
+
+```bash
+# Clone from HuggingFace
+git clone https://huggingface.co/lee101/bed model/
+
+# Or download with huggingface-cli
+huggingface-cli download lee101/bed --local-dir model/
+```
+
+Or via Python:
+
+```python
+from huggingface_hub import hf_hub_download
+model_path = hf_hub_download(repo_id="lee101/bed", filename="modelint8_512dim.safetensors")
+tokenizer_path = hf_hub_download(repo_id="lee101/bed", filename="tokenizer.json")
+```
 
 ## 🚀 Performance
 
