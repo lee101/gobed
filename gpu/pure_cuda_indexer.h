@@ -54,6 +54,7 @@ int cuda_search_with_embedding(
 // Utility functions
 size_t cuda_get_memory_usage();
 int cuda_is_available();
+int cuda_set_device(int device_id);
 
 // Bulk operations for optimized indexing
 int cuda_bulk_index_tokens(

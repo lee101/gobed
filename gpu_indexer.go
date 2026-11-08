@@ -78,6 +78,12 @@ func NewGPUIndexer(config IndexConfig) (*GPUIndexer, error) {
 		return nil, fmt.Errorf("CUDA is not available")
 	}
 
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if int(C.cuda_set_device(C.int(config.DeviceID))) == 0 {
+		return nil, fmt.Errorf("failed to set CUDA device %d", config.DeviceID)
+	}
+
 	// Create indexer handle
 	handle := C.cuda_index_create(
 		C.int(config.VectorDim),
@@ -104,10 +110,22 @@ func NewGPUIndexer(config IndexConfig) (*GPUIndexer, error) {
 	return indexer, nil
 }
 
+func (g *GPUIndexer) setDevice() error {
+	if int(C.cuda_set_device(C.int(g.deviceID))) == 0 {
+		return fmt.Errorf("failed to set CUDA device %d", g.deviceID)
+	}
+	return nil
+}
+
 // LoadEmbeddings loads the token embedding table to GPU
 func (g *GPUIndexer) LoadEmbeddings(embeddings []float32) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return err
+	}
 
 	if len(embeddings) != g.vocabSize*g.embedDim {
 		return fmt.Errorf("embeddings size mismatch: expected %d, got %d",
@@ -131,6 +149,11 @@ func (g *GPUIndexer) LoadEmbeddings(embeddings []float32) error {
 func (g *GPUIndexer) LoadEmbeddingsInt8(embeddings []int8, scales []float32) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return err
+	}
 
 	if len(embeddings) != g.vocabSize*g.embedDim {
 		return fmt.Errorf("int8 embeddings size mismatch: expected %d, got %d",
@@ -159,6 +182,11 @@ func (g *GPUIndexer) LoadEmbeddingsInt8(embeddings []int8, scales []float32) err
 func (g *GPUIndexer) AddVectors(vectors [][]int8, scales []float32) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return err
+	}
 
 	if len(vectors) == 0 {
 		return fmt.Errorf("no vectors to add")
@@ -249,6 +277,11 @@ func (g *GPUIndexer) GetAllocatedMemoryUsage() uint64 {
 func (g *GPUIndexer) SearchWithTokens(tokenIDs []int32, k int) ([]int32, []float32, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return nil, nil, err
+	}
 
 	if len(tokenIDs) == 0 {
 		return nil, nil, fmt.Errorf("no tokens provided")
@@ -275,6 +308,11 @@ func (g *GPUIndexer) SearchWithTokens(tokenIDs []int32, k int) ([]int32, []float
 		return nil, nil, fmt.Errorf("GPU search failed")
 	}
 
+	resultCount := int(result)
+	if resultCount < len(resultIndices) {
+		resultIndices = resultIndices[:resultCount]
+		resultScores = resultScores[:resultCount]
+	}
 	return resultIndices, resultScores, nil
 }
 
@@ -309,6 +347,11 @@ func (g *GPUIndexer) searchWithTokensUnbuffered(tokenIDs []int32, k int) ([]int3
 func (g *GPUIndexer) SearchWithEmbedding(query []int8, queryScale float32, k int) ([]int32, []float32, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return nil, nil, err
+	}
 
 	if len(query) != g.vectorDim {
 		return nil, nil, fmt.Errorf("query dimension mismatch: expected %d, got %d",
@@ -336,6 +379,11 @@ func (g *GPUIndexer) SearchWithEmbedding(query []int8, queryScale float32, k int
 		return nil, nil, fmt.Errorf("GPU search failed")
 	}
 
+	resultCount := int(result)
+	if resultCount < len(resultIndices) {
+		resultIndices = resultIndices[:resultCount]
+		resultScores = resultScores[:resultCount]
+	}
 	return resultIndices, resultScores, nil
 }
 
@@ -365,6 +413,11 @@ func (g *GPUIndexer) GetMemoryUsage() uint64 {
 
 // GetTotalGPUMemoryUsage returns total GPU memory usage (for debugging)
 func (g *GPUIndexer) GetTotalGPUMemoryUsage() uint64 {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return 0
+	}
 	return GetCUDAMemoryUsage()
 }
 
@@ -372,6 +425,11 @@ func (g *GPUIndexer) GetTotalGPUMemoryUsage() uint64 {
 func (g *GPUIndexer) SetMaxTokens(maxTokens int) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return
+	}
 
 	C.cuda_set_max_tokens(g.handle, C.int(maxTokens))
 }
@@ -380,6 +438,11 @@ func (g *GPUIndexer) SetMaxTokens(maxTokens int) {
 func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int) (int, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := g.setDevice(); err != nil {
+		return 0, err
+	}
 
 	if len(tokenSequences) == 0 {
 		return 0, fmt.Errorf("no token sequences provided")
@@ -432,6 +495,12 @@ func (g *GPUIndexer) BulkIndexTokens(tokenSequences [][]int32, seqLengths []int)
 
 // destroy cleans up GPU resources
 func (g *GPUIndexer) destroy() {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	_ = g.setDevice()
+
 	if g.handle != nil {
 		C.cuda_index_destroy(g.handle)
 		g.handle = nil
