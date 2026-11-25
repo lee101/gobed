@@ -2,6 +2,10 @@ package search
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
+	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -34,6 +38,24 @@ type Engine struct {
 
 	// Per-query scratch buffers
 	scratchPool sync.Pool
+
+	timings TrainTimings
+
+	// requested is the config as passed by the caller (zero NList/NProbe mean
+	// auto); a persisted index only loads into an engine with the same request.
+	requested Config
+}
+
+// TrainTimings records how long each phase of the last Train took.
+type TrainTimings struct {
+	IVF, PQ, HNSW time.Duration
+}
+
+// LastTrainTimings returns the phase timings of the most recent Train.
+func (e *Engine) LastTrainTimings() TrainTimings {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.timings
 }
 
 // Config holds engine configuration
@@ -41,9 +63,10 @@ type Config struct {
 	// Index type threshold
 	MaxFlatSize int // Use flat index below this size (default: 50000)
 
-	// IVF parameters
-	NList  int // Number of clusters (default: 4096)
-	NProbe int // Number of clusters to search (default: 8)
+	// IVF parameters. Zero means auto: NList ~ 4*sqrt(n) clamped to
+	// [16, 4096] and NProbe = max(8, NList/16), chosen when training.
+	NList  int // Number of clusters
+	NProbe int // Number of clusters to search
 
 	// PQ parameters
 	M     int // Number of subquantizers (default: 64)
@@ -63,8 +86,8 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		MaxFlatSize: 1500, // Tuned default based on recent optimization runs
-		NList:       4096,
-		NProbe:      8,
+		NList:       0,    // auto
+		NProbe:      0,    // auto
 		M:           64,
 		NBits:       8,
 		HNSWEnabled: true,
@@ -81,11 +104,11 @@ func NewEngine(config Config) *Engine {
 	if config.MaxFlatSize <= 0 {
 		config.MaxFlatSize = 1500
 	}
-	if config.NList <= 0 {
-		config.NList = 4096
+	if config.NList < 0 {
+		config.NList = 0
 	}
-	if config.NProbe <= 0 {
-		config.NProbe = 8
+	if config.NProbe < 0 {
+		config.NProbe = 0
 	}
 	if config.M <= 0 {
 		config.M = 64
@@ -104,6 +127,7 @@ func NewEngine(config Config) *Engine {
 	}
 
 	e := &Engine{
+		requested:  config,
 		config:     config,
 		flatIndex:  flat.NewFlatIndex(config.MaxFlatSize),
 		rawVectors: make([]simd.Vec512, 0, initialCap),
@@ -114,55 +138,127 @@ func NewEngine(config Config) *Engine {
 	return e
 }
 
+// Training sample caps: k-means quality saturates at a few dozen points per
+// centroid, and PQ codebooks (256 codewords per subspace) at a few tens of
+// thousands of points. Everything is assigned/encoded after training.
+const (
+	ivfPointsPerList = 64
+	maxIVFTrain      = 50000
+	maxPQTrain       = 16384
+)
+
+// autoNList picks the IVF list count for n vectors: ~4*sqrt(n), clamped to
+// [16, 4096] and never more than n/8 (so lists average >= 8 vectors).
+func autoNList(n int) int {
+	k := int(4 * math.Sqrt(float64(n)))
+	k = max(16, min(4096, k))
+	return max(1, min(k, n/8))
+}
+
+func autoNProbe(nlist int) int {
+	return min(nlist, max(8, nlist/16))
+}
+
+// sampleRows returns up to k rows chosen uniformly without replacement
+// (deterministic), or the inputs unchanged when k >= n.
+func sampleRows(vectors []simd.Vec512, scales []float32, k int, seed int64) ([]simd.Vec512, []float32) {
+	n := len(vectors)
+	if k >= n {
+		return vectors, scales
+	}
+	perm := rand.New(rand.NewSource(seed)).Perm(n)[:k]
+	sort.Ints(perm)
+	sv := make([]simd.Vec512, k)
+	ss := make([]float32, k)
+	for i, j := range perm {
+		sv[i], ss[i] = vectors[j], scales[j]
+	}
+	return sv, ss
+}
+
 // Train trains the index on sample data
 func (e *Engine) Train(vectors []simd.Vec512, scales []float32) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.trainLocked(vectors, scales)
+}
 
+func (e *Engine) trainLocked(vectors []simd.Vec512, scales []float32) error {
 	n := len(vectors)
 	if n == 0 {
 		return fmt.Errorf("no training data provided")
 	}
 
-	// Always create IVF when Train is explicitly called (caller knows IVF is needed)
-	// The check for small datasets should happen at the caller level
-
-	// Only print if actually training, not when loading from cache
-	if !e.trained {
-		fmt.Printf("Indexing %d vectors...\n", n)
+	if e.requested.NList <= 0 {
+		e.config.NList = autoNList(n)
 	}
+	if e.requested.NProbe <= 0 {
+		e.config.NProbe = autoNProbe(e.config.NList)
+	}
+	if n < e.config.NList {
+		return fmt.Errorf("need at least NList=%d training vectors, got %d", e.config.NList, n)
+	}
+
+	fmt.Printf("Indexing %d vectors (nlist=%d nprobe=%d)...\n", n, e.config.NList, e.config.NProbe)
 	start := time.Now()
 
-	// Initialize IVF
+	ivfVecs, ivfScales := sampleRows(vectors, scales, min(maxIVFTrain, ivfPointsPerList*e.config.NList), 1)
 	e.ivfIndex = ivf.NewIVFIndex(e.config.NList, e.config.NProbe)
-	e.ivfIndex.Train(vectors, scales)
+	e.ivfIndex.Train(ivfVecs, ivfScales)
+	e.timings.IVF = time.Since(start)
+	phase := time.Now()
 
-	// Train PQ on residuals (only if we have enough data)
+	// PQ codes approximate the raw int8 dot product used for the final
+	// rerank, so codebooks are trained on unscaled int8 values.
+	e.pq = nil
 	if e.config.M > 0 && n >= e.config.M*256 {
-		// Convert int8 to float32 for PQ training
-		floatVectors := make([][]float32, n)
-		for i := range vectors {
-			floatVectors[i] = dequantizeVector(&vectors[i], scales[i])
+		pqVecs, _ := sampleRows(vectors, scales, maxPQTrain, 2)
+		floatVectors := make([][]float32, len(pqVecs))
+		for i := range pqVecs {
+			floatVectors[i] = dequantizeVector(&pqVecs[i], 1)
 		}
-
 		e.pq = pq.NewProductQuantizer(512, e.config.M, 256)
 		e.pq.Train(floatVectors)
 	}
+	e.timings.PQ = time.Since(phase)
+	phase = time.Now()
 
-	// Build HNSW on centroids if enabled
-	if e.config.HNSWEnabled && e.ivfIndex != nil {
+	e.hnswRouter = nil
+	if e.config.HNSWEnabled {
 		e.hnswRouter = hnsw.NewHNSW(e.config.HNSWM, e.config.HNSWEfC)
-
-		// Add centroids to HNSW
 		for i, centroid := range e.ivfIndex.KMeans.Centroids {
 			e.hnswRouter.Add(centroid, e.ivfIndex.KMeans.Scales[i], i)
 		}
 	}
+	e.timings.HNSW = time.Since(phase)
 
 	e.trained = true
-	fmt.Printf("Training completed in %v\n", time.Since(start))
-
+	fmt.Printf("Training completed in %v (ivf=%v pq=%v hnsw=%v)\n", time.Since(start), e.timings.IVF, e.timings.PQ, e.timings.HNSW)
 	return nil
+}
+
+// encodePQ encodes vectors (as unscaled int8) across GOMAXPROCS workers.
+func (e *Engine) encodePQ(vectors []simd.Vec512) [][]uint8 {
+	codes := make([][]uint8, len(vectors))
+	workers := max(1, min(runtime.GOMAXPROCS(0), len(vectors)))
+	chunk := (len(vectors) + workers - 1) / workers
+	var wg sync.WaitGroup
+	for s := 0; s < len(vectors); s += chunk {
+		end := min(s+chunk, len(vectors))
+		wg.Add(1)
+		go func(s, end int) {
+			defer wg.Done()
+			buf := make([]float32, 512)
+			for i := s; i < end; i++ {
+				for j, x := range vectors[i] {
+					buf[j] = float32(x)
+				}
+				codes[i] = e.pq.Encode(buf)
+			}
+		}(s, end)
+	}
+	wg.Wait()
+	return codes
 }
 
 // Add adds a vector to the index
@@ -183,7 +279,7 @@ func (e *Engine) Add(vec simd.Vec512, scale float32, id int) error {
 	e.ids = append(e.ids, id)
 
 	// Add to appropriate index
-	if e.size < e.config.MaxFlatSize {
+	if e.size < e.config.MaxFlatSize && e.ivfIndex == nil {
 		e.flatIndex.Add(vec, scale, id)
 	} else {
 		if e.ivfIndex == nil {
@@ -192,11 +288,8 @@ func (e *Engine) Add(vec simd.Vec512, scale float32, id int) error {
 
 		e.ivfIndex.Add(vec, scale, id)
 
-		// Encode with PQ if enabled
 		if e.pq != nil && e.pq.Trained {
-			floatVec := dequantizeVector(&vec, scale)
-			codes := e.pq.Encode(floatVec)
-			e.pqCodes = append(e.pqCodes, codes)
+			e.pqCodes = append(e.pqCodes, e.encodePQ([]simd.Vec512{vec})...)
 		}
 	}
 
@@ -217,11 +310,7 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 	// Auto-train if needed
 	if !e.trained && e.size == 0 {
 		if n > e.config.MaxFlatSize {
-			// Need to train for large dataset
-			e.mu.Unlock()
-			err := e.Train(vectors[:min(n, 100000)], scales[:min(n, 100000)])
-			e.mu.Lock()
-			if err != nil {
+			if err := e.trainLocked(vectors, scales); err != nil {
 				return err
 			}
 		} else {
@@ -234,79 +323,31 @@ func (e *Engine) AddBatch(vectors []simd.Vec512, scales []float32, ids []int) er
 	e.scales = append(e.scales, scales...)
 	e.ids = append(e.ids, ids...)
 
-	// Add to index
-	// For large datasets, always use IVF if it exists (was trained)
 	if e.ivfIndex != nil && e.trained {
-		// Use IVF index for large datasets
 		e.ivfIndex.AddBatch(vectors, scales, ids)
-
-		// Batch encode with PQ
 		if e.pq != nil && e.pq.Trained {
-			floatVectors := make([][]float32, n)
-			for i := range vectors {
-				floatVectors[i] = dequantizeVector(&vectors[i], scales[i])
-			}
-			codes := e.pq.EncodeBatch(floatVectors)
-			e.pqCodes = append(e.pqCodes, codes...)
+			e.pqCodes = append(e.pqCodes, e.encodePQ(vectors)...)
 		}
 	} else if e.size+n <= e.config.MaxFlatSize {
-		// Use flat index for small datasets
 		e.flatIndex.AddBatch(vectors, scales, ids)
 	} else {
-		// Dataset outgrew MaxFlatSize -- auto-train IVF from existing data
-		// e.rawVectors/e.scales/e.ids already include the new batch (appended above)
-		totalVecs := len(e.rawVectors)
-		trainSize := totalVecs
-		if trainSize > 100000 {
-			trainSize = 100000
-		}
-
+		// Dataset outgrew MaxFlatSize: train IVF from everything stored so far
+		// (already including this batch) and migrate it out of the flat index.
 		fmt.Printf("Auto-training IVF (size=%d, adding=%d, MaxFlatSize=%d)\n", e.size, n, e.config.MaxFlatSize)
 		start := time.Now()
-
-		e.ivfIndex = ivf.NewIVFIndex(e.config.NList, e.config.NProbe)
-		e.ivfIndex.Train(e.rawVectors[:trainSize], e.scales[:trainSize])
-
-		if e.config.HNSWEnabled {
-			e.hnswRouter = hnsw.NewHNSW(e.config.HNSWM, e.config.HNSWEfC)
-			for i, centroid := range e.ivfIndex.KMeans.Centroids {
-				e.hnswRouter.Add(centroid, e.ivfIndex.KMeans.Scales[i], i)
-			}
+		if err := e.trainLocked(e.rawVectors, e.scales); err != nil {
+			e.rawVectors = e.rawVectors[:e.size]
+			e.scales = e.scales[:e.size]
+			e.ids = e.ids[:e.size]
+			return err
 		}
-
 		e.ivfIndex.AddBatch(e.rawVectors, e.scales, e.ids)
-
-		// PQ training -- single alloc, reuse buffer for encode
-		if e.config.M > 0 && trainSize >= e.config.M*256 {
-			buf := make([]float32, 512)
-			floatVectors := make([][]float32, trainSize)
-			flatBuf := make([]float32, trainSize*512)
-			for i := 0; i < trainSize; i++ {
-				fv := flatBuf[i*512 : (i+1)*512]
-				s := e.scales[i]
-				for j := 0; j < 512; j++ {
-					fv[j] = float32(e.rawVectors[i][j]) * s
-				}
-				floatVectors[i] = fv
-			}
-			e.pq = pq.NewProductQuantizer(512, e.config.M, 256)
-			e.pq.Train(floatVectors)
-
-			// Encode all vectors reusing the buffer
-			e.pqCodes = make([][]uint8, totalVecs)
-			for i := 0; i < totalVecs; i++ {
-				s := e.scales[i]
-				for j := 0; j < 512; j++ {
-					buf[j] = float32(e.rawVectors[i][j]) * s
-				}
-				e.pqCodes[i] = e.pq.Encode(buf)
-			}
-			_ = buf
+		e.pqCodes = nil
+		if e.pq != nil {
+			e.pqCodes = e.encodePQ(e.rawVectors)
 		}
-
 		e.flatIndex = nil
-		e.trained = true
-		fmt.Printf("Auto-training done in %v, migrated %d vectors to IVF\n", time.Since(start), totalVecs)
+		fmt.Printf("Auto-training done in %v, migrated %d vectors to IVF\n", time.Since(start), len(e.rawVectors))
 	}
 
 	e.size += n
@@ -323,7 +364,7 @@ func (e *Engine) Search(query *simd.Vec512, k int) ([]SearchResult, error) {
 	}
 
 	// Use flat index for small datasets
-	if e.size <= e.config.MaxFlatSize && e.flatIndex != nil {
+	if e.ivfIndex == nil && e.flatIndex != nil {
 		var flatResults []flat.SearchResult
 		if e.config.UseParallel {
 			flatResults = e.flatIndex.SearchTopKParallel(query, k)
@@ -444,16 +485,16 @@ func (e *Engine) collectCandidates(sc *searchScratch, clusters []int) []int {
 	return cands
 }
 
-// scorePQCandidates scores candidates using PQ and returns top R (lowest distance,
-// ties broken by candidate position).
+// scorePQCandidates scores candidates by PQ-approximated dot product and returns
+// the top R (ties broken by candidate position).
 func (e *Engine) scorePQCandidates(sc *searchScratch, query *simd.Vec512, candidates []int, R int) []int {
 	if len(candidates) == 0 || R <= 0 {
 		return nil
 	}
-	adcTable := e.pq.ComputeADCTable(dequantizeVector(query, 1.0))
+	ipTable := e.pq.ComputeIPTable(dequantizeVector(query, 1.0))
 	h := sc.pqs[:0]
 	for i, idx := range candidates {
-		h = topRPush(h, R, scored[float32]{s: -adcTable.Distance(e.pqCodes[idx]), pos: int32(i)})
+		h = topRPush(h, R, scored[float32]{s: ipTable.Distance(e.pqCodes[idx]), pos: int32(i)})
 	}
 	topRSort(h)
 	sc.pqs = h
@@ -531,7 +572,7 @@ func (e *Engine) Stats() IndexStats {
 		MemoryUsage: int64(e.size * 512), // Approximate
 	}
 
-	if e.size > e.config.MaxFlatSize {
+	if e.ivfIndex != nil {
 		stats.IndexType = "ivf-hnsw-pq"
 		if e.ivfIndex != nil {
 			stats.NLists = e.config.NList

@@ -1,12 +1,18 @@
 package gobed
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -67,35 +73,43 @@ func DefaultSaveOptions() SaveOptions {
 	}
 }
 
-// Save persists the SearchEngine to disk
+// Snapshot files written since v2 start with snapshotMagic, then a u32
+// version, a u64 length and the gob IndexSnapshot, followed by the ann engine
+// state (search.Engine.Save) so Load restores the trained index without
+// re-embedding or retraining. Files without the magic are the v1 gob-only
+// format: their documents are re-embedded and the index rebuilt once.
+const (
+	snapshotMagic   = "GBSEARCH"
+	snapshotVersion = 2
+)
+
+// ErrSnapshotMismatch is returned by LoadMatching when the saved documents
+// differ from the expected ones.
+var ErrSnapshotMismatch = errors.New("gobed: saved index documents do not match")
+
+// Save persists the SearchEngine to disk atomically.
 func (se *SearchEngine) Save(path string, options SaveOptions) error {
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 
-	// Create directory if needed
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Create snapshot
 	snapshot := &IndexSnapshot{
-		Version:      "1.0",
+		Version:      "2.0",
 		CreatedAt:    time.Now(),
 		NumDocuments: len(se.documents),
 		Config:       se.config,
 		Metadata:     options.Metadata,
 	}
-
-	// Include documents if requested
 	if options.IncludeTexts {
 		snapshot.Documents = make(map[int]string, len(se.documents))
 		for id, text := range se.documents {
 			snapshot.Documents[id] = text
 		}
 	}
-
-	// Extract index data
 	if se.index != nil {
 		indexData, err := se.extractIndexData()
 		if err != nil {
@@ -104,46 +118,176 @@ func (se *SearchEngine) Save(path string, options SaveOptions) error {
 		snapshot.IndexData = indexData
 	}
 
-	// Save based on format
-	switch options.Format {
-	case FormatBinary:
-		return se.saveBinary(path, snapshot, options.Compress)
-	case FormatJSON:
+	if options.Format == FormatJSON {
 		return se.saveJSON(path, snapshot, options.Compress)
-	default:
+	}
+	if options.Format != FormatBinary {
 		return fmt.Errorf("unsupported format: %s", options.Format)
 	}
+
+	var meta bytes.Buffer
+	if err := gob.NewEncoder(&meta).Encode(snapshot); err != nil {
+		return fmt.Errorf("failed to encode snapshot: %w", err)
+	}
+
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp*")
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer os.Remove(tmp.Name())
+	tmp.Chmod(0o644)
+	w := bufio.NewWriterSize(tmp, 1<<20)
+	w.WriteString(snapshotMagic)
+	binary.Write(w, binary.LittleEndian, uint32(snapshotVersion))
+	binary.Write(w, binary.LittleEndian, uint64(meta.Len()))
+	w.Write(meta.Bytes())
+	hasIndex := se.index != nil
+	binary.Write(w, binary.LittleEndian, hasIndex)
+	if hasIndex {
+		if err := se.index.Save(w); err != nil {
+			tmp.Close()
+			return fmt.Errorf("failed to save index: %w", err)
+		}
+	}
+	if err := w.Flush(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
-// Load restores a SearchEngine from disk
+// Load restores a SearchEngine from disk. Snapshots with saved index state
+// load without training; v1 snapshots (documents only) are re-embedded and
+// indexed once, then rewritten in place in the current format (best effort).
 func (se *SearchEngine) Load(path string) error {
-	se.mu.Lock()
-	defer se.mu.Unlock()
+	return se.load(path, nil, nil)
+}
 
-	// Detect format by trying binary first, then JSON
-	snapshot, err := se.loadBinary(path)
+// LoadMatching is Load, but returns ErrSnapshotMismatch (leaving the engine
+// untouched) unless the snapshot holds exactly these id/text documents.
+func (se *SearchEngine) LoadMatching(path string, ids []int, texts []string) error {
+	if len(ids) != len(texts) {
+		return fmt.Errorf("ids and texts must have the same length")
+	}
+	return se.load(path, ids, texts)
+}
+
+func (se *SearchEngine) load(path string, ids []int, texts []string) error {
+	f, err := os.Open(path)
 	if err != nil {
-		// Try JSON format
-		snapshot, err = se.loadJSON(path)
+		return fmt.Errorf("failed to load index: %w", err)
+	}
+	defer f.Close()
+	r := bufio.NewReaderSize(f, 1<<20)
+
+	head, _ := r.Peek(len(snapshotMagic))
+	if string(head) != snapshotMagic {
+		snapshot, err := se.loadBinary(path)
 		if err != nil {
-			return fmt.Errorf("failed to load index: %w", err)
+			snapshot, err = se.loadJSON(path)
+			if err != nil {
+				return fmt.Errorf("failed to load index: %w", err)
+			}
+		}
+		if ids != nil && !documentsMatch(snapshot.Documents, ids, texts) {
+			return ErrSnapshotMismatch
+		}
+		if err := se.rebuildFromSnapshot(snapshot); err != nil {
+			return err
+		}
+		f.Close()
+		if err := se.QuickSave(path); err != nil {
+			log.Printf("gobed: rebuilt v1 snapshot %s but could not upgrade it: %v", path, err)
+		}
+		return nil
+	}
+
+	r.Discard(len(snapshotMagic))
+	var version uint32
+	var metaLen uint64
+	if err := binary.Read(r, binary.LittleEndian, &version); err != nil || version != snapshotVersion {
+		return fmt.Errorf("failed to load index: unsupported snapshot version %d", version)
+	}
+	if err := binary.Read(r, binary.LittleEndian, &metaLen); err != nil || metaLen > 1<<34 {
+		return fmt.Errorf("failed to load index: bad header")
+	}
+	var snapshot IndexSnapshot
+	if err := gob.NewDecoder(io.LimitReader(r, int64(metaLen))).Decode(&snapshot); err != nil {
+		return fmt.Errorf("failed to decode snapshot: %w", err)
+	}
+	if ids != nil && !documentsMatch(snapshot.Documents, ids, texts) {
+		return ErrSnapshotMismatch
+	}
+	var hasIndex bool
+	if err := binary.Read(r, binary.LittleEndian, &hasIndex); err != nil {
+		return fmt.Errorf("failed to load index: %w", err)
+	}
+	var index *search.Engine
+	if hasIndex {
+		if index, err = search.ReadEngine(r); err != nil {
+			return fmt.Errorf("failed to restore index data: %w", err)
 		}
 	}
 
-	// Restore state
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	se.config = snapshot.Config
 	se.documents = snapshot.Documents
 	if se.documents == nil {
 		se.documents = make(map[int]string)
 	}
+	if index != nil {
+		se.index = index
+	} else {
+		se.index = search.NewEngine(mapSearchConfigToAnnConfig(se.config))
+	}
+	se.initialized = true
+	return nil
+}
 
-	// Restore index if present
-	if snapshot.IndexData != nil {
-		if err := se.restoreIndexData(snapshot.IndexData); err != nil {
-			return fmt.Errorf("failed to restore index data: %w", err)
+func documentsMatch(docs map[int]string, ids []int, texts []string) bool {
+	if len(docs) != len(ids) {
+		return false
+	}
+	for i, id := range ids {
+		if t, ok := docs[id]; !ok || t != texts[i] {
+			return false
 		}
 	}
+	return true
+}
 
+// rebuildFromSnapshot indexes a v1 snapshot's documents from scratch: v1
+// files never stored vectors, so restoring them used to yield an empty index.
+func (se *SearchEngine) rebuildFromSnapshot(snapshot *IndexSnapshot) error {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.config = snapshot.Config
+	se.documents = make(map[int]string)
+	se.index = search.NewEngine(mapSearchConfigToAnnConfig(se.config))
+	se.initialized = false
+	if len(snapshot.Documents) == 0 {
+		se.initialized = true
+		return nil
+	}
+	if se.model == nil {
+		return fmt.Errorf("failed to restore index data: v1 snapshot needs an embedding model to rebuild")
+	}
+	ids := make([]int, 0, len(snapshot.Documents))
+	for id := range snapshot.Documents {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	texts := make([]string, len(ids))
+	for i, id := range ids {
+		texts[i] = snapshot.Documents[id]
+	}
+	if err := se.indexBatchInternal(ids, texts); err != nil {
+		return fmt.Errorf("failed to rebuild v1 snapshot: %w", err)
+	}
 	se.initialized = true
 	return nil
 }
@@ -211,27 +355,6 @@ func (se *SearchEngine) extractIndexData() (*IndexData, error) {
 	// A full implementation would serialize the internal structures
 
 	return data, nil
-}
-
-// restoreIndexData restores the internal index from saved data
-func (se *SearchEngine) restoreIndexData(data *IndexData) error {
-	if data == nil {
-		return nil
-	}
-
-	// Create new index with saved configuration
-	config := search.DefaultConfig()
-
-	se.index = search.NewEngine(config)
-
-	// IMPORTANT: Mark the index as already trained to skip re-indexing
-	// This is a workaround until we implement full state serialization
-	if data.Trained {
-		// Set the trained flag to prevent re-indexing
-		se.index.SetTrained(true)
-	}
-
-	return nil
 }
 
 // saveBinary saves the snapshot in binary format

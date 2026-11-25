@@ -48,6 +48,22 @@ func (idx *IVFIndex) Train(vectors []simd.Vec512, scales []float32) {
 	}
 }
 
+// Restore installs previously trained centroids and inverted lists without
+// retraining. vectors/scales/ids back the list entries (list values index them).
+func (idx *IVFIndex) Restore(centroids []simd.Vec512, centroidScales []float32, lists [][]int, vectors []simd.Vec512, scales []float32, ids []int) {
+	idx.NList = len(centroids)
+	idx.KMeans.SetCentroids(centroids, centroidScales)
+	idx.Lists = lists
+	idx.ListLocks = make([]sync.RWMutex, len(lists))
+	idx.Vectors = vectors
+	idx.Scales = scales
+	idx.IDs = ids
+	for k, l := range lists {
+		idx.KMeans.Counts[k] = len(l)
+	}
+	idx.Trained = true
+}
+
 // Add adds a vector to the index
 func (idx *IVFIndex) Add(vec simd.Vec512, scale float32, id int) {
 	if !idx.Trained {
@@ -86,24 +102,16 @@ func (idx *IVFIndex) AddBatch(vectors []simd.Vec512, scales []float32, ids []int
 	// Assign to clusters in parallel
 	assignments := make([]int, n)
 
-	var wg sync.WaitGroup
-	chunkSize := (n + 7) / 8
-
-	for start := 0; start < n; start += chunkSize {
-		end := start + chunkSize
-		if end > n {
-			end = n
-		}
-
-		wg.Add(1)
-		go func(start, end int) {
-			defer wg.Done()
-			for i := start; i < end; i++ {
+	parallelRange(n, func(_, start, end int) {
+		buf := make([]int32, idx.KMeans.K)
+		for i := start; i < end; i++ {
+			if len(idx.KMeans.norms) == len(idx.KMeans.Centroids) {
+				assignments[i] = idx.KMeans.nearest(&vectors[i], buf)
+			} else {
 				assignments[i] = idx.KMeans.Predict(&vectors[i])
 			}
-		}(start, end)
-	}
-	wg.Wait()
+		}
+	})
 
 	// Count per cluster first for pre-allocation
 	clusterCounts := make([]int, idx.NList)

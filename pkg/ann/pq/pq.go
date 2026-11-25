@@ -3,6 +3,8 @@ package pq
 import (
 	"math"
 	"math/rand"
+	"runtime"
+	"sync"
 )
 
 // ProductQuantizer performs product quantization on vectors
@@ -39,95 +41,133 @@ func NewProductQuantizer(d, m, ksub int) *ProductQuantizer {
 	}
 }
 
-// Train trains the product quantizer on a set of vectors
+// Train trains the product quantizer on a set of vectors. Subquantizers are
+// independent, so they are trained concurrently across GOMAXPROCS workers.
 func (pq *ProductQuantizer) Train(vectors [][]float32) {
 	n := len(vectors)
-	if n < pq.KSub*pq.M {
+	if n < pq.KSub {
 		panic("not enough training data for PQ")
 	}
 
-	// Train each subquantizer independently
+	workers := min(runtime.GOMAXPROCS(0), pq.M)
+	next := make(chan int, pq.M)
 	for m := 0; m < pq.M; m++ {
-		startDim := m * pq.DSub
-		endDim := startDim + pq.DSub
-
-		// Extract subvectors for this subquantizer
-		subvectors := make([][]float32, n)
-		for i := range subvectors {
-			subvectors[i] = vectors[i][startDim:endDim]
-		}
-
-		// Run k-means on subvectors
-		pq.trainSubquantizer(m, subvectors)
+		next <- m
 	}
+	close(next)
+
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sub := make([]float32, n*pq.DSub)
+			for m := range next {
+				off := m * pq.DSub
+				for i, v := range vectors {
+					copy(sub[i*pq.DSub:(i+1)*pq.DSub], v[off:off+pq.DSub])
+				}
+				pq.trainSubquantizer(m, sub, rand.New(rand.NewSource(int64(m)+1)))
+			}
+		}()
+	}
+	wg.Wait()
 
 	pq.Trained = true
 }
 
-// trainSubquantizer trains a single subquantizer using k-means
-func (pq *ProductQuantizer) trainSubquantizer(m int, subvectors [][]float32) {
-	n := len(subvectors)
+// trainSubquantizer runs k-means++ then Lloyd on one subspace. sub holds n
+// contiguous DSub-dim subvectors. Stops when <=0.1% of points move.
+func (pq *ProductQuantizer) trainSubquantizer(m int, sub []float32, rng *rand.Rand) {
+	ds := pq.DSub
+	n := len(sub) / ds
 	k := pq.KSub
-	maxIters := 25
-
-	// Initialize centroids with k-means++
 	centroids := pq.Codebooks[m]
-	pq.initializeKMeansPlusPlus(subvectors, centroids)
+	pq.seedPlusPlus(sub, centroids, rng)
 
 	assignments := make([]int, n)
+	for i := range assignments {
+		assignments[i] = -1
+	}
+	sums := make([]float32, k*ds)
+	counts := make([]int, k)
+	tol := n / 1000
 
-	for iter := 0; iter < maxIters; iter++ {
-		// Assignment step
-		changed := false
-		for i, vec := range subvectors {
-			minDist := float32(math.MaxFloat32)
-			bestK := 0
-
+	for iter := 0; iter < 25; iter++ {
+		changed := 0
+		for i := 0; i < n; i++ {
+			v := sub[i*ds : (i+1)*ds]
+			best, bestD := 0, float32(math.MaxFloat32)
 			for ki := 0; ki < k; ki++ {
-				dist := euclideanDistance(vec, centroids[ki])
-				if dist < minDist {
-					minDist = dist
-					bestK = ki
+				if d := squaredDistance(v, centroids[ki]); d < bestD {
+					bestD, best = d, ki
 				}
 			}
-
-			if assignments[i] != bestK {
-				assignments[i] = bestK
-				changed = true
+			if assignments[i] != best {
+				assignments[i] = best
+				changed++
 			}
 		}
-
-		if !changed && iter > 0 {
+		if iter > 0 && changed <= tol {
 			break
 		}
 
-		// Update step
-		counts := make([]int, k)
-		for i := range centroids {
-			for j := range centroids[i] {
-				centroids[i][j] = 0
+		clear(sums)
+		clear(counts)
+		for i, a := range assignments {
+			counts[a]++
+			acc := sums[a*ds : (a+1)*ds]
+			for d, x := range sub[i*ds : (i+1)*ds] {
+				acc[d] += x
 			}
 		}
-
-		for i, vec := range subvectors {
-			ki := assignments[i]
-			counts[ki]++
-			for d := range vec {
-				centroids[ki][d] += vec[d]
-			}
-		}
-
 		for ki := 0; ki < k; ki++ {
-			if counts[ki] > 0 {
-				for d := range centroids[ki] {
-					centroids[ki][d] /= float32(counts[ki])
-				}
-			} else {
-				// Reinitialize empty cluster
-				idx := rand.Intn(n)
-				copy(centroids[ki], subvectors[idx])
+			if counts[ki] == 0 {
+				idx := rng.Intn(n)
+				copy(centroids[ki], sub[idx*ds:(idx+1)*ds])
+				continue
+			}
+			inv := 1 / float32(counts[ki])
+			for d := range centroids[ki] {
+				centroids[ki][d] = sums[ki*ds+d] * inv
 			}
 		}
+	}
+}
+
+// seedPlusPlus is incremental k-means++: each step folds only the newest
+// centroid into the per-point nearest distance (O(n*k) instead of O(n*k^2)).
+func (pq *ProductQuantizer) seedPlusPlus(sub []float32, centroids [][]float32, rng *rand.Rand) {
+	ds := pq.DSub
+	n := len(sub) / ds
+	first := rng.Intn(n)
+	copy(centroids[0], sub[first*ds:(first+1)*ds])
+	dist := make([]float32, n)
+	for i := range dist {
+		dist[i] = math.MaxFloat32
+	}
+	for ki := 1; ki < len(centroids); ki++ {
+		c := centroids[ki-1]
+		total := 0.0
+		for i := 0; i < n; i++ {
+			if d := squaredDistance(sub[i*ds:(i+1)*ds], c); d < dist[i] {
+				dist[i] = d
+			}
+			total += float64(dist[i])
+		}
+		chosen := rng.Intn(n)
+		if total > 0 {
+			threshold := rng.Float64() * total
+			cum := 0.0
+			for i := 0; i < n; i++ {
+				cum += float64(dist[i])
+				if cum >= threshold {
+					chosen = i
+					break
+				}
+			}
+		}
+		copy(centroids[ki], sub[chosen*ds:(chosen+1)*ds])
 	}
 }
 
@@ -149,7 +189,7 @@ func (pq *ProductQuantizer) Encode(vec []float32) []uint8 {
 		bestK := uint8(0)
 
 		for k := 0; k < pq.KSub; k++ {
-			dist := euclideanDistance(subvec, pq.Codebooks[m][k])
+			dist := squaredDistance(subvec, pq.Codebooks[m][k])
 			if dist < minDist {
 				minDist = dist
 				bestK = uint8(k)
@@ -162,12 +202,23 @@ func (pq *ProductQuantizer) Encode(vec []float32) []uint8 {
 	return codes
 }
 
-// EncodeBatch encodes multiple vectors efficiently
+// EncodeBatch encodes multiple vectors across GOMAXPROCS workers.
 func (pq *ProductQuantizer) EncodeBatch(vectors [][]float32) [][]uint8 {
 	codes := make([][]uint8, len(vectors))
-	for i := range vectors {
-		codes[i] = pq.Encode(vectors[i])
+	workers := max(1, min(runtime.GOMAXPROCS(0), len(vectors)))
+	chunk := (len(vectors) + workers - 1) / workers
+	var wg sync.WaitGroup
+	for s := 0; s < len(vectors); s += chunk {
+		e := min(s+chunk, len(vectors))
+		wg.Add(1)
+		go func(s, e int) {
+			defer wg.Done()
+			for i := s; i < e; i++ {
+				codes[i] = pq.Encode(vectors[i])
+			}
+		}(s, e)
 	}
+	wg.Wait()
 	return codes
 }
 
@@ -214,45 +265,6 @@ func (pq *ProductQuantizer) ComputeDistance(codes []uint8, query []float32) floa
 	return distance
 }
 
-// initializeKMeansPlusPlus initializes centroids using k-means++
-func (pq *ProductQuantizer) initializeKMeansPlusPlus(vectors [][]float32, centroids [][]float32) {
-	n := len(vectors)
-	k := len(centroids)
-
-	// Choose first centroid randomly
-	first := rand.Intn(n)
-	copy(centroids[0], vectors[first])
-
-	distances := make([]float32, n)
-
-	for ki := 1; ki < k; ki++ {
-		// Compute distances to nearest centroid
-		totalDist := float32(0)
-		for i, vec := range vectors {
-			minDist := float32(math.MaxFloat32)
-			for j := 0; j < ki; j++ {
-				dist := euclideanDistance(vec, centroids[j])
-				if dist < minDist {
-					minDist = dist
-				}
-			}
-			distances[i] = minDist * minDist // Square for k-means++
-			totalDist += distances[i]
-		}
-
-		// Choose next centroid
-		threshold := rand.Float32() * totalDist
-		cumSum := float32(0)
-		for i, vec := range vectors {
-			cumSum += distances[i]
-			if cumSum >= threshold {
-				copy(centroids[ki], vec)
-				break
-			}
-		}
-	}
-}
-
 // euclideanDistance computes L2 distance between two vectors
 func euclideanDistance(a, b []float32) float32 {
 	sum := float32(0)
@@ -261,6 +273,16 @@ func euclideanDistance(a, b []float32) float32 {
 		sum += diff * diff
 	}
 	return float32(math.Sqrt(float64(sum)))
+}
+
+// squaredDistance omits the sqrt; nearest-codeword selection only compares.
+func squaredDistance(a, b []float32) float32 {
+	var sum float32
+	for i := range a {
+		d := a[i] - b[i]
+		sum += d * d
+	}
+	return sum
 }
 
 // ADCTable stores precomputed distances for Asymmetric Distance Computation
@@ -289,6 +311,30 @@ func (pq *ProductQuantizer) ComputeADCTable(query []float32) *ADCTable {
 		}
 	}
 
+	return table
+}
+
+// ComputeIPTable precomputes per-subspace inner products of the query with
+// every codeword. ADCTable.Distance then returns the approximate dot product
+// of the query with the encoded vector (higher is more similar).
+func (pq *ProductQuantizer) ComputeIPTable(query []float32) *ADCTable {
+	if !pq.Trained {
+		panic("PQ must be trained before computing IP table")
+	}
+	table := &ADCTable{Distances: make([][]float32, pq.M)}
+	flat := make([]float32, pq.M*pq.KSub)
+	for m := 0; m < pq.M; m++ {
+		row := flat[m*pq.KSub : (m+1)*pq.KSub]
+		q := query[m*pq.DSub : (m+1)*pq.DSub]
+		for k, c := range pq.Codebooks[m] {
+			var dot float32
+			for d, x := range q {
+				dot += x * c[d]
+			}
+			row[k] = dot
+		}
+		table.Distances[m] = row
+	}
 	return table
 }
 

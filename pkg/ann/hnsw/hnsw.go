@@ -133,16 +133,25 @@ func (h *HNSW) Add(vec simd.Vec512, scale float32, id int) {
 		return
 	}
 
-	// Find neighbors using a greedy search
-	candidates := h.searchLayer(&vec, h.entryPoint, 1, level)
+	// Greedy descent through layers above the new node's level, then connect
+	// on each layer the node shares with the graph, starting from the best
+	// point found on the layer above.
+	ep := h.entryPoint
+	top := h.nodes[ep].Level
+	for lc := top; lc > level; lc-- {
+		if c := h.searchLayer(&vec, ep, 1, lc); len(c) > 0 {
+			ep = c[0].ID
+		}
+	}
 
-	// Insert node
 	nodeIdx := len(h.nodes)
 	h.nodes = append(h.nodes, node)
 
-	// Connect to neighbors at all levels
-	for lc := level; lc >= 0; lc-- {
-		candidates = h.searchLayer(&vec, h.entryPoint, h.efConstruction, lc)
+	for lc := min(level, top); lc >= 0; lc-- {
+		candidates := h.searchLayer(&vec, ep, h.efConstruction, lc)
+		if len(candidates) > 0 {
+			ep = candidates[0].ID
+		}
 
 		m := h.MMax
 		if lc == 0 {
@@ -152,18 +161,10 @@ func (h *HNSW) Add(vec simd.Vec512, scale float32, id int) {
 		neighbors := h.getNeighbors(candidates, m)
 		h.nodes[nodeIdx].Neighbors[lc] = neighbors
 
-		// Add bidirectional links
 		for _, neighbor := range neighbors {
 			h.nodes[neighbor].Neighbors[lc] = append(h.nodes[neighbor].Neighbors[lc], nodeIdx)
-
-			// Prune connections if needed
-			maxConn := h.MMax
-			if lc == 0 {
-				maxConn = h.MMax0
-			}
-
-			if len(h.nodes[neighbor].Neighbors[lc]) > maxConn {
-				h.pruneConnections(neighbor, lc, maxConn)
+			if len(h.nodes[neighbor].Neighbors[lc]) > m {
+				h.pruneConnections(neighbor, lc, m)
 			}
 		}
 	}
@@ -233,42 +234,45 @@ func (h *HNSW) searchLayer(query *simd.Vec512, ep int, ef int, layer int) []Cand
 		h.heapPool.Put(w)
 	}()
 
+	// candidates: min-heap on distance (closest first to expand).
+	// w: the ef best so far, as a max-heap via negated distance, so w[0] is
+	// the farthest kept result and is what gets evicted.
 	dist := h.distFunc(query, &h.nodes[ep].Vector)
-	heap.Push(candidates, Candidate{ID: ep, Distance: -dist}) // Negative for max heap
-	heap.Push(w, Candidate{ID: ep, Distance: dist})
+	heap.Push(candidates, Candidate{ID: ep, Distance: dist})
+	heap.Push(w, Candidate{ID: ep, Distance: -dist})
 	visited[ep] = true
 
 	for candidates.Len() > 0 {
 		current := heap.Pop(candidates).(Candidate)
-		current.Distance = -current.Distance // Convert back
-
-		if current.Distance > (*w)[0].Distance {
+		if current.Distance > -(*w)[0].Distance {
 			break
 		}
 
-		// Check neighbors
-		neighbors := h.nodes[current.ID].Neighbors[layer]
-		for _, neighbor := range neighbors {
-			if !visited[neighbor] {
-				visited[neighbor] = true
-				dist := h.distFunc(query, &h.nodes[neighbor].Vector)
-
-				if dist < (*w)[0].Distance || w.Len() < ef {
-					heap.Push(candidates, Candidate{ID: neighbor, Distance: -dist})
-					heap.Push(w, Candidate{ID: neighbor, Distance: dist})
-
-					if w.Len() > ef {
-						heap.Pop(w)
-					}
+		if layer >= len(h.nodes[current.ID].Neighbors) {
+			continue
+		}
+		for _, neighbor := range h.nodes[current.ID].Neighbors[layer] {
+			if visited[neighbor] {
+				continue
+			}
+			visited[neighbor] = true
+			dist := h.distFunc(query, &h.nodes[neighbor].Vector)
+			if w.Len() < ef || dist < -(*w)[0].Distance {
+				heap.Push(candidates, Candidate{ID: neighbor, Distance: dist})
+				heap.Push(w, Candidate{ID: neighbor, Distance: -dist})
+				if w.Len() > ef {
+					heap.Pop(w)
 				}
 			}
 		}
 	}
 
-	// Convert heap to slice
+	// Pop farthest first into the tail: results end up nearest first.
 	results := make([]Candidate, w.Len())
 	for i := len(results) - 1; i >= 0; i-- {
-		results[i] = heap.Pop(w).(Candidate)
+		c := heap.Pop(w).(Candidate)
+		c.Distance = -c.Distance
+		results[i] = c
 	}
 
 	return results
@@ -391,4 +395,39 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// Graph is the serializable topology of an HNSW index. Node vectors are not
+// included; callers supply them again on Restore.
+type Graph struct {
+	EntryPoint int
+	Levels     []int
+	Neighbors  [][][]int // [node][level] -> neighbour node indices
+}
+
+// Export returns a deep copy of the graph topology.
+func (h *HNSW) Export() Graph {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	g := Graph{EntryPoint: h.entryPoint, Levels: make([]int, len(h.nodes)), Neighbors: make([][][]int, len(h.nodes))}
+	for i, n := range h.nodes {
+		g.Levels[i] = n.Level
+		g.Neighbors[i] = make([][]int, len(n.Neighbors))
+		for l, nb := range n.Neighbors {
+			g.Neighbors[i][l] = append([]int(nil), nb...)
+		}
+	}
+	return g
+}
+
+// Restore rebuilds the index from an exported topology and the node vectors,
+// without running any insertions.
+func (h *HNSW) Restore(g Graph, vectors []simd.Vec512, scales []float32) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.nodes = make([]Node, len(g.Levels))
+	for i := range h.nodes {
+		h.nodes[i] = Node{ID: i, Vector: vectors[i], Scale: scales[i], Level: g.Levels[i], Neighbors: g.Neighbors[i]}
+	}
+	h.entryPoint = g.EntryPoint
 }
