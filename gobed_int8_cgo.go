@@ -203,13 +203,24 @@ import "C"
 import (
 	"runtime"
 	"unsafe"
+
+	"golang.org/x/sys/cpu"
 )
 
-// cgo kernels are the default on amd64 (AVX-512). Elsewhere the Go-assembly /
-// pure-Go kernels in gobed_int8_kernels.go are faster and need no cgo.
-const (
-	haveCgoInt8 = true
-	useCgoInt8  = runtime.GOARCH == "amd64"
+// The C file is compiled with AVX-512 enabled on amd64, so its kernels may only
+// run on CPUs that have it: an AVX2-only Xeon (e.g. Broadwell, the prod GPU box)
+// gets SIGILL. Dispatch to them only when the CPU reports AVX-512 F/BW/VL;
+// otherwise the pure-Go kernels in gobed_int8_kernels.go run. Elsewhere the
+// Go-assembly / pure-Go kernels are faster and need no cgo.
+const haveCgoInt8 = true
+
+var (
+	hasAVX512Int8 = cpu.X86.HasAVX512F && cpu.X86.HasAVX512BW && cpu.X86.HasAVX512VL
+	// useCgoInt8: production dispatch goes to the C kernels.
+	useCgoInt8 = runtime.GOARCH == "amd64" && hasAVX512Int8
+	// cgoInt8Runnable: the C kernels can be called at all (tests, benchmarks).
+	// Off amd64 this file only builds with -tags gobed_cgo_int8, using scalar C.
+	cgoInt8Runnable = runtime.GOARCH != "amd64" || hasAVX512Int8
 )
 
 func quantizeRowInt8Cgo(in []float32, out []int8, scale float32, zeroPoint int8) {

@@ -4,8 +4,9 @@ package gobed
 
 // No cgo int8 kernels in this build; the pure-Go ones are used everywhere.
 const (
-	haveCgoInt8 = false
-	useCgoInt8  = false
+	haveCgoInt8     = false
+	useCgoInt8      = false
+	cgoInt8Runnable = false
 )
 
 func quantizeRowInt8Cgo(in []float32, out []int8, scale float32, zeroPoint int8) {

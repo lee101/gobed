@@ -91,7 +91,7 @@ func TestInt8KernelCosineProperty(t *testing.T) {
 					if g := cosineInt8Go(a, b); math.Float32bits(g) != math.Float32bits(want) {
 						t.Fatalf("cosineInt8Go n=%d modes=%d/%d: %v != ref %v", n, ma, mb, g, want)
 					}
-					if haveCgoInt8 {
+					if cgoInt8Runnable {
 						if g := cosineInt8Cgo(a, b); math.Float32bits(g) != math.Float32bits(want) {
 							t.Fatalf("cosineInt8Cgo n=%d modes=%d/%d: %v != ref %v", n, ma, mb, g, want)
 						}
@@ -142,7 +142,7 @@ func TestInt8KernelEmbedProperty(t *testing.T) {
 					got = make([]uint8, dim)
 					embedInt8(flat, ids, dim, vocab, got, scale)
 					check("dispatch", got)
-					if haveCgoInt8 {
+					if cgoInt8Runnable {
 						got = make([]uint8, dim)
 						embedInt8Cgo(flat, ids, dim, vocab, got, scale)
 						check("cgo", got)
@@ -175,7 +175,7 @@ func TestInt8KernelQuantizeRow(t *testing.T) {
 					t.Fatalf("go zp=%d scale=%v i=%d (%v): %d != %d", zp, scale, i, in[i], got[i], want[i])
 				}
 			}
-			if haveCgoInt8 {
+			if cgoInt8Runnable {
 				quantizeRowInt8Cgo(in, got, scale, zp)
 				for i := range want {
 					if math.Abs(float64(in[i]*scale)) > 1<<30 {
@@ -249,7 +249,7 @@ func cosineImpls() []cosineImpl {
 		{"go_simd", cosineInt8Go}, // NEON SDOT Go asm on arm64, unrolled Go elsewhere
 		{"go_scalar_fallback", CosineSimilarityInt8Fallback},
 	}
-	if haveCgoInt8 {
+	if cgoInt8Runnable {
 		impls = append(impls, cosineImpl{"cgo", cosineInt8Cgo})
 	}
 	return impls
@@ -316,7 +316,7 @@ func BenchmarkInt8KernelEmbed(b *testing.B) {
 			embedInt8Go(m.weightsInt8Flat, ids, m.EmbedDim, m.VocabSize, out, m.scale)
 		}
 	})
-	if haveCgoInt8 {
+	if cgoInt8Runnable {
 		b.Run("tok32/cgo", func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
