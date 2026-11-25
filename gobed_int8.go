@@ -8,12 +8,19 @@ import (
 	"unsafe"
 )
 
-// #cgo CFLAGS: -mavx512f -mavx512bw -mavx512vl -O3 -march=native
+// // AVX-512 flags only on amd64: clang rejects them on arm64 (Apple Silicon,
+// // Graviton), which used to break every cgo build of gobed there. Other
+// // architectures get the scalar implementations in the #else branch below.
+// #cgo amd64 CFLAGS: -mavx512f -mavx512bw -mavx512vl -O3 -march=native
+// #cgo !amd64 CFLAGS: -O3
 // #cgo LDFLAGS: -lm
-// #include <immintrin.h>
 // #include <stdint.h>
+// #include <stdlib.h>
 // #include <string.h>
 // #include <math.h>
+//
+// #if defined(__x86_64__) && defined(__AVX512F__)
+// #include <immintrin.h>
 //
 // // Quantize float32 to int8 with scale and zero point
 // void quantize_weights_avx512(const float* input, int8_t* output, int size, float scale, int8_t zero_point) {
@@ -157,6 +164,54 @@ import (
 //
 //     return dot / (sqrtf(na) * sqrtf(nb));
 // }
+//
+// #else // portable scalar fallbacks (same signatures and semantics)
+//
+// void quantize_weights_avx512(const float* input, int8_t* output, int size, float scale, int8_t zero_point) {
+//     for (int i = 0; i < size; i++) {
+//         int32_t q = (int32_t)roundf(input[i] * scale) + zero_point;
+//         if (q < -128) q = -128;
+//         if (q > 127) q = 127;
+//         output[i] = (int8_t)q;
+//     }
+// }
+//
+// void compute_embedding_int8_avx512(const int8_t* weights, const int* token_ids, int num_tokens,
+//                                    int embed_dim, int vocab_size, uint8_t* output,
+//                                    float scale, uint8_t zero_point) {
+//     int32_t* acc = (int32_t*)calloc(embed_dim, sizeof(int32_t));
+//     int valid = 0;
+//     for (int t = 0; t < num_tokens; t++) {
+//         int id = token_ids[t];
+//         if (id < 0 || id >= vocab_size) continue;
+//         const int8_t* row = &weights[id * embed_dim];
+//         for (int d = 0; d < embed_dim; d++) acc[d] += row[d];
+//         valid++;
+//     }
+//     if (valid > 0) {
+//         float inv = 1.0f / valid;
+//         for (int d = 0; d < embed_dim; d++) {
+//             float n = ((acc[d] * inv) / scale + 1.0f) * 127.5f;
+//             if (n < 0) n = 0;
+//             if (n > 255) n = 255;
+//             output[d] = (uint8_t)n;
+//         }
+//     } else {
+//         memset(output, 128, embed_dim);
+//     }
+//     free(acc);
+// }
+//
+// float cosine_similarity_int8_avx512(const uint8_t* a, const uint8_t* b, int size) {
+//     int32_t dot = 0, na = 0, nb = 0;
+//     for (int i = 0; i < size; i++) {
+//         int8_t va = (int8_t)(a[i] - 128), vb = (int8_t)(b[i] - 128);
+//         dot += va * vb; na += va * va; nb += vb * vb;
+//     }
+//     if (na == 0 || nb == 0) return 0.0f;
+//     return dot / (sqrtf(na) * sqrtf(nb));
+// }
+// #endif
 import "C"
 
 // EmbeddingModelInt8 provides INT8 quantized embeddings with SIMD acceleration
