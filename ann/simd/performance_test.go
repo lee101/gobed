@@ -1,6 +1,7 @@
 package simd
 
 import (
+	"runtime"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -9,6 +10,9 @@ import (
 
 // Performance regression test - ensures SIMD is significantly faster than generic
 func TestPerformanceRegression(t *testing.T) {
+	if runtime.GOARCH != "amd64" {
+		t.Skip("the AVX2 speedup floor only applies on amd64; elsewhere that path is the generic fallback")
+	}
 	// Skip in short mode
 	if testing.Short() {
 		t.Skip("Skipping performance regression test in short mode")

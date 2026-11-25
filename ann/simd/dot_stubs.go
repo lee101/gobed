@@ -1,21 +1,9 @@
-//go:build (!amd64 && !arm64) || !cgo
+//go:build !amd64 || noasm
 
 package simd
 
-// Stub implementations for architectures without SIMD or when CGO is disabled
-
+// The VNNI kernel exists only on amd64 (dot_amd64_vnni.go); everything else
+// dispatches to it never, but still has to link.
 func dot512_i8_vnni(a, b *Vec512) int32 {
 	return dot512_generic(a, b)
-}
-
-func dot512_i8_sdot(a, b *Vec512) int32 {
-	return dot512_generic(a, b)
-}
-
-func l2squared512_i8_avx2(a, b *Vec512) int32 {
-	return l2squared512_generic(a, b)
-}
-
-func l2squared512_i8_neon(a, b *Vec512) int32 {
-	return l2squared512_generic(a, b)
 }
