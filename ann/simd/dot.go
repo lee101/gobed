@@ -3,6 +3,8 @@ package simd
 import (
     "unsafe"
     "golang.org/x/sys/cpu"
+
+	"github.com/lee101/gobed/internal/i8simd"
 )
 
 // Vec512 represents a 512-dimensional int8 vector
@@ -15,7 +17,7 @@ func Dot512(a, b *Vec512) int32 {
 		return dot512_i8_vnni(a, b)
 	case cpu.X86.HasAVX2:
 		return dot512_i8_avx2(a, b)
-	case cpu.ARM64.HasASIMDDP: // ARM Dot Product
+	case i8simd.HasSDOT: // ARM dot product (x/sys/cpu misses it on darwin)
 		return dot512_i8_sdot(a, b)
 	default:
 		// Unrolled pure Go fallback

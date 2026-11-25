@@ -2,6 +2,8 @@ package simd
 
 import (
 	"golang.org/x/sys/cpu"
+
+	"github.com/lee101/gobed/internal/i8simd"
 	"sync"
 	"unsafe"
 )
@@ -25,7 +27,7 @@ func initDotImpl() {
 		dotImpl = dot512_i8_vnni
 	case cpu.X86.HasAVX2:
 		dotImpl = dot512_i8_avx2
-	case cpu.ARM64.HasASIMDDP:
+	case i8simd.HasSDOT: // ARM dot product (x/sys/cpu misses it on darwin)
 		dotImpl = dot512_i8_sdot
 	default:
 		dotImpl = dot512_generic
